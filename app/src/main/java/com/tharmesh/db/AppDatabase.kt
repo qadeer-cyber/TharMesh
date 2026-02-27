@@ -15,7 +15,7 @@ import com.tharmesh.db.entity.ContactEntity
 
 @Database(
     entities = [MessageEntity::class, BundleEntity::class, ConversationEntity::class, ContactEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

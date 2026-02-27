@@ -215,7 +215,9 @@ class ChatActivity : AppCompatActivity() {
                     expiresAt = ts + (24L * 60L * 60L * 1000L),
                     hopCount = 0,
                     maxHops = 8,
-                    status = "QUEUED"
+                    status = "QUEUED",
+                    nextRetryAt = ts,
+                    lastAttemptAt = 0L
                 )
             )
 

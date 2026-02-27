@@ -14,5 +14,7 @@ data class BundleEntity(
     val expiresAt: Long,
     val hopCount: Int,
     val maxHops: Int,
-    val status: String
+    val status: String,
+    val nextRetryAt: Long,
+    val lastAttemptAt: Long
 )

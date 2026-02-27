@@ -6,15 +6,19 @@ import org.json.JSONObject
 enum class ProtocolType {
     HELLO,
     INV,
+    HAVE,
     GET,
     BUNDLE,
-    ACK
+    ACK_RELAY,
+    ACK_FINAL
 }
 
 data class HelloPacket(val userId: String, val name: String, val pubKeyHash: String)
 data class InvPacket(val bundleIds: List<String>)
+data class HavePacket(val bundleIds: List<String>)
 data class GetPacket(val bundleIds: List<String>)
-data class AckPacket(val bundleId: String, val to: String, val ts: Long, val sig: String)
+data class AckRelayPacket(val bundleId: String, val relayUserId: String, val ts: Long, val sig: String)
+data class AckFinalPacket(val bundleId: String, val toUserId: String, val ts: Long, val sig: String)
 
 data class ProtocolFrame(
     val type: ProtocolType,
@@ -53,44 +57,68 @@ object ProtocolCodec {
         return json.toString()
     }
 
-    fun encodeInv(packet: InvPacket): String {
-        val arr = JSONArray()
-        for (id in packet.bundleIds) arr.put(id)
-        return arr.toString()
-    }
+    fun encodeInv(packet: InvPacket): String = encodeIds(packet.bundleIds)
+    fun encodeHave(packet: HavePacket): String = encodeIds(packet.bundleIds)
+    fun encodeGet(packet: GetPacket): String = encodeIds(packet.bundleIds)
 
-    fun encodeGet(packet: GetPacket): String {
-        val arr = JSONArray()
-        for (id in packet.bundleIds) arr.put(id)
-        return arr.toString()
-    }
-
-    fun encodeAck(packet: AckPacket): String {
+    fun encodeAckRelay(packet: AckRelayPacket): String {
         val json = JSONObject()
         json.put("bundleId", packet.bundleId)
-        json.put("to", packet.to)
+        json.put("relayUserId", packet.relayUserId)
         json.put("ts", packet.ts)
         json.put("sig", packet.sig)
         return json.toString()
+    }
+
+    fun encodeAckFinal(packet: AckFinalPacket): String {
+        val json = JSONObject()
+        json.put("bundleId", packet.bundleId)
+        json.put("toUserId", packet.toUserId)
+        json.put("ts", packet.ts)
+        json.put("sig", packet.sig)
+        return json.toString()
+    }
+
+    private fun encodeIds(ids: List<String>): String {
+        val arr = JSONArray()
+        for (id in ids) arr.put(id)
+        return arr.toString()
     }
 
     fun decodeIds(payload: String): List<String> {
         return try {
             val arr = JSONArray(payload)
             val out = mutableListOf<String>()
-            for (i in 0 until arr.length()) out.add(arr.optString(i))
+            for (i in 0 until arr.length()) {
+                val id = arr.optString(i)
+                if (id.isNotBlank()) out.add(id)
+            }
             out
         } catch (ignored: Throwable) {
             emptyList()
         }
     }
 
-    fun decodeAck(payload: String): AckPacket? {
+    fun decodeAckRelay(payload: String): AckRelayPacket? {
         return try {
             val json = JSONObject(payload)
-            AckPacket(
+            AckRelayPacket(
                 bundleId = json.getString("bundleId"),
-                to = json.optString("to", ""),
+                relayUserId = json.optString("relayUserId", ""),
+                ts = json.optLong("ts", 0L),
+                sig = json.optString("sig", "")
+            )
+        } catch (ignored: Throwable) {
+            null
+        }
+    }
+
+    fun decodeAckFinal(payload: String): AckFinalPacket? {
+        return try {
+            val json = JSONObject(payload)
+            AckFinalPacket(
+                bundleId = json.getString("bundleId"),
+                toUserId = json.optString("toUserId", ""),
                 ts = json.optLong("ts", 0L),
                 sig = json.optString("sig", "")
             )
