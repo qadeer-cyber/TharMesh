@@ -6,9 +6,9 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "conversations")
 data class ConversationEntity(
     @PrimaryKey
-    val convoId: String,
+    val userId: String,
     val title: String,
     val lastMessage: String,
-    val lastTs: Long,
+    val lastTimestamp: Long,
     val unreadCount: Int
 )

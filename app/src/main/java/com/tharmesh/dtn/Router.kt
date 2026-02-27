@@ -5,7 +5,7 @@ class Router {
     private val sentToPeer: MutableSet<String> = mutableSetOf()
 
     fun shouldForward(bundle: MeshBundle, peerId: String, nowMs: Long): Boolean {
-        if (bundle.hopCount >= bundle.maxHops) {
+        if (bundle.hopsLeft <= 0) {
             return false
         }
         if (bundle.ttlUntil < nowMs) {

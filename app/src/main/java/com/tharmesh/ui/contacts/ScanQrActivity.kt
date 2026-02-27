@@ -16,9 +16,6 @@ class ScanQrActivity : AppCompatActivity() {
 
     companion object {
         const val RESULT_CODE = "result_code"
-        const val RESULT_USER_ID = "result_user_id"
-        const val RESULT_PUBLIC_KEY = "result_public_key"
-        const val RESULT_NAME = "result_name"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,18 +47,14 @@ class ScanQrActivity : AppCompatActivity() {
 
             val qr = QrCodec.decode(raw)
             val invite = InviteCode.parse(raw)
-
-            val userId = when {
+            val resolved = when {
                 qr != null && qr.userId.isNotBlank() -> qr.userId
-                invite != null && invite.isValid -> invite.userId
+                invite != null -> invite.userId
                 else -> raw
             }
 
             val data = Intent()
-            data.putExtra(RESULT_CODE, userId)
-            data.putExtra(RESULT_USER_ID, userId)
-            data.putExtra(RESULT_PUBLIC_KEY, qr?.publicKeyBase64.orEmpty())
-            data.putExtra(RESULT_NAME, qr?.name.orEmpty())
+            data.putExtra(RESULT_CODE, resolved)
             setResult(Activity.RESULT_OK, data)
             finish()
         }

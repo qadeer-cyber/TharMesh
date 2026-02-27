@@ -13,14 +13,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.tharmesh.db.AppDatabase
-import com.tharmesh.db.entity.ContactEntity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class ContactsActivity : AppCompatActivity() {
 
@@ -84,32 +78,15 @@ class ContactsActivity : AppCompatActivity() {
         setContentView(root)
         title = "Contacts"
 
-        loadContactsFromDbOrFallback()
+        loadContactsFallback()
     }
 
-    private fun loadContactsFromDbOrFallback() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val dbItems = AppDatabase.getInstance(applicationContext).contactDao().getAll()
-                withContext(Dispatchers.Main) {
-                    contacts.clear()
-                    if (dbItems.isEmpty()) {
-                        contacts.add("88001122")
-                        contacts.add("99002233")
-                    } else {
-                        contacts.addAll(dbItems.map { it.userId + if (it.displayName.isNotBlank()) " (${it.displayName})" else "" })
-                    }
-                    adapter.notifyDataSetChanged()
-                }
-            } catch (ignored: Throwable) {
-                withContext(Dispatchers.Main) {
-                    contacts.clear()
-                    contacts.add("88001122")
-                    contacts.add("99002233")
-                    adapter.notifyDataSetChanged()
-                }
-            }
-        }
+    private fun loadContactsFallback() {
+        // TODO: replace with Room-backed contacts list when Contact table/DAO is available.
+        contacts.clear()
+        contacts.add("88001122")
+        contacts.add("99002233")
+        adapter.notifyDataSetChanged()
     }
 
     private fun showAddInviteDialog() {
@@ -130,35 +107,17 @@ class ContactsActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun addContact(value: String, name: String = "", publicKey: String = "") {
-        contacts.add(0, value + if (name.isNotBlank()) " ($name)" else "")
+    private fun addContact(value: String) {
+        contacts.add(0, value)
         adapter.notifyItemInserted(0)
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val now = System.currentTimeMillis()
-                AppDatabase.getInstance(applicationContext).contactDao().upsert(
-                    ContactEntity(
-                        userId = value,
-                        displayName = name,
-                        publicKey = publicKey,
-                        addedAt = now,
-                        lastSeen = now
-                    )
-                )
-            } catch (ignored: Throwable) {
-                // Fallback stays in-memory only.
-            }
-        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_SCAN_QR && resultCode == Activity.RESULT_OK) {
-            val userId = data?.getStringExtra(ScanQrActivity.RESULT_USER_ID).orEmpty().trim()
-            val publicKey = data?.getStringExtra(ScanQrActivity.RESULT_PUBLIC_KEY).orEmpty().trim()
-            val name = data?.getStringExtra(ScanQrActivity.RESULT_NAME).orEmpty().trim()
-            if (userId.isNotEmpty()) {
-                addContact(userId, name, publicKey)
+            val code = data?.getStringExtra(ScanQrActivity.RESULT_CODE).orEmpty().trim()
+            if (code.isNotEmpty()) {
+                addContact(code)
             }
         }
     }
