@@ -10,8 +10,8 @@ import com.tharmesh.db.entity.BundleEntity
 interface BundleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(bundleEntity: BundleEntity)
+    fun insert(bundleEntity: BundleEntity): Long
 
     @Query("SELECT * FROM bundles ORDER BY createdAt DESC")
-    suspend fun getAll(): List<BundleEntity>
+    fun getAll(): List<BundleEntity>
 }

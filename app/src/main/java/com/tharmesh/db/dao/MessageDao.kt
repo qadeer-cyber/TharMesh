@@ -10,8 +10,8 @@ import com.tharmesh.db.entity.MessageEntity
 interface MessageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(messageEntity: MessageEntity)
+    fun insert(messageEntity: MessageEntity): Long
 
     @Query("SELECT * FROM messages WHERE toUserId = :toUserId OR fromUserId = :toUserId ORDER BY timestamp ASC")
-    suspend fun getMessagesForUser(toUserId: String): List<MessageEntity>
+    fun getMessagesForUser(toUserId: String): List<MessageEntity>
 }

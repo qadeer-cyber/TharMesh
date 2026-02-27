@@ -10,8 +10,8 @@ import com.tharmesh.db.entity.ConversationEntity
 interface ConversationDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(conversationEntity: ConversationEntity)
+    fun upsert(conversationEntity: ConversationEntity): Long
 
     @Query("SELECT * FROM conversations ORDER BY lastTimestamp DESC")
-    suspend fun getAll(): List<ConversationEntity>
+    fun getAll(): List<ConversationEntity>
 }
