@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">TharMesh</string>
+    <string name="tab_chats">Chats</string>
+    <string name="tab_status">Status</string>
+    <string name="tab_groups">Groups</string>
+    <string name="tab_contacts">Contacts</string>
+    <string name="new_chat">New chat</string>
+    <string name="empty_chats">No chats yet. Start a new offline conversation.</string>
+    <string name="hint_message">Type a message</string>
+    <string name="queued_local">Queued locally ⏳</string>
+    <string name="chat_attach">Attach</string>
+    <string name="chat_send">Send</string>
+</resources>

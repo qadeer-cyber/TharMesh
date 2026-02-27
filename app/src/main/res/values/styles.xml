@@ -1,0 +1,10 @@
+<resources>
+    <style name="Text.Title" parent="TextAppearance.AppCompat.Title">
+        <item name="android:textColor">@color/tm_text_primary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Text.Subtle" parent="TextAppearance.AppCompat.Body2">
+        <item name="android:textColor">@color/tm_text_secondary</item>
+    </style>
+</resources>
