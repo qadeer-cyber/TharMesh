@@ -21,6 +21,8 @@ class MeshEngine(
         private const val BUNDLE_BATCH_SIZE = 10
         private const val SEEN_CACHE_MAX = 2000
         private const val METRIC_LOG_EVERY_TICKS = 5
+        private const val ACK_MAX_AGE_MS = 15L * 60L * 1000L
+        private const val ACK_FORWARD_CACHE_MAX = 6000
     }
 
     private val router = Router()
@@ -35,6 +37,13 @@ class MeshEngine(
     private val seenFinalAckIds: LinkedHashMap<String, Long> = object : LinkedHashMap<String, Long>(SEEN_CACHE_MAX, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
             return size > SEEN_CACHE_MAX
+        }
+    }
+
+
+    private val ackForwardedToPeerKeys: LinkedHashMap<String, Long> = object : LinkedHashMap<String, Long>(ACK_FORWARD_CACHE_MAX, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
+            return size > ACK_FORWARD_CACHE_MAX
         }
     }
 
@@ -85,6 +94,23 @@ class MeshEngine(
 
     fun setAckSignatureVerifier(verifier: (fromUserId: String, payload: String, sig: String) -> Boolean) {
         ackSignatureVerifier = verifier
+    }
+
+    fun snapshotMetrics(): MeshMetricsSnapshot {
+        val active = cache.values.count { it.status != "DELIVERED" && it.status != "EXPIRED" }
+        val delivered = cache.values.count { it.status == "DELIVERED" }
+        val expired = cache.values.count { it.status == "EXPIRED" }
+        val readyToSync = cache.values.count { (it.status == "QUEUED" || it.status == "RELAYED") && !isExpired(it) && it.nextRetryAt <= now() }
+        return MeshMetricsSnapshot(
+            totalBundles = cache.size,
+            activeBundles = active,
+            deliveredBundles = delivered,
+            expiredBundles = expired,
+            readyToSyncBundles = readyToSync,
+            retriesObserved = retryAttemptCount,
+            connectedPeers = connectedPeers.size,
+            lastTickAt = now()
+        )
     }
 
     fun queueText(destId: String, payloadCiphertext: String, ttlMs: Long, maxHops: Int): MeshBundle {
@@ -271,6 +297,7 @@ class MeshEngine(
 
     private fun handleAckFinal(fromPeerId: String, payload: String) {
         val ack = ProtocolCodec.decodeAckFinal(payload) ?: return
+        if ((now() - ack.ts) > ACK_MAX_AGE_MS) return
         val existing = cache[ack.bundleId] ?: return
 
         val replayKey = ack.bundleId + "@" + ack.toUserId + "@" + ack.fromUserId
@@ -307,14 +334,21 @@ class MeshEngine(
     }
 
     private fun forwardAckFinal(fromPeerId: String, ack: AckFinalPacket, payload: String) {
+        if ((now() - ack.ts) > ACK_MAX_AGE_MS) return
         val frame = ProtocolFrame(ProtocolType.ACK_FINAL, localUserId, payload)
+        val replayKeyBase = ack.bundleId + "@" + ack.toUserId + "@" + ack.fromUserId
         for (peer in connectedPeers) {
             if (peer == fromPeerId) continue
+            val dedupeKey = replayKeyBase + "->" + peer
+            if (ackForwardedToPeerKeys.containsKey(dedupeKey)) continue
             // Prefer peers who might not already know this bundle.
             val known = peerKnownIds.getOrPut(peer) { mutableSetOf() }
             if (known.contains(ack.bundleId)) continue
-            transport.send(peer, ProtocolCodec.encode(frame))
-            known.add(ack.bundleId)
+            val sent = transport.send(peer, ProtocolCodec.encode(frame))
+            if (sent) {
+                ackForwardedToPeerKeys[dedupeKey] = now()
+                known.add(ack.bundleId)
+            }
         }
     }
 
@@ -430,3 +464,15 @@ class MeshEngine(
         )
     }
 }
+
+
+data class MeshMetricsSnapshot(
+    val totalBundles: Int,
+    val activeBundles: Int,
+    val deliveredBundles: Int,
+    val expiredBundles: Int,
+    val readyToSyncBundles: Int,
+    val retriesObserved: Long,
+    val connectedPeers: Int,
+    val lastTickAt: Long
+)
