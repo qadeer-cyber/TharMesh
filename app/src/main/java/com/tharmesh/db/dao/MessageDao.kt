@@ -12,9 +12,6 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(messageEntity: MessageEntity): Long
 
-    @Query("SELECT * FROM messages WHERE convoId = :convoId ORDER BY ts ASC")
-    fun getMessagesForConvo(convoId: String): List<MessageEntity>
-
-    @Query("UPDATE messages SET status = :status WHERE bundleId = :bundleId")
-    fun updateStatusByBundleId(bundleId: String, status: String): Int
+    @Query("SELECT * FROM messages WHERE toUserId = :toUserId OR fromUserId = :toUserId ORDER BY timestamp ASC")
+    fun getMessagesForUser(toUserId: String): List<MessageEntity>
 }

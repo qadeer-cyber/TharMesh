@@ -9,12 +9,9 @@ data class MeshBundle(
     val destId: String,
     val payloadCiphertext: String,
     val ttlUntil: Long,
-    val hopCount: Int,
-    val maxHops: Int,
+    val hopsLeft: Int,
     val signature: String,
-    val status: String,
-    val attemptCount: Int,
-    val nextRetryAt: Long
+    val status: String
 )
 
 object BundleCodec {
@@ -26,12 +23,9 @@ object BundleCodec {
         json.put("destId", bundle.destId)
         json.put("payload", bundle.payloadCiphertext)
         json.put("ttl", bundle.ttlUntil)
-        json.put("hopCount", bundle.hopCount)
-        json.put("maxHops", bundle.maxHops)
+        json.put("hops", bundle.hopsLeft)
         json.put("sig", bundle.signature)
         json.put("status", bundle.status)
-        json.put("attemptCount", bundle.attemptCount)
-        json.put("nextRetryAt", bundle.nextRetryAt)
         return json.toString()
     }
 
@@ -44,12 +38,9 @@ object BundleCodec {
                 destId = json.optString("destId", ""),
                 payloadCiphertext = json.optString("payload", ""),
                 ttlUntil = json.optLong("ttl", 0L),
-                hopCount = json.optInt("hopCount", 0),
-                maxHops = json.optInt("maxHops", 8),
+                hopsLeft = json.optInt("hops", 0),
                 signature = json.optString("sig", ""),
-                status = json.optString("status", "QUEUED"),
-                attemptCount = json.optInt("attemptCount", 0),
-                nextRetryAt = json.optLong("nextRetryAt", 0L)
+                status = json.optString("status", "PENDING")
             )
         } catch (ignored: Throwable) {
             null

@@ -7,11 +7,9 @@ import androidx.room.PrimaryKey
 data class MessageEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val convoId: String,
     val fromUserId: String,
     val toUserId: String,
-    val ciphertext: String,
-    val ts: Long,
+    val body: String,
     val status: String,
-    val bundleId: String
+    val timestamp: Long
 )
