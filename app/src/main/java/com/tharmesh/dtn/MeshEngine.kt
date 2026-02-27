@@ -2,7 +2,6 @@ package com.tharmesh.dtn
 
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.TransportEvent
-import java.util.LinkedHashMap
 import java.util.UUID
 
 class MeshEngine(
@@ -11,25 +10,9 @@ class MeshEngine(
     private val now: () -> Long = { System.currentTimeMillis() }
 ) {
 
-    companion object {
-        private const val INV_BATCH_SIZE = 200
-        private const val GET_BATCH_SIZE = 50
-        private const val BUNDLE_BATCH_SIZE = 10
-        private const val SEEN_CACHE_MAX = 4000
-    }
-
     private val router = Router()
     private val cache: MutableMap<String, MeshBundle> = linkedMapOf()
-    private val seenBundleIds: LinkedHashMap<String, Long> = object : LinkedHashMap<String, Long>(SEEN_CACHE_MAX, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
-            return size > SEEN_CACHE_MAX
-        }
-    }
-    private val peerKnownIds: MutableMap<String, MutableSet<String>> = mutableMapOf()
-
     private var onBundleDelivered: ((MeshBundle) -> Unit)? = null
-    private var onRelayAck: ((String) -> Unit)? = null
-    private var onFinalAck: ((String) -> Unit)? = null
 
     init {
         transport.setListener { event: TransportEvent ->
@@ -49,14 +32,6 @@ class MeshEngine(
         onBundleDelivered = listener
     }
 
-    fun setRelayAckListener(listener: (String) -> Unit) {
-        onRelayAck = listener
-    }
-
-    fun setFinalAckListener(listener: (String) -> Unit) {
-        onFinalAck = listener
-    }
-
     fun queueText(destId: String, payloadCiphertext: String, ttlMs: Long, hops: Int): MeshBundle {
         val bundle = MeshBundle(
             bundleId = UUID.randomUUID().toString(),
@@ -66,176 +41,93 @@ class MeshEngine(
             ttlUntil = now() + ttlMs,
             hopsLeft = hops,
             signature = "TODO_SIG",
-            status = "QUEUED"
+            status = "PENDING"
         )
         cache[bundle.bundleId] = bundle
         return bundle
     }
 
     fun syncWithPeer(peerId: String) {
-        sendInv(peerId)
+        val inv = BundleCodec.encodeInventory(cache.keys.toList())
+        val frame = ProtocolFrame(ProtocolType.INV, localUserId, inv)
+        transport.send(peerId, encodeFrame(frame))
     }
 
     private fun onTransportEvent(event: TransportEvent) {
-        when (event) {
-            is TransportEvent.PeerConnected -> {
-                onPeerConnected(event.peerId)
-            }
-            is TransportEvent.PayloadReceived -> {
-                val frame = ProtocolCodec.decode(event.bytes) ?: return
-                handleFrame(event.peerId, frame)
-            }
-            else -> {
-                // ignore
-            }
+        if (event !is TransportEvent.PayloadReceived) {
+            return
         }
-    }
-
-    private fun onPeerConnected(peerId: String) {
-        val hello = ProtocolFrame(
-            ProtocolType.HELLO,
-            localUserId,
-            ProtocolCodec.encodeHello(HelloPacket(localUserId, "TharMesh", "TODO_PUBKEY_HASH"))
-        )
-        transport.send(peerId, ProtocolCodec.encode(hello))
-        sendInv(peerId)
-    }
-
-    private fun handleFrame(peerId: String, frame: ProtocolFrame) {
+        val frame = decodeFrame(event.bytes) ?: return
         when (frame.type) {
-            ProtocolType.HELLO -> sendInv(peerId)
-            ProtocolType.INV -> handleInv(peerId, frame.payload)
-            ProtocolType.HAVE -> handleHave(peerId, frame.payload)
-            ProtocolType.GET -> handleGet(peerId, frame.payload)
-            ProtocolType.BUNDLE -> handleBundle(peerId, frame.payload)
-            ProtocolType.ACK_RELAY -> handleAckRelay(frame.payload)
-            ProtocolType.ACK_FINAL -> handleAckFinal(frame.payload)
+            ProtocolType.INV -> handleInv(event.peerId, frame.payload)
+            ProtocolType.GET -> handleGet(event.peerId, frame.payload)
+            ProtocolType.BUNDLE -> handleBundle(event.peerId, frame.payload)
+            ProtocolType.ACK -> handleAck(frame.payload)
+            ProtocolType.HELLO -> {
+                // TODO: Use for trust handshake and capability exchange.
+            }
         }
-    }
-
-    private fun sendInv(peerId: String) {
-        val eligible = cache.values
-            .filter { it.ttlUntil > now() }
-            .map { it.bundleId }
-            .take(INV_BATCH_SIZE)
-        if (eligible.isEmpty()) return
-        val frame = ProtocolFrame(ProtocolType.INV, localUserId, ProtocolCodec.encodeInv(InvPacket(eligible)))
-        transport.send(peerId, ProtocolCodec.encode(frame))
     }
 
     private fun handleInv(peerId: String, payload: String) {
-        val ids = ProtocolCodec.decodeIds(payload)
-        if (ids.isEmpty()) return
-
-        val known = peerKnownIds.getOrPut(peerId) { mutableSetOf() }
-        known.addAll(ids)
-
-        val missing = ids.filter { id -> !cache.containsKey(id) }
-        val have = ids.filter { id -> cache.containsKey(id) }
-
-        if (have.isNotEmpty()) {
-            val haveFrame = ProtocolFrame(ProtocolType.HAVE, localUserId, ProtocolCodec.encodeHave(HavePacket(have.take(INV_BATCH_SIZE))))
-            transport.send(peerId, ProtocolCodec.encode(haveFrame))
+        val peerIds = BundleCodec.decodeInventory(payload)
+        val missing = peerIds.filter { id: String -> !cache.containsKey(id) }
+        if (missing.isEmpty()) {
+            return
         }
-
-        if (missing.isNotEmpty()) {
-            val getFrame = ProtocolFrame(ProtocolType.GET, localUserId, ProtocolCodec.encodeGet(GetPacket(missing.take(GET_BATCH_SIZE))))
-            transport.send(peerId, ProtocolCodec.encode(getFrame))
-        }
-    }
-
-    private fun handleHave(peerId: String, payload: String) {
-        val ids = ProtocolCodec.decodeIds(payload)
-        if (ids.isEmpty()) return
-        val known = peerKnownIds.getOrPut(peerId) { mutableSetOf() }
-        known.addAll(ids)
+        val frame = ProtocolFrame(ProtocolType.GET, localUserId, BundleCodec.encodeInventory(missing))
+        transport.send(peerId, encodeFrame(frame))
     }
 
     private fun handleGet(peerId: String, payload: String) {
-        val requested = ProtocolCodec.decodeIds(payload).take(BUNDLE_BATCH_SIZE)
-        if (requested.isEmpty()) return
-
-        val peerKnown = peerKnownIds.getOrPut(peerId) { mutableSetOf() }
-
+        val requested = BundleCodec.decodeInventory(payload)
         for (id in requested) {
             val bundle = cache[id] ?: continue
-            if (!router.shouldForward(bundle, peerId, now())) continue
-            if (peerKnown.contains(bundle.bundleId)) continue
-            if (bundle.ttlUntil <= now()) continue
-
-            val next = bundle.copy(
-                hopsLeft = bundle.hopsLeft - 1,
-                status = if (bundle.srcId == localUserId) "RELAYED" else bundle.status
-            )
-            peerKnown.add(next.bundleId)
-
-            val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(next))
-            val sent = transport.send(peerId, ProtocolCodec.encode(frame))
-            if (sent && next.srcId == localUserId) {
-                onRelayAck?.invoke(next.bundleId)
+            if (!router.shouldForward(bundle, peerId, now())) {
+                continue
             }
+            val next = bundle.copy(hopsLeft = bundle.hopsLeft - 1, status = "FORWARDED")
+            val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(next))
+            transport.send(peerId, encodeFrame(frame))
         }
     }
 
-    private fun handleBundle(fromPeerId: String, payload: String) {
+    private fun handleBundle(peerId: String, payload: String) {
         val bundle = BundleCodec.decode(payload) ?: return
-        if (bundle.bundleId.isBlank()) return
-        if (bundle.ttlUntil <= now()) return
-        if (bundle.hopsLeft <= 0) return
-
-        if (seenBundleIds.containsKey(bundle.bundleId)) {
-            return
-        }
-        seenBundleIds[bundle.bundleId] = now()
-
         if (!cache.containsKey(bundle.bundleId)) {
             cache[bundle.bundleId] = bundle
         }
-
-        val relayAck = ProtocolFrame(
-            ProtocolType.ACK_RELAY,
-            localUserId,
-            ProtocolCodec.encodeAckRelay(
-                AckRelayPacket(
-                    bundleId = bundle.bundleId,
-                    relayUserId = localUserId,
-                    ts = now(),
-                    sig = "TODO_RELAY_SIG"
-                )
-            )
-        )
-        transport.send(fromPeerId, ProtocolCodec.encode(relayAck))
-
         if (bundle.destId == localUserId) {
-            val delivered = bundle.copy(status = "DELIVERED")
-            onBundleDelivered?.invoke(delivered)
-            val finalAck = ProtocolFrame(
-                ProtocolType.ACK_FINAL,
-                localUserId,
-                ProtocolCodec.encodeAckFinal(
-                    AckFinalPacket(
-                        bundleId = bundle.bundleId,
-                        toUserId = localUserId,
-                        ts = now(),
-                        sig = "TODO_FINAL_SIG"
-                    )
-                )
-            )
-            transport.send(fromPeerId, ProtocolCodec.encode(finalAck))
+            onBundleDelivered?.invoke(bundle.copy(status = "DELIVERED_FINAL"))
+            val ack = ProtocolFrame(ProtocolType.ACK, localUserId, bundle.bundleId)
+            transport.send(peerId, encodeFrame(ack))
         }
     }
 
-    private fun handleAckRelay(payload: String) {
-        val ack = ProtocolCodec.decodeAckRelay(payload) ?: return
-        val existing = cache[ack.bundleId] ?: return
-        cache[ack.bundleId] = existing.copy(status = "RELAYED")
-        onRelayAck?.invoke(ack.bundleId)
+    private fun handleAck(bundleId: String) {
+        val existing = cache[bundleId] ?: return
+        cache[bundleId] = existing.copy(status = "DELIVERED_FINAL")
     }
 
-    private fun handleAckFinal(payload: String) {
-        val ack = ProtocolCodec.decodeAckFinal(payload) ?: return
-        val existing = cache[ack.bundleId] ?: return
-        cache[ack.bundleId] = existing.copy(status = "DELIVERED")
-        onFinalAck?.invoke(ack.bundleId)
+    private fun encodeFrame(frame: ProtocolFrame): ByteArray {
+        val wire = frame.type.name + "|" + frame.fromPeerId + "|" + frame.payload
+        return wire.toByteArray(Charsets.UTF_8)
+    }
+
+    private fun decodeFrame(bytes: ByteArray): ProtocolFrame? {
+        return try {
+            val raw = String(bytes, Charsets.UTF_8)
+            val first = raw.indexOf('|')
+            val second = raw.indexOf('|', first + 1)
+            if (first <= 0 || second <= first) {
+                return null
+            }
+            val type = ProtocolType.valueOf(raw.substring(0, first))
+            val from = raw.substring(first + 1, second)
+            val payload = raw.substring(second + 1)
+            ProtocolFrame(type, from, payload)
+        } catch (ignored: Throwable) {
+            null
+        }
     }
 }

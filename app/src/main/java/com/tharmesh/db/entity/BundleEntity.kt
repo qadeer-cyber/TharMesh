@@ -5,16 +5,10 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "bundles")
 data class BundleEntity(
-    @PrimaryKey
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
     val bundleId: String,
     val toUserId: String,
-    val fromUserId: String,
-    val payloadCiphertext: String,
-    val createdAt: Long,
-    val expiresAt: Long,
-    val hopCount: Int,
-    val maxHops: Int,
-    val status: String,
-    val nextRetryAt: Long,
-    val lastAttemptAt: Long
+    val payload: String,
+    val createdAt: Long
 )

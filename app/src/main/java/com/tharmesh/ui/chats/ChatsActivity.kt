@@ -12,16 +12,10 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.tharmesh.db.AppDatabase
-import com.tharmesh.db.entity.ConversationEntity
 import com.tharmesh.ui.chat.ChatActivity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,11 +61,8 @@ class ChatsActivity : AppCompatActivity() {
 
         setContentView(root)
         title = "Chats"
-    }
 
-    override fun onResume() {
-        super.onResume()
-        loadConversationsFromDbOrFallback()
+        loadConversationsPlaceholder()
     }
 
     private fun showNewChatDialog() {
@@ -98,52 +89,27 @@ class ChatsActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun loadConversationsFromDbOrFallback() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val rows: List<ConversationEntity> = AppDatabase.getInstance(applicationContext).conversationDao().getAll()
-                val mapped = rows.map { row ->
-                    ConversationUi(
-                        toUserId = row.convoId,
-                        title = row.title,
-                        lastMessage = row.lastMessage,
-                        lastTimestamp = row.lastTs,
-                        unreadCount = row.unreadCount
-                    )
-                }
-                withContext(Dispatchers.Main) {
-                    conversations.clear()
-                    if (mapped.isEmpty()) {
-                        conversations.add(
-                            ConversationUi(
-                                toUserId = "88001122",
-                                title = "88001122",
-                                lastMessage = "Start chatting offline",
-                                lastTimestamp = System.currentTimeMillis(),
-                                unreadCount = 0
-                            )
-                        )
-                    } else {
-                        conversations.addAll(mapped)
-                    }
-                    adapter.notifyDataSetChanged()
-                }
-            } catch (ignored: Throwable) {
-                withContext(Dispatchers.Main) {
-                    conversations.clear()
-                    conversations.add(
-                        ConversationUi(
-                            toUserId = "88001122",
-                            title = "88001122",
-                            lastMessage = "Start chatting offline",
-                            lastTimestamp = System.currentTimeMillis(),
-                            unreadCount = 0
-                        )
-                    )
-                    adapter.notifyDataSetChanged()
-                }
-            }
-        }
+    private fun loadConversationsPlaceholder() {
+        conversations.clear()
+        conversations.add(
+            ConversationUi(
+                toUserId = "88001122",
+                title = "88001122",
+                lastMessage = "Queued message example",
+                lastTimestamp = System.currentTimeMillis() - 60_000L,
+                unreadCount = 1
+            )
+        )
+        conversations.add(
+            ConversationUi(
+                toUserId = "99002233",
+                title = "99002233",
+                lastMessage = "Tap to continue chatting offline",
+                lastTimestamp = System.currentTimeMillis() - 3_600_000L,
+                unreadCount = 0
+            )
+        )
+        adapter.notifyDataSetChanged()
     }
 }
 

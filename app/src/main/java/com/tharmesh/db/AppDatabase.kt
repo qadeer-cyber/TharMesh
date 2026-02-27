@@ -7,15 +7,13 @@ import androidx.room.RoomDatabase
 import com.tharmesh.db.dao.BundleDao
 import com.tharmesh.db.dao.ConversationDao
 import com.tharmesh.db.dao.MessageDao
-import com.tharmesh.db.dao.ContactDao
 import com.tharmesh.db.entity.BundleEntity
 import com.tharmesh.db.entity.ConversationEntity
 import com.tharmesh.db.entity.MessageEntity
-import com.tharmesh.db.entity.ContactEntity
 
 @Database(
-    entities = [MessageEntity::class, BundleEntity::class, ConversationEntity::class, ContactEntity::class],
-    version = 4,
+    entities = [MessageEntity::class, BundleEntity::class, ConversationEntity::class],
+    version = 1,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -23,7 +21,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun bundleDao(): BundleDao
     abstract fun conversationDao(): ConversationDao
-    abstract fun contactDao(): ContactDao
 
     companion object {
         @Volatile
