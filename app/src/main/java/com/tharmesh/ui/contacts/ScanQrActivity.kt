@@ -9,6 +9,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
+import com.tharmesh.identity.InviteCode
+import com.tharmesh.identity.QrCodec
 
 class ScanQrActivity : AppCompatActivity() {
 
@@ -38,13 +40,23 @@ class ScanQrActivity : AppCompatActivity() {
         val addButton = Button(this)
         addButton.text = "Add"
         addButton.setOnClickListener {
-            val code = input.text?.toString()?.trim().orEmpty()
-            if (code.isNotEmpty()) {
-                val data = Intent()
-                data.putExtra(RESULT_CODE, code)
-                setResult(Activity.RESULT_OK, data)
-                finish()
+            val raw = input.text?.toString()?.trim().orEmpty()
+            if (raw.isEmpty()) {
+                return@setOnClickListener
             }
+
+            val qr = QrCodec.decode(raw)
+            val invite = InviteCode.parse(raw)
+            val resolved = when {
+                qr != null && qr.userId.isNotBlank() -> qr.userId
+                invite != null -> invite.userId
+                else -> raw
+            }
+
+            val data = Intent()
+            data.putExtra(RESULT_CODE, resolved)
+            setResult(Activity.RESULT_OK, data)
+            finish()
         }
         root.addView(
             addButton,

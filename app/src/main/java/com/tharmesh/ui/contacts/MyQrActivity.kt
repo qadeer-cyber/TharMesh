@@ -6,6 +6,10 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.tharmesh.identity.IdentityQrPayload
+import com.tharmesh.identity.IdentityStore
+import com.tharmesh.identity.InviteCode
+import com.tharmesh.identity.QrCodec
 
 class MyQrActivity : AppCompatActivity() {
 
@@ -21,48 +25,41 @@ class MyQrActivity : AppCompatActivity() {
         )
 
         val qrText = TextView(this)
-        qrText.textSize = 20f
+        qrText.textSize = 16f
         qrText.gravity = Gravity.CENTER
-        val userId = loadMyUserIdSafely()
-        qrText.text = "QR: $userId"
 
-        root.addView(
-            qrText,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+        val inviteText = TextView(this)
+        inviteText.textSize = 14f
+        inviteText.gravity = Gravity.CENTER
+
+        val identity = loadIdentitySafe()
+        val qrPayload = QrCodec.encode(
+            IdentityQrPayload(
+                userId = identity.userId,
+                name = identity.name,
+                publicKeyBase64 = identity.publicKeyBase64
             )
         )
+        qrText.text = "QR: $qrPayload"
+        inviteText.text = "Invite: " + InviteCode.generate(identity.userId)
+
+        root.addView(qrText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(inviteText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         setContentView(root)
         title = "My QR"
     }
 
-    private fun loadMyUserIdSafely(): String {
+    private fun loadIdentitySafe(): com.tharmesh.identity.LocalIdentity {
         return try {
-            val prefsClass = Class.forName("com.tharmesh.data.UserPrefs")
-            val ensureMethod = prefsClass.methods.firstOrNull { method ->
-                method.name == "ensureProfile" && method.parameterTypes.size == 1
-            }
-            val profile = ensureMethod?.invoke(null, applicationContext)
-            if (profile != null) {
-                readUserIdFromProfile(profile) ?: "local-user"
-            } else {
-                "local-user"
-            }
+            IdentityStore(applicationContext).ensureIdentity()
         } catch (ignored: Throwable) {
-            "local-user"
-        }
-    }
-
-    private fun readUserIdFromProfile(profile: Any): String? {
-        return try {
-            val getter = profile.javaClass.methods.firstOrNull { method ->
-                method.name.equals("getUserId", ignoreCase = true) && method.parameterTypes.isEmpty()
-            }
-            getter?.invoke(profile)?.toString()
-        } catch (ignored: Throwable) {
-            null
+            com.tharmesh.identity.LocalIdentity(
+                userId = "local-user",
+                name = "Local User",
+                publicKeyBase64 = "",
+                privateKeyBase64 = ""
+            )
         }
     }
 }
