@@ -1,0 +1,10 @@
+<resources>
+    <style name="Text.Title" parent="TextAppearance.AppCompat.Title">
+        <item name="android:textColor">@android:color/black</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Text.Subtle" parent="TextAppearance.AppCompat.Body2">
+        <item name="android:textColor">@android:color/darker_gray</item>
+    </style>
+</resources>
