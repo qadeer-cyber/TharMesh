@@ -1,4 +1,7 @@
 buildscript {
+    ext {
+        appModuleName = "tharmesh.app"
+    }
     ext.kotlin_version = "1.6.21"
     repositories {
         google()
