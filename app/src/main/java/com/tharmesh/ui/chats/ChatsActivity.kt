@@ -58,14 +58,17 @@ class ChatsActivity : AppCompatActivity() {
                 R.id.nav_chats -> true
                 R.id.nav_status -> {
                     startActivity(Intent(this, StatusActivity::class.java))
+                    finish()
                     true
                 }
                 R.id.nav_groups -> {
                     startActivity(Intent(this, GroupsActivity::class.java))
+                    finish()
                     true
                 }
                 R.id.nav_contacts -> {
                     startActivity(Intent(this, ContactsActivity::class.java))
+                    finish()
                     true
                 }
                 else -> false
