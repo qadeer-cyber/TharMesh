@@ -114,7 +114,7 @@ class ChatActivity : AppCompatActivity() {
                 val list = db.messageDao().getMessagesForConvo(toUserId)
                 val mapped = list.map { entity ->
                     val body = decryptForUi(db, me, entity)
-                    val bundleStatus = db.bundleDao().getByBundleId(entity.bundleId)?.status ?: entity.status
+                    val bundleStatus = db.bundleDao().getByBundleId(entity.bundleId)?.status ?: "QUEUED"
                     MessageUi(
                         id = entity.id,
                         body = body,

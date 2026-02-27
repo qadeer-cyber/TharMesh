@@ -125,14 +125,14 @@ class MeshEngine(
             ProtocolType.HAVE -> handleHave(peerId, frame.payload)
             ProtocolType.GET -> handleGet(peerId, frame.payload)
             ProtocolType.BUNDLE -> handleBundle(peerId, frame.payload)
-            ProtocolType.ACK_RELAY -> handleAckRelay(frame.payload)
-            ProtocolType.ACK_FINAL -> handleAckFinal(frame.payload)
+            ProtocolType.ACK_RELAY -> handleAckRelay(peerId, frame.payload)
+            ProtocolType.ACK_FINAL -> handleAckFinal(peerId, frame.payload)
         }
     }
 
     private fun sendInv(peerId: String) {
         val eligible = cache.values
-            .filter { it.ttlUntil > now() && it.status != "DELIVERED" }
+            .filter { it.ttlUntil > now() && it.status != "DELIVERED" && it.status != "EXPIRED" }
             .map { it.bundleId }
             .take(INV_BATCH_SIZE)
         if (eligible.isEmpty()) return
@@ -177,15 +177,11 @@ class MeshEngine(
             val bundle = cache[id] ?: continue
             if (peerKnown.contains(bundle.bundleId)) continue
             if (!router.shouldForward(bundle, peerId, now())) continue
-            if (bundle.status == "DELIVERED") continue
+            if (bundle.status == "DELIVERED" || bundle.status == "EXPIRED") continue
 
-            val next = bundle.copy(status = if (bundle.srcId == localUserId) "RELAYED" else bundle.status)
-            peerKnown.add(next.bundleId)
-            val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(next))
-            val sent = transport.send(peerId, ProtocolCodec.encode(frame))
-            if (sent && next.srcId == localUserId) {
-                onRelayAck?.invoke(next.bundleId)
-            }
+            peerKnown.add(bundle.bundleId)
+            val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(bundle))
+            transport.send(peerId, ProtocolCodec.encode(frame))
         }
     }
 
@@ -197,10 +193,15 @@ class MeshEngine(
         if (seenBundleIds.containsKey(bundle.bundleId)) return
 
         seenBundleIds[bundle.bundleId] = now()
-        val stored = if (!cache.containsKey(bundle.bundleId)) {
-            bundle.copy(hopCount = bundle.hopCount + 1, status = if (bundle.destId == localUserId) "DELIVERED" else "RELAYED")
+
+        val existing = cache[bundle.bundleId]
+        val stored = if (existing == null) {
+            bundle.copy(
+                hopCount = bundle.hopCount + 1,
+                status = if (bundle.destId == localUserId) "DELIVERED" else "RELAYED"
+            )
         } else {
-            cache[bundle.bundleId]!!
+            existing
         }
         cache[stored.bundleId] = stored
 
@@ -219,25 +220,54 @@ class MeshEngine(
                 ProtocolType.ACK_FINAL,
                 localUserId,
                 ProtocolCodec.encodeAckFinal(
-                    AckFinalPacket(stored.bundleId, localUserId, now(), "TODO_FINAL_SIG")
+                    AckFinalPacket(stored.bundleId, stored.srcId, localUserId, now(), "TODO_FINAL_SIG")
                 )
             )
             transport.send(fromPeerId, ProtocolCodec.encode(finalAck))
         }
     }
 
-    private fun handleAckRelay(payload: String) {
+    private fun handleAckRelay(fromPeerId: String, payload: String) {
         val ack = ProtocolCodec.decodeAckRelay(payload) ?: return
         val existing = cache[ack.bundleId] ?: return
-        cache[ack.bundleId] = existing.copy(status = "RELAYED")
+        if (existing.status == "DELIVERED") return
+
+        // Basic authenticity guard: relay ack should come from same peer claiming relayUserId.
+        if (ack.relayUserId.isBlank() || ack.relayUserId != fromPeerId) return
+
+        cache[ack.bundleId] = applyMonotonicStatus(existing, "RELAYED")
         onRelayAck?.invoke(ack.bundleId)
     }
 
-    private fun handleAckFinal(payload: String) {
+    private fun handleAckFinal(fromPeerId: String, payload: String) {
         val ack = ProtocolCodec.decodeAckFinal(payload) ?: return
         val existing = cache[ack.bundleId] ?: return
-        cache[ack.bundleId] = existing.copy(status = "DELIVERED")
+
+        // Authenticity + intent checks:
+        if (ack.toUserId != localUserId) return
+        if (ack.fromUserId.isBlank() || fromPeerId != ack.fromUserId) return
+        if (existing.srcId != localUserId) return
+        if (existing.destId != ack.fromUserId) return
+
+        cache[ack.bundleId] = applyMonotonicStatus(existing, "DELIVERED")
         onFinalAck?.invoke(ack.bundleId)
+    }
+
+    private fun applyMonotonicStatus(bundle: MeshBundle, newStatus: String): MeshBundle {
+        val currentRank = statusRank(bundle.status)
+        val nextRank = statusRank(newStatus)
+        return if (nextRank >= currentRank) bundle.copy(status = newStatus) else bundle
+    }
+
+    private fun statusRank(status: String): Int {
+        return when (status) {
+            "QUEUED" -> 0
+            "RELAYED" -> 1
+            "DELIVERED" -> 2
+            "READ" -> 3
+            "EXPIRED" -> 4
+            else -> 0
+        }
     }
 
     private fun startHeartbeat() {
@@ -259,9 +289,13 @@ class MeshEngine(
         if (connectedPeers.isEmpty()) return
         val nowTs = now()
 
-        val expired = cache.values.filter { it.ttlUntil <= nowTs && it.status != "DELIVERED" }
-        for (bundle in expired) {
-            cache[bundle.bundleId] = bundle.copy(status = "EXPIRED")
+        // TTL purge and non-regressive expiry mark.
+        val expiredIds = cache.values
+            .filter { it.ttlUntil <= nowTs && it.status != "DELIVERED" && it.status != "EXPIRED" }
+            .map { it.bundleId }
+        for (id in expiredIds) {
+            val b = cache[id] ?: continue
+            cache[id] = applyMonotonicStatus(b, "EXPIRED")
         }
 
         for (peerId in connectedPeers) {
@@ -275,7 +309,7 @@ class MeshEngine(
         val nowTs = now()
 
         val candidates = cache.values
-            .filter { it.status != "DELIVERED" && it.status != "EXPIRED" }
+            .filter { it.status == "QUEUED" || it.status == "RELAYED" }
             .filter { it.nextRetryAt <= nowTs }
             .filter { it.ttlUntil > nowTs }
             .filter { !peerKnown.contains(it.bundleId) }
@@ -285,20 +319,13 @@ class MeshEngine(
             if (!router.shouldForward(bundle, peerId, nowTs)) continue
             val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(bundle))
             val sent = transport.send(peerId, ProtocolCodec.encode(frame))
-            val updated = if (sent) {
+            val nextAttempt = bundle.attemptCount + 1
+            val updated = bundle.copy(
+                attemptCount = nextAttempt,
+                nextRetryAt = nowTs + backoffForAttempt(nextAttempt)
+            )
+            if (sent) {
                 peerKnown.add(bundle.bundleId)
-                val nextAttempt = bundle.attemptCount + 1
-                bundle.copy(
-                    attemptCount = nextAttempt,
-                    nextRetryAt = nowTs + backoffForAttempt(nextAttempt),
-                    status = if (bundle.srcId == localUserId) "RELAYED" else bundle.status
-                )
-            } else {
-                val nextAttempt = bundle.attemptCount + 1
-                bundle.copy(
-                    attemptCount = nextAttempt,
-                    nextRetryAt = nowTs + backoffForAttempt(nextAttempt)
-                )
             }
             cache[updated.bundleId] = updated
         }

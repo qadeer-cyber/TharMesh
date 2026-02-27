@@ -18,7 +18,7 @@ data class InvPacket(val bundleIds: List<String>)
 data class HavePacket(val bundleIds: List<String>)
 data class GetPacket(val bundleIds: List<String>)
 data class AckRelayPacket(val bundleId: String, val relayUserId: String, val ts: Long, val sig: String)
-data class AckFinalPacket(val bundleId: String, val toUserId: String, val ts: Long, val sig: String)
+data class AckFinalPacket(val bundleId: String, val toUserId: String, val fromUserId: String, val ts: Long, val sig: String)
 
 data class ProtocolFrame(
     val type: ProtocolType,
@@ -74,6 +74,7 @@ object ProtocolCodec {
         val json = JSONObject()
         json.put("bundleId", packet.bundleId)
         json.put("toUserId", packet.toUserId)
+        json.put("fromUserId", packet.fromUserId)
         json.put("ts", packet.ts)
         json.put("sig", packet.sig)
         return json.toString()
@@ -119,6 +120,7 @@ object ProtocolCodec {
             AckFinalPacket(
                 bundleId = json.getString("bundleId"),
                 toUserId = json.optString("toUserId", ""),
+                fromUserId = json.optString("fromUserId", ""),
                 ts = json.optLong("ts", 0L),
                 sig = json.optString("sig", "")
             )
