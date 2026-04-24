@@ -17,8 +17,13 @@ class MeshEngine(
 ) {
 
     private val router = Router()
+    // Bundle cache is read/written from both IO dispatcher threads (repository sends, retry
+    // loop) and Google Nearby Connections callback threads (handleBundle/handleAck/handleRead).
+    // LinkedHashMap is NOT thread-safe; wrap every access in [cacheLock] below. We keep
+    // LinkedHashMap to preserve insertion order for inventory-sync determinism.
+    private val cacheLock = Any()
     private val cache: MutableMap<String, MeshBundle> = linkedMapOf()
-    private var eventListener: ((MeshEvent) -> Unit)? = null
+    @Volatile private var eventListener: ((MeshEvent) -> Unit)? = null
 
     init {
         transport.setListener { event: TransportEvent ->
@@ -60,7 +65,7 @@ class MeshEngine(
             signature = "TODO_SIG",
             status = "PENDING"
         )
-        cache[bundle.bundleId] = bundle
+        synchronized(cacheLock) { cache[bundle.bundleId] = bundle }
         // Try to send immediately to every connected peer; routing decides if we actually do.
         broadcastBundle(bundle)
         return bundle
@@ -81,14 +86,15 @@ class MeshEngine(
      * delivered this is a no-op.
      */
     fun retryBundle(bundleId: String) {
-        val bundle = cache[bundleId] ?: return
+        val bundle = synchronized(cacheLock) { cache[bundleId] } ?: return
         if (bundle.srcId != localUserId) return
         if (bundle.status == "DELIVERED_FINAL") return
         broadcastBundle(bundle)
     }
 
     fun syncWithPeer(peerId: String) {
-        val inv = BundleCodec.encodeInventory(cache.keys.toList())
+        val snapshot = synchronized(cacheLock) { cache.keys.toList() }
+        val inv = BundleCodec.encodeInventory(snapshot)
         val frame = ProtocolFrame(ProtocolType.INV, localUserId, inv)
         transport.send(peerId, encodeFrame(frame))
     }
@@ -138,7 +144,9 @@ class MeshEngine(
 
     private fun handleInv(peerId: String, payload: String) {
         val peerIds = BundleCodec.decodeInventory(payload)
-        val missing = peerIds.filter { id: String -> !cache.containsKey(id) }
+        val missing = synchronized(cacheLock) {
+            peerIds.filter { id: String -> !cache.containsKey(id) }
+        }
         if (missing.isEmpty()) {
             return
         }
@@ -148,8 +156,10 @@ class MeshEngine(
 
     private fun handleGet(peerId: String, payload: String) {
         val requested = BundleCodec.decodeInventory(payload)
-        for (id in requested) {
-            val bundle = cache[id] ?: continue
+        val toForward: List<MeshBundle> = synchronized(cacheLock) {
+            requested.mapNotNull { id -> cache[id] }
+        }
+        for (bundle in toForward) {
             if (!router.shouldForward(bundle, peerId, now())) {
                 continue
             }
@@ -161,18 +171,25 @@ class MeshEngine(
 
     private fun handleBundle(peerId: String, payload: String) {
         val bundle = BundleCodec.decode(payload) ?: return
-        if (!cache.containsKey(bundle.bundleId)) {
-            cache[bundle.bundleId] = bundle
+        var alreadyDelivered = false
+        var deliveredSnapshot: MeshBundle? = null
+        synchronized(cacheLock) {
+            if (!cache.containsKey(bundle.bundleId)) {
+                cache[bundle.bundleId] = bundle
+            }
+            if (bundle.destId == localUserId) {
+                alreadyDelivered = cache[bundle.bundleId]?.status == "DELIVERED_FINAL"
+                val delivered = bundle.copy(status = "DELIVERED_FINAL")
+                cache[delivered.bundleId] = delivered
+                deliveredSnapshot = delivered
+            }
         }
-        if (bundle.destId == localUserId) {
+        if (deliveredSnapshot != null) {
             // Relay paths can deliver the same bundle more than once. Only emit
             // BundleDelivered on the first arrival; subsequent copies still ACK so
             // the sender can retire its queue but do not re-notify the repository.
-            val alreadyDelivered = cache[bundle.bundleId]?.status == "DELIVERED_FINAL"
-            val delivered = bundle.copy(status = "DELIVERED_FINAL")
-            cache[delivered.bundleId] = delivered
             if (!alreadyDelivered) {
-                eventListener?.invoke(MeshEvent.BundleDelivered(delivered))
+                eventListener?.invoke(MeshEvent.BundleDelivered(deliveredSnapshot!!))
             }
             val ack = ProtocolFrame(ProtocolType.ACK, localUserId, bundle.bundleId)
             transport.send(peerId, encodeFrame(ack))
@@ -180,16 +197,21 @@ class MeshEngine(
     }
 
     private fun handleAck(ackedBy: String, bundleId: String) {
-        val existing = cache[bundleId] ?: return
-        if (existing.srcId != localUserId) return
-        cache[bundleId] = existing.copy(status = "DELIVERED_FINAL")
-        eventListener?.invoke(MeshEvent.BundleAcked(bundleId, ackedBy))
+        val updated: Boolean = synchronized(cacheLock) {
+            val existing = cache[bundleId] ?: return@synchronized false
+            if (existing.srcId != localUserId) return@synchronized false
+            cache[bundleId] = existing.copy(status = "DELIVERED_FINAL")
+            true
+        }
+        if (updated) eventListener?.invoke(MeshEvent.BundleAcked(bundleId, ackedBy))
     }
 
     private fun handleRead(readBy: String, bundleId: String) {
-        val existing = cache[bundleId] ?: return
-        if (existing.srcId != localUserId) return
-        eventListener?.invoke(MeshEvent.BundleRead(bundleId, readBy))
+        val fireEvent: Boolean = synchronized(cacheLock) {
+            val existing = cache[bundleId] ?: return@synchronized false
+            existing.srcId == localUserId
+        }
+        if (fireEvent) eventListener?.invoke(MeshEvent.BundleRead(bundleId, readBy))
     }
 
     private fun encodeFrame(frame: ProtocolFrame): ByteArray {

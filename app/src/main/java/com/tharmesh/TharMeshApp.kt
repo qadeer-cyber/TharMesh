@@ -34,7 +34,7 @@ class TharMeshApp : Application() {
 
     private var transport: Transport? = null
     private var meshEngine: MeshEngine? = null
-    private var started: Boolean = false
+    @Volatile private var started: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -47,8 +47,11 @@ class TharMeshApp : Application() {
 
     /**
      * Idempotently creates the [MeshEngine] and [MessageRepository] for the local user, then
-     * starts advertising + discovering over Nearby. Safe to call from multiple activities.
+     * starts advertising + discovering over Nearby. Safe to call from multiple activities and
+     * from background threads — `@Synchronized` guarantees two racing callers cannot both
+     * observe `started == false` and wire duplicate transports / repositories.
      */
+    @Synchronized
     fun ensureMeshStarted() {
         if (started) return
         val profile = UserPrefs.ensureProfile(this)
@@ -68,6 +71,7 @@ class TharMeshApp : Application() {
         started = true
     }
 
+    @Synchronized
     fun stopMesh() {
         if (!started) return
         repository.stopStoreAndForwardLoop()
