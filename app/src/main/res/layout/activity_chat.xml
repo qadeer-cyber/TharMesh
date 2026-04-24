@@ -25,7 +25,7 @@
             android:id="@+id/text_top_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Queued locally ⏳"
+            android:text="@string/chat_header_offline"
             android:textColor="#DDEEFF"
             android:textSize="12sp" />
     </LinearLayout>
@@ -37,6 +37,51 @@
         android:layout_weight="1"
         android:clipToPadding="false"
         android:padding="8dp" />
+
+    <LinearLayout
+        android:id="@+id/reply_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/tm_surface"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:id="@+id/reply_bar_author"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/tm_accent"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:text="@string/chat_reply_to" />
+
+            <TextView
+                android:id="@+id/reply_bar_preview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:textColor="@color/tm_text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/reply_bar_close"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/chat_cancel_reply"
+            android:src="@android:drawable/ic_menu_close_clear_cancel" />
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -60,7 +105,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="@string/hint_message"
-            android:maxLines="4" />
+            android:maxLines="4"
+            android:inputType="textMultiLine|textCapSentences" />
 
         <Button
             android:id="@+id/button_send"

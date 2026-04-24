@@ -2,173 +2,169 @@ package com.tharmesh.ui.chats
 
 import android.content.Intent
 import android.os.Bundle
-import android.text.InputType
-import android.view.Gravity
+import android.text.format.DateFormat
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import tharmesh.app.R
+import com.tharmesh.TharMeshApp
+import com.tharmesh.data.MessageRepository
+import com.tharmesh.data.UserPrefs
+import com.tharmesh.db.MessageStatus
+import com.tharmesh.db.entity.ConversationEntity
+import com.tharmesh.ui.auth.LoginActivity
 import com.tharmesh.ui.chat.ChatActivity
-import java.text.SimpleDateFormat
+import com.tharmesh.ui.contacts.ContactsActivity
+import com.tharmesh.ui.groups.GroupsActivity
+import com.tharmesh.ui.status.StatusActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Date
-import java.util.Locale
 
+/** WhatsApp-style chat list, backed by [MessageRepository] (Room Flow). */
 class ChatsActivity : AppCompatActivity() {
 
-    private val conversations: MutableList<ConversationUi> = mutableListOf()
-    private lateinit var adapter: ConversationAdapter
+    private lateinit var adapter: ChatsAdapter
+    private lateinit var empty: View
+    private lateinit var repository: MessageRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val root = FrameLayout(this)
-
-        val recyclerView = RecyclerView(this)
-        recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = ConversationAdapter(conversations) { conversation: ConversationUi ->
-            openChat(conversation.toUserId)
+        if (!UserPrefs.hasProfile(this)) {
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
+            return
         }
-        recyclerView.adapter = adapter
-        root.addView(
-            recyclerView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
+        setContentView(R.layout.activity_chats)
+        TharMeshApp.get().ensureMeshStarted()
+        repository = TharMeshApp.get().repository
 
-        val fab = FloatingActionButton(this)
-        fab.setImageResource(android.R.drawable.ic_input_add)
-        fab.contentDescription = "New Chat"
-        fab.setOnClickListener {
-            showNewChatDialog()
+        val recycler: RecyclerView = findViewById(R.id.recycler_chats)
+        val fab: FloatingActionButton = findViewById(R.id.fab_new_chat)
+        val bottomNav: BottomNavigationView = findViewById(R.id.bottom_nav)
+        empty = findViewById(R.id.text_empty)
+
+        adapter = ChatsAdapter { conv ->
+            val intent = Intent(this, ChatActivity::class.java)
+            intent.putExtra(ChatActivity.EXTRA_TO_USER_ID, conv.userId)
+            intent.putExtra(ChatActivity.EXTRA_TITLE, conv.title)
+            startActivity(intent)
         }
-        val fabParams = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        fabParams.gravity = Gravity.BOTTOM or Gravity.END
-        val margin = (16 * resources.displayMetrics.density).toInt()
-        fabParams.setMargins(margin, margin, margin, margin)
-        root.addView(fab, fabParams)
+        recycler.layoutManager = LinearLayoutManager(this)
+        recycler.adapter = adapter
 
-        setContentView(root)
-        title = "Chats"
+        fab.setOnClickListener { promptNewChat() }
 
-        loadConversationsPlaceholder()
+        bottomNav.setOnNavigationItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_chats -> true
+                R.id.nav_status -> {
+                    startActivity(Intent(this, StatusActivity::class.java))
+                    false
+                }
+                R.id.nav_groups -> {
+                    startActivity(Intent(this, GroupsActivity::class.java))
+                    false
+                }
+                R.id.nav_contacts -> {
+                    startActivity(Intent(this, ContactsActivity::class.java))
+                    false
+                }
+                else -> false
+            }
+        }
+
+        lifecycleScope.launch {
+            repository.observeConversations().collectLatest { list ->
+                adapter.submitList(list)
+                empty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+            }
+        }
     }
 
-    private fun showNewChatDialog() {
+    private fun promptNewChat() {
         val input = EditText(this)
-        input.hint = "Recipient userId / number"
-        input.inputType = InputType.TYPE_CLASS_TEXT
-
+        input.hint = getString(R.string.new_chat_recipient_hint)
         AlertDialog.Builder(this)
-            .setTitle("New Chat")
+            .setTitle(R.string.new_chat)
             .setView(input)
-            .setPositiveButton("Open") { _, _ ->
+            .setPositiveButton(R.string.dialog_start) { _, _ ->
                 val toUserId = input.text?.toString()?.trim().orEmpty()
-                if (toUserId.isNotEmpty()) {
-                    openChat(toUserId)
+                if (toUserId.isEmpty()) return@setPositiveButton
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { repository.ensureConversation(toUserId) }
+                    val next = Intent(this@ChatsActivity, ChatActivity::class.java)
+                    next.putExtra(ChatActivity.EXTRA_TO_USER_ID, toUserId)
+                    startActivity(next)
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
 
-    private fun openChat(toUserId: String) {
-        val intent = Intent(this, ChatActivity::class.java)
-        intent.putExtra(ChatActivity.EXTRA_TO_USER_ID, toUserId)
-        startActivity(intent)
-    }
+    private class ChatsAdapter(
+        private val onClick: (ConversationEntity) -> Unit
+    ) : RecyclerView.Adapter<ChatsAdapter.VH>() {
 
-    private fun loadConversationsPlaceholder() {
-        conversations.clear()
-        conversations.add(
-            ConversationUi(
-                toUserId = "88001122",
-                title = "88001122",
-                lastMessage = "Queued message example",
-                lastTimestamp = System.currentTimeMillis() - 60_000L,
-                unreadCount = 1
-            )
-        )
-        conversations.add(
-            ConversationUi(
-                toUserId = "99002233",
-                title = "99002233",
-                lastMessage = "Tap to continue chatting offline",
-                lastTimestamp = System.currentTimeMillis() - 3_600_000L,
-                unreadCount = 0
-            )
-        )
-        adapter.notifyDataSetChanged()
-    }
-}
+        private val items: MutableList<ConversationEntity> = mutableListOf()
 
-data class ConversationUi(
-    val toUserId: String,
-    val title: String,
-    val lastMessage: String,
-    val lastTimestamp: Long,
-    val unreadCount: Int
-)
+        fun submitList(list: List<ConversationEntity>) {
+            items.clear()
+            items.addAll(list)
+            notifyDataSetChanged()
+        }
 
-private class ConversationAdapter(
-    private val items: List<ConversationUi>,
-    private val onClick: (ConversationUi) -> Unit
-) : RecyclerView.Adapter<ConversationAdapter.ConversationViewHolder>() {
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_chat, parent, false)
+            return VH(view)
+        }
 
-    private val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val conv = items[position]
+            holder.title.text = conv.title
+            holder.avatar.text = conv.title.take(1).uppercase()
+            holder.preview.text = conv.lastMessage.ifEmpty { "…" }
+            holder.time.text = DateFormat.format("HH:mm", Date(conv.lastTimestamp))
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ConversationViewHolder {
-        val container = LinearLayout(parent.context)
-        container.orientation = LinearLayout.VERTICAL
-        val pad = (12 * parent.resources.displayMetrics.density).toInt()
-        container.setPadding(pad, pad, pad, pad)
+            val statusGlyph = when (conv.lastMessageStatus) {
+                MessageStatus.QUEUED -> "⏳ "
+                MessageStatus.SENT -> "✓ "
+                MessageStatus.DELIVERED -> "✓✓ "
+                MessageStatus.READ -> "✓✓ "
+                else -> ""
+            }
+            if (statusGlyph.isNotEmpty()) {
+                holder.preview.text = statusGlyph + conv.lastMessage
+            }
 
-        val titleView = TextView(parent.context)
-        titleView.textSize = 16f
-        container.addView(titleView)
+            if (conv.unreadCount > 0) {
+                holder.unread.visibility = View.VISIBLE
+                holder.unread.text = conv.unreadCount.toString()
+            } else {
+                holder.unread.visibility = View.GONE
+            }
+            holder.itemView.setOnClickListener { onClick(conv) }
+        }
 
-        val previewView = TextView(parent.context)
-        previewView.textSize = 14f
-        container.addView(previewView)
+        override fun getItemCount(): Int = items.size
 
-        val metaView = TextView(parent.context)
-        metaView.textSize = 12f
-        container.addView(metaView)
-
-        return ConversationViewHolder(container, titleView, previewView, metaView)
-    }
-
-    override fun onBindViewHolder(holder: ConversationViewHolder, position: Int) {
-        val item = items[position]
-        holder.titleView.text = item.title
-        holder.previewView.text = item.lastMessage
-        val timeText = formatter.format(Date(item.lastTimestamp))
-        val unreadText = if (item.unreadCount > 0) " • ${item.unreadCount} unread" else ""
-        holder.metaView.text = "$timeText$unreadText"
-        holder.itemView.setOnClickListener {
-            onClick(item)
+        class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val avatar: TextView = itemView.findViewById(R.id.text_avatar)
+            val title: TextView = itemView.findViewById(R.id.text_title)
+            val preview: TextView = itemView.findViewById(R.id.text_preview)
+            val time: TextView = itemView.findViewById(R.id.text_time)
+            val unread: TextView = itemView.findViewById(R.id.text_unread)
         }
     }
-
-    override fun getItemCount(): Int {
-        return items.size
-    }
-
-    class ConversationViewHolder(
-        itemView: View,
-        val titleView: TextView,
-        val previewView: TextView,
-        val metaView: TextView
-    ) : RecyclerView.ViewHolder(itemView)
 }

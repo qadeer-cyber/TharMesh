@@ -12,4 +12,39 @@
     <string name="hint_message">Type a message</string>
     <string name="chat_send">Send</string>
     <string name="chat_attach">Attach</string>
+    <string name="chat_header_offline">Offline mesh</string>
+    <string name="chat_reply_to">Replying</string>
+    <string name="chat_cancel_reply">Cancel reply</string>
+
+    <!-- WhatsApp-style message status ticks. -->
+    <string name="status_queued">⏳</string>
+    <string name="status_sent">✓</string>
+    <string name="status_delivered">✓✓</string>
+    <string name="status_read">✓✓</string>
+    <string name="status_failed">!</string>
+
+    <string name="new_chat_recipient_hint">Recipient userId</string>
+    <string name="dialog_start_chat">Start chat</string>
+    <string name="dialog_start">Open</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <!-- Reply action in message bottom sheet. -->
+    <string name="action_reply">Reply</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_delete">Delete</string>
+
+    <!-- Login screen. -->
+    <string name="login_tagline">Offline mesh messaging — sign in once over internet.</string>
+    <string name="login_continue_with_google">Continue with Google</string>
+    <string name="login_continue_anonymously">Continue anonymously</string>
+    <string name="login_ready">Tap Continue with Google to create your profile.</string>
+    <string name="login_missing_oauth">Google sign-in not configured in this build — use Continue anonymously.</string>
+    <string name="login_failed_fmt">Sign-in failed: %1$s</string>
+
+    <!-- Contacts. -->
+    <string name="contacts_title">Contacts</string>
+    <string name="contacts_my_qr">My QR</string>
+    <string name="contacts_scan_qr">Scan QR</string>
+    <string name="contacts_add_by_invite">Add by invite code</string>
+    <string name="contacts_empty">No contacts yet</string>
 </resources>

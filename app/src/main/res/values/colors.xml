@@ -14,4 +14,6 @@
     <color name="tm_bubble_me">#DCF8C6</color>
     <color name="tm_bubble_peer">#FFFFFF</color>
     <color name="tm_unread_badge">#25D366</color>
+    <color name="tm_tick_read">#34B7F1</color>
+    <color name="tm_tick_default">#6B7280</color>
 </resources>
