@@ -4,4 +4,14 @@
     <color name="teal_200">#03DAC5</color>
     <color name="black">#000000</color>
     <color name="white">#FFFFFF</color>
+
+    <color name="tm_primary">#128C7E</color>
+    <color name="tm_accent">#25D366</color>
+    <color name="tm_bg">#ECE5DD</color>
+    <color name="tm_surface">#FFFFFF</color>
+    <color name="tm_text_primary">#1F2937</color>
+    <color name="tm_text_secondary">#6B7280</color>
+    <color name="tm_bubble_me">#DCF8C6</color>
+    <color name="tm_bubble_peer">#FFFFFF</color>
+    <color name="tm_unread_badge">#25D366</color>
 </resources>
