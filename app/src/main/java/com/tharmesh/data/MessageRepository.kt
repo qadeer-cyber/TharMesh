@@ -10,8 +10,11 @@ import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.dtn.MeshEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -41,6 +44,20 @@ class MessageRepository(
     init {
         mesh.setEventListener { event -> onMeshEvent(event) }
     }
+
+    /**
+     * Metrics the Status screen reads. Incremented as mesh events arrive; never decremented.
+     * Survives process death only if we ever write them to SharedPreferences — for now they
+     * are best-effort, session-scoped numbers.
+     */
+    @Volatile var messagesRelayed: Long = 0L
+        private set
+    @Volatile var messagesDelivered: Long = 0L
+        private set
+    @Volatile var messagesSent: Long = 0L
+        private set
+
+    private var retryJob: Job? = null
 
     fun observeConversation(peerId: String): Flow<List<MessageEntity>> =
         db.messageDao().observeConversation(peerId)
@@ -211,16 +228,64 @@ class MessageRepository(
     private fun onMeshEvent(event: MeshEvent) {
         when (event) {
             is MeshEvent.BundleSent -> scope.launch(Dispatchers.IO) {
+                messagesSent++
                 advanceByBundleId(event.bundleId, MessageStatus.SENT)
             }
             is MeshEvent.BundleAcked -> scope.launch(Dispatchers.IO) {
+                messagesDelivered++
                 advanceByBundleId(event.bundleId, MessageStatus.DELIVERED)
             }
             is MeshEvent.BundleRead -> scope.launch(Dispatchers.IO) {
                 advanceByBundleId(event.bundleId, MessageStatus.READ)
             }
-            is MeshEvent.BundleDelivered -> handleIncomingBundle(event.bundle)
+            is MeshEvent.BundleDelivered -> {
+                messagesRelayed++
+                handleIncomingBundle(event.bundle)
+            }
         }
+    }
+
+    /**
+     * Broadcast a best-effort SOS text to every currently online peer in the directory.
+     * Returns the number of peers the SOS was queued to — the Status screen surfaces this
+     * as "SOS sent to N nodes".
+     */
+    suspend fun broadcastSos(text: String, targets: List<String>): Int {
+        if (targets.isEmpty()) return 0
+        for (target in targets) {
+            send(target, text)
+        }
+        return targets.size
+    }
+
+    /**
+     * Start a coroutine that every [STORE_AND_FORWARD_INTERVAL_MS] walks the set of
+     * still-undelivered outbound messages and hands them back to the mesh engine for
+     * another broadcast attempt. The engine itself also opportunistically syncs with any
+     * newly-connected peer via INV/GET, so this loop mostly catches the case where the
+     * app was offline when the message was composed.
+     */
+    fun startStoreAndForwardLoop() {
+        if (retryJob?.isActive == true) return
+        retryJob = scope.launch(Dispatchers.IO) {
+            while (true) {
+                delay(STORE_AND_FORWARD_INTERVAL_MS)
+                try {
+                    val pending = db.messageDao().pendingOutbound(myUserId())
+                    for (msg in pending) {
+                        val id = msg.bundleId ?: continue
+                        mesh.retryBundle(id)
+                    }
+                } catch (_: Throwable) {
+                    // Ignore transient I/O failures; next tick will retry.
+                }
+            }
+        }
+    }
+
+    fun stopStoreAndForwardLoop() {
+        retryJob?.cancel()
+        retryJob = null
     }
 
     private fun advanceByBundleId(bundleId: String, target: String) {
@@ -258,10 +323,12 @@ class MessageRepository(
     }
 
     private suspend fun <T> runIo(block: () -> T): T =
-        kotlinx.coroutines.withContext(Dispatchers.IO) { block() }
+        withContext(Dispatchers.IO) { block() }
 
     companion object {
         const val DEFAULT_TTL_MS: Long = 24L * 60L * 60L * 1000L
         const val DEFAULT_HOPS: Int = 8
+        /** How often the retry loop walks undelivered outbound messages. */
+        const val STORE_AND_FORWARD_INTERVAL_MS: Long = 15_000L
     }
 }

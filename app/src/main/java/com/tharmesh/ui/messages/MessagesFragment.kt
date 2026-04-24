@@ -6,9 +6,8 @@ import android.text.format.DateFormat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
+import android.widget.Button
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -18,7 +17,9 @@ import com.tharmesh.TharMeshApp
 import com.tharmesh.data.MessageRepository
 import com.tharmesh.db.MessageStatus
 import com.tharmesh.db.entity.ConversationEntity
+import com.tharmesh.mesh.MeshNode
 import com.tharmesh.ui.chat.ChatActivity
+import com.tharmesh.ui.devices.DevicePickerSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -26,7 +27,13 @@ import kotlinx.coroutines.withContext
 import tharmesh.app.R
 import java.util.Date
 
-/** Messages tab: chat list backed by MessageRepository Flow. */
+/**
+ * Messages tab: chat list backed by MessageRepository Flow.
+ *
+ * Starting a new chat is now zero-friction: the FAB (and the empty-state CTA)
+ * open [DevicePickerSheet]; tapping a nearby node opens [ChatActivity] pre-filled
+ * with that peer's userId, display name, and avatar colour.
+ */
 class MessagesFragment : Fragment() {
 
     private lateinit var adapter: ChatsAdapter
@@ -45,18 +52,17 @@ class MessagesFragment : Fragment() {
 
         val recycler: RecyclerView = view.findViewById(R.id.recycler_chats)
         val fab: FloatingActionButton = view.findViewById(R.id.fab_new_chat)
+        val emptyCta: Button = view.findViewById(R.id.button_empty_start_chat)
         empty = view.findViewById(R.id.empty_chats)
 
         adapter = ChatsAdapter { conv ->
-            val intent = Intent(requireContext(), ChatActivity::class.java)
-            intent.putExtra(ChatActivity.EXTRA_TO_USER_ID, conv.userId)
-            intent.putExtra(ChatActivity.EXTRA_TITLE, conv.title)
-            startActivity(intent)
+            openChat(conv.userId, conv.title, avatarBgForPeer(conv.userId))
         }
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
-        fab.setOnClickListener { promptNewChat() }
+        fab.setOnClickListener { showDevicePicker() }
+        emptyCta.setOnClickListener { showDevicePicker() }
 
         viewLifecycleOwner.lifecycleScope.launch {
             repository.observeConversations().collectLatest { list ->
@@ -66,24 +72,36 @@ class MessagesFragment : Fragment() {
         }
     }
 
-    private fun promptNewChat() {
-        val input = EditText(requireContext())
-        input.hint = getString(R.string.new_chat_recipient_hint)
-        AlertDialog.Builder(requireContext())
-            .setTitle(R.string.new_chat)
-            .setView(input)
-            .setPositiveButton(R.string.dialog_start) { _, _ ->
-                val toUserId = input.text?.toString()?.trim().orEmpty()
-                if (toUserId.isEmpty()) return@setPositiveButton
-                viewLifecycleOwner.lifecycleScope.launch {
-                    withContext(Dispatchers.IO) { repository.ensureConversation(toUserId) }
-                    val next = Intent(requireContext(), ChatActivity::class.java)
-                    next.putExtra(ChatActivity.EXTRA_TO_USER_ID, toUserId)
-                    startActivity(next)
-                }
-            }
-            .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
+    private fun showDevicePicker() {
+        val sheet = DevicePickerSheet()
+        sheet.listener = DevicePickerSheet.Listener { node -> openChatWithNode(node) }
+        sheet.show(parentFragmentManager, DevicePickerSheet.TAG)
+    }
+
+    private fun openChatWithNode(node: MeshNode) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            withContext(Dispatchers.IO) { repository.ensureConversation(node.userId, node.name) }
+            openChat(node.userId, node.name, node.avatarBg)
+        }
+    }
+
+    private fun openChat(userId: String, title: String, avatarBg: Int) {
+        val intent = Intent(requireContext(), ChatActivity::class.java)
+        intent.putExtra(ChatActivity.EXTRA_TO_USER_ID, userId)
+        intent.putExtra(ChatActivity.EXTRA_TITLE, title)
+        intent.putExtra(ChatActivity.EXTRA_AVATAR_BG, avatarBg)
+        startActivity(intent)
+    }
+
+    /**
+     * Look up the avatar colour we'd use for a given peer in the directory. Keeps
+     * the chat header visually consistent with the picker/dashboard. Falls back to
+     * the default cyan avatar when the peer is not known to the directory yet
+     * (e.g. inbound message from a new peer).
+     */
+    private fun avatarBgForPeer(userId: String): Int {
+        val dir = TharMeshApp.get().directory
+        return dir.nodes.value.firstOrNull { it.userId == userId }?.avatarBg ?: R.drawable.bg_avatar
     }
 
     private class ChatsAdapter(

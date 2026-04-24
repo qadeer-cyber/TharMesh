@@ -9,7 +9,6 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -40,6 +39,7 @@ class ChatActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_TO_USER_ID = "toUserId"
         const val EXTRA_TITLE = "title"
+        const val EXTRA_AVATAR_BG = "avatarBg"
     }
 
     private lateinit var recycler: RecyclerView
@@ -70,6 +70,7 @@ class ChatActivity : AppCompatActivity() {
 
         val provided = intent.getStringExtra(EXTRA_TO_USER_ID)?.trim().orEmpty()
         val providedTitle = intent.getStringExtra(EXTRA_TITLE)?.trim().orEmpty()
+        val providedAvatarBg = intent.getIntExtra(EXTRA_AVATAR_BG, 0)
 
         titleView = findViewById(R.id.text_chat_title)
         topStatus = findViewById(R.id.text_top_status)
@@ -92,14 +93,20 @@ class ChatActivity : AppCompatActivity() {
         replyBarClose.setOnClickListener { cancelReply() }
 
         if (provided.isEmpty()) {
-            askRecipient()
-        } else {
-            toUserId = provided
-            val title = providedTitle.ifBlank { toUserId }
-            titleView.text = title
-            chatAvatar.text = title.take(1).uppercase()
-            start()
+            // A ChatActivity should always be launched from a picker / conversation row
+            // that provides a userId. If we reach here with no target, bail cleanly
+            // rather than showing a dead screen.
+            finish()
+            return
         }
+        toUserId = provided
+        val title = providedTitle.ifBlank { toUserId }
+        titleView.text = title
+        chatAvatar.text = title.take(1).uppercase()
+        if (providedAvatarBg != 0) {
+            chatAvatar.setBackgroundResource(providedAvatarBg)
+        }
+        start()
     }
 
     override fun onResume() {
@@ -107,23 +114,6 @@ class ChatActivity : AppCompatActivity() {
         if (toUserId.isNotEmpty()) {
             lifecycleScope.launch { repository.markChatRead(toUserId) }
         }
-    }
-
-    private fun askRecipient() {
-        val editText = EditText(this)
-        editText.hint = getString(R.string.new_chat_recipient_hint)
-        AlertDialog.Builder(this)
-            .setTitle(R.string.dialog_start_chat)
-            .setCancelable(false)
-            .setView(editText)
-            .setPositiveButton(R.string.dialog_start) { _, _ ->
-                toUserId = editText.text?.toString()?.trim().orEmpty().ifBlank { "unknown" }
-                titleView.text = toUserId
-                chatAvatar.text = toUserId.take(1).uppercase()
-                start()
-            }
-            .setNegativeButton(R.string.dialog_cancel) { _, _ -> finish() }
-            .show()
     }
 
     private fun start() {

@@ -75,6 +75,18 @@ class MeshEngine(
         transport.send(toPeerId, encodeFrame(frame))
     }
 
+    /**
+     * Re-broadcast a cached outbound bundle. Called by the repository's store-and-forward
+     * retry loop. If the bundle is no longer in the cache (unlikely) or was already marked
+     * delivered this is a no-op.
+     */
+    fun retryBundle(bundleId: String) {
+        val bundle = cache[bundleId] ?: return
+        if (bundle.srcId != localUserId) return
+        if (bundle.status == "DELIVERED_FINAL") return
+        broadcastBundle(bundle)
+    }
+
     fun syncWithPeer(peerId: String) {
         val inv = BundleCodec.encodeInventory(cache.keys.toList())
         val frame = ProtocolFrame(ProtocolType.INV, localUserId, inv)
@@ -153,9 +165,15 @@ class MeshEngine(
             cache[bundle.bundleId] = bundle
         }
         if (bundle.destId == localUserId) {
+            // Relay paths can deliver the same bundle more than once. Only emit
+            // BundleDelivered on the first arrival; subsequent copies still ACK so
+            // the sender can retire its queue but do not re-notify the repository.
+            val alreadyDelivered = cache[bundle.bundleId]?.status == "DELIVERED_FINAL"
             val delivered = bundle.copy(status = "DELIVERED_FINAL")
             cache[delivered.bundleId] = delivered
-            eventListener?.invoke(MeshEvent.BundleDelivered(delivered))
+            if (!alreadyDelivered) {
+                eventListener?.invoke(MeshEvent.BundleDelivered(delivered))
+            }
             val ack = ProtocolFrame(ProtocolType.ACK, localUserId, bundle.bundleId)
             transport.send(peerId, encodeFrame(ack))
         }

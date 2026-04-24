@@ -77,4 +77,20 @@ interface MessageDao {
         """
     )
     fun markIncomingRead(peerUserId: String, ts: Long)
+
+    /**
+     * Outbound messages that have NOT yet been DELIVERED/READ — the store-and-forward
+     * retry loop re-broadcasts these every tick in case a peer came back online.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+         WHERE fromUserId = :myUserId
+           AND (status = 'QUEUED' OR status = 'SENT' OR status = 'FAILED')
+           AND bundleId IS NOT NULL
+         ORDER BY timestamp ASC
+         LIMIT 50
+        """
+    )
+    fun pendingOutbound(myUserId: String): List<MessageEntity>
 }

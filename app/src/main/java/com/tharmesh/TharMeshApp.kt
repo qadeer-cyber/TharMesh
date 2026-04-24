@@ -5,6 +5,7 @@ import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
 import com.tharmesh.dtn.MeshEngine
+import com.tharmesh.mesh.NearbyDirectory
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.nearby.NearbyConnectionsTransport
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,9 @@ class TharMeshApp : Application() {
     lateinit var repository: MessageRepository
         private set
 
+    lateinit var directory: NearbyDirectory
+        private set
+
     private var transport: Transport? = null
     private var meshEngine: MeshEngine? = null
     private var started: Boolean = false
@@ -37,6 +41,8 @@ class TharMeshApp : Application() {
         instance = this
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         database = AppDatabase.getInstance(this)
+        directory = NearbyDirectory(appScope)
+        directory.startSimulation()
     }
 
     /**
@@ -58,14 +64,23 @@ class TharMeshApp : Application() {
         meshEngine = engine
         repository = repo
         engine.start()
+        repo.startStoreAndForwardLoop()
         started = true
     }
 
     fun stopMesh() {
         if (!started) return
+        repository.stopStoreAndForwardLoop()
         meshEngine?.stop()
         started = false
     }
+
+    /**
+     * Check whether the mesh has been started for the current user. Some Activities
+     * (Dashboard, Devices) may render before sign-in; they should only reach for
+     * [repository] / [meshEngine] when this returns true.
+     */
+    fun isMeshStarted(): Boolean = started
 
     companion object {
         @Volatile

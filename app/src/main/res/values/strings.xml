@@ -16,8 +16,28 @@
     <string name="tab_contacts">Contacts</string>
 
     <string name="empty_chats">No conversations yet</string>
-    <string name="empty_chats_hint">Tap the + button to start a secure mesh chat with a nearby device.</string>
+    <string name="empty_chats_hint">Tap Start Mesh Chat to pick a nearby device and open a secure channel.</string>
+    <string name="empty_chats_button">Start Mesh Chat</string>
     <string name="new_chat">New chat</string>
+
+    <!-- Device picker bottom sheet -->
+    <string name="picker_title">Nearby Mesh Nodes</string>
+    <string name="picker_subtitle">Tap a device to open a secure chat</string>
+    <string name="picker_count_fmt">%1$d online</string>
+    <string name="picker_empty_title">No nodes online</string>
+    <string name="picker_empty_sub">Wait a moment — devices come and go as they enter mesh range.</string>
+    <string name="picker_chat">Chat</string>
+
+    <!-- SOS -->
+    <string name="status_sos_default_body">SOS — I need help. Please relay this message.</string>
+    <string name="status_sos_sending">Sending SOS…</string>
+    <string name="status_sos_sent_fmt">SOS sent to %1$d nodes</string>
+    <string name="status_sos_none">No mesh nodes online — retry when a peer is reachable.</string>
+
+    <!-- Profile editor -->
+    <string name="profile_edit_title">Edit display name</string>
+    <string name="profile_edit_hint">Display name</string>
+    <string name="profile_edit_save">Save</string>
 
     <!-- Chat screen -->
     <string name="hint_message">Type a secure message…</string>

@@ -1,23 +1,34 @@
 package com.tharmesh.ui.status
 
+import android.animation.ObjectAnimator
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import com.tharmesh.TharMeshApp
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import tharmesh.app.R
 
 /**
- * Status tab — emergency broadcast, network alerts, device health.
+ * Status tab — Emergency Broadcast + live network health.
  *
- * SOS currently shows a toast; wiring it into MeshEngine.broadcastEmergency is
- * left for a follow-up so we don't accidentally spam a live mesh.
+ * SOS now actually fans out a bundle to every online node in the
+ * [com.tharmesh.mesh.NearbyDirectory] via [com.tharmesh.data.MessageRepository.broadcastSos].
+ * Result is shown on a pulsing red card ("SOS sent to N nodes") so the user sees the
+ * broadcast actually happened.
  */
 class StatusFragment : Fragment() {
+
+    private var pulseAnim: ObjectAnimator? = null
+    private lateinit var sosResult: TextView
+    private lateinit var sosResultCard: View
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -27,13 +38,68 @@ class StatusFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        bindHealthStat(view.findViewById(R.id.health_battery), R.drawable.ic_battery, "86%", R.string.status_battery_label)
-        bindHealthStat(view.findViewById(R.id.health_mesh), R.drawable.ic_wifi, "4 nodes", R.string.status_network_label)
-        bindHealthStat(view.findViewById(R.id.health_storage), R.drawable.ic_storage, "128 MB", R.string.status_storage_label)
 
-        view.findViewById<Button>(R.id.button_sos).setOnClickListener {
-            Toast.makeText(requireContext(), "SOS broadcast queued — demo only", Toast.LENGTH_LONG).show()
+        val batteryStat: View = view.findViewById(R.id.health_battery)
+        val meshStat: View = view.findViewById(R.id.health_mesh)
+        val storageStat: View = view.findViewById(R.id.health_storage)
+        bindHealthStat(batteryStat, R.drawable.ic_battery, "86%", R.string.status_battery_label)
+        bindHealthStat(meshStat, R.drawable.ic_wifi, "0 nodes", R.string.status_network_label)
+        bindHealthStat(storageStat, R.drawable.ic_storage, "128 MB", R.string.status_storage_label)
+
+        sosResultCard = view.findViewById(R.id.sos_result_card)
+        sosResult = view.findViewById(R.id.sos_result_text)
+        sosResultCard.visibility = View.GONE
+
+        val sos: Button = view.findViewById(R.id.button_sos)
+        sos.setOnClickListener { triggerSos() }
+
+        val directory = TharMeshApp.get().directory
+        viewLifecycleOwner.lifecycleScope.launch {
+            directory.nodes.collectLatest { nodes ->
+                val online = nodes.count { it.online }
+                meshStat.findViewById<TextView>(R.id.health_value).text =
+                    if (online == 1) "1 node" else "$online nodes"
+            }
         }
+    }
+
+    private fun triggerSos() {
+        val app = TharMeshApp.get()
+        if (!app.isMeshStarted()) return
+        val targets = app.directory.onlineRanked().map { it.userId }
+        if (targets.isEmpty()) {
+            showResult(getString(R.string.status_sos_none), error = true)
+            return
+        }
+        showResult(getString(R.string.status_sos_sending), error = false)
+        val body = getString(R.string.status_sos_default_body)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val delivered = app.repository.broadcastSos(body, targets)
+            showResult(getString(R.string.status_sos_sent_fmt, delivered), error = false)
+        }
+    }
+
+    private fun showResult(text: String, error: Boolean) {
+        sosResult.text = text
+        sosResultCard.setBackgroundResource(
+            if (error) R.drawable.bg_card_danger_soft
+            else R.drawable.bg_card_danger
+        )
+        sosResultCard.visibility = View.VISIBLE
+        pulseAnim?.cancel()
+        pulseAnim = ObjectAnimator.ofFloat(sosResultCard, "alpha", 0.55f, 1.0f).apply {
+            duration = 900L
+            repeatMode = ObjectAnimator.REVERSE
+            repeatCount = 3
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
+    }
+
+    override fun onDestroyView() {
+        pulseAnim?.cancel()
+        pulseAnim = null
+        super.onDestroyView()
     }
 
     private fun bindHealthStat(stat: View, iconRes: Int, value: String, labelRes: Int) {

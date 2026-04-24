@@ -84,6 +84,15 @@
                     android:layout_marginTop="6dp"
                     android:gravity="center"
                     android:text="@string/empty_chats_hint" />
+
+                <Button
+                    android:id="@+id/button_empty_start_chat"
+                    style="@style/TmButton.Primary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:minWidth="180dp"
+                    android:text="@string/empty_chats_button" />
             </LinearLayout>
         </FrameLayout>
     </LinearLayout>
