@@ -25,8 +25,35 @@ class MeshEngineTtlHopsCacheTest {
 
     @Test
     fun cache_evictsOldestOverCap() {
+        // Use relayed (non-local) bundles so they are not protected by the
+        // "never evict local undelivered outbound" invariant. The eviction
+        // loop is allowed to drop these to stay within maxCacheSize.
         val transport = SilentTransport()
         val engine = MeshEngine(localUserId = "me", transport = transport, maxCacheSize = 3)
+        repeat(5) { i ->
+            engine.cachePut(
+                MeshBundle(
+                    bundleId = "b$i",
+                    srcId = "other",
+                    destId = "someone-else",
+                    payloadCiphertext = "body$i",
+                    ttlUntil = System.currentTimeMillis() + 60_000L,
+                    hopsLeft = 4,
+                    signature = "sig",
+                    status = "FORWARDED"
+                )
+            )
+        }
+        assertEquals("Cache capped at maxCacheSize", 3, engine.cacheSize())
+    }
+
+    @Test
+    fun cache_doesNotEvictLocalUndeliveredOutbound() {
+        // All 5 bundles originate from localUserId and are QUEUED — the retry loop
+        // still needs them, so the cache is allowed to temporarily exceed the cap
+        // rather than drop pending outbound traffic on the floor.
+        val transport = SilentTransport()
+        val engine = MeshEngine(localUserId = "me", transport = transport, maxCacheSize = 2)
         repeat(5) { i ->
             engine.queueText(
                 destId = "peer$i",
@@ -35,7 +62,7 @@ class MeshEngineTtlHopsCacheTest {
                 hops = 4
             )
         }
-        assertEquals("Cache capped at maxCacheSize", 3, engine.cacheSize())
+        assertEquals("Local undelivered outbound is pinned", 5, engine.cacheSize())
     }
 
     @Test

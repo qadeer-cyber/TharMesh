@@ -320,17 +320,33 @@ class MeshEngine(
         // LinkedHashMap keeps insertion order; remove-then-put refreshes "recency".
         cache.remove(bundle.bundleId)
         cache[bundle.bundleId] = bundle
-        // Evict oldest until within cap. Never evict a bundle we're currently tracking
-        // as pending (the sender still needs it); instead skip and evict the next oldest.
+        if (cache.size <= maxCacheSize) return
+
+        // Enforce the stated invariant: never evict a bundle that is (a) currently
+        // awaiting PayloadSent/Error correlation, or (b) a local unDELIVERED outbound
+        // — the store-and-forward retry loop still needs it. Snapshot the pending set
+        // while holding pendingLock, then walk the LinkedHashMap (oldest-first) and
+        // remove the first evictable entry. If nothing is evictable (every cache entry
+        // is protected), stop — we'd rather exceed the cap briefly than drop pending
+        // traffic on the floor.
+        val pendingBundleIds = synchronized(pendingLock) { pendingBundleSends.values.toSet() }
         while (cache.size > maxCacheSize) {
-            val it = cache.entries.iterator()
-            if (!it.hasNext()) break
-            val oldest = it.next()
-            it.remove()
-            if (oldest.key == bundle.bundleId) {
-                // Shouldn't normally happen (we just inserted), but guard anyway.
+            val iter = cache.entries.iterator()
+            var evicted = false
+            while (iter.hasNext()) {
+                val entry = iter.next()
+                val key = entry.key
+                if (key == bundle.bundleId) continue
+                if (key in pendingBundleIds) continue
+                val v = entry.value
+                val isLocalUndelivered =
+                    v.srcId == localUserId && v.status != "DELIVERED_FINAL"
+                if (isLocalUndelivered) continue
+                iter.remove()
+                evicted = true
                 break
             }
+            if (!evicted) break
         }
     }
 

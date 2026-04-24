@@ -9,6 +9,7 @@ import com.tharmesh.mesh.EmptyMeshDataSource
 import com.tharmesh.mesh.MeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
 import com.tharmesh.mesh.NearbyMeshDataSource
+import com.tharmesh.permissions.NearbyPermissions
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.nearby.NearbyConnectionsTransport
 import kotlinx.coroutines.CoroutineScope
@@ -68,6 +69,13 @@ class TharMeshApp : Application() {
     @Synchronized
     fun ensureMeshStarted() {
         if (started) return
+        // Refuse to wire the transport before runtime Bluetooth/Location permissions are
+        // granted — Nearby's startAdvertising / startDiscovery silently fail without them,
+        // and we must NOT flip `started = true` in that state, otherwise this method
+        // becomes a permanent no-op and the mesh stays dead forever. MainActivity calls
+        // us again from onRequestPermissionsResult once the user grants, and from then on
+        // the normal idempotency kicks in.
+        if (!NearbyPermissions.allGranted(this)) return
         val profile = UserPrefs.ensureProfile(this)
         val t: Transport = NearbyConnectionsTransport(this)
         val engine = MeshEngine(profile.userId, t)

@@ -94,6 +94,11 @@ class MainActivity : AppCompatActivity() {
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
+        } else {
+            // Permissions just flipped to granted. ensureMeshStarted bailed out earlier
+            // because perms were missing (it does NOT flip started=true in that case),
+            // so calling it again now actually wires the transport.
+            TharMeshApp.get().ensureMeshStarted()
         }
     }
 

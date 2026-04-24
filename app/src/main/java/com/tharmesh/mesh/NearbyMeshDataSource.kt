@@ -7,7 +7,6 @@ import com.tharmesh.dtn.MeshEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlin.math.absoluteValue
 
 /**
  * Real [MeshDataSource] backed by peer-lifecycle events emitted by [MeshEngine].
@@ -130,7 +129,10 @@ class NearbyMeshDataSource(
     @DrawableRes
     private fun avatarBgFor(userId: String): Int {
         // Deterministic: same userId → same avatar background across sessions.
-        val idx = (userId.hashCode().absoluteValue) % AVATAR_BGS.size
+        // NOTE: Int.MIN_VALUE.absoluteValue stays negative (overflow), so we widen to
+        // Long + mask the sign bit before taking the modulus. Otherwise any userId that
+        // happens to hash to Int.MIN_VALUE would crash every peer with AIOOBE.
+        val idx = (userId.hashCode().toLong() and 0xFFFFFFFFL).rem(AVATAR_BGS.size).toInt()
         return AVATAR_BGS[idx]
     }
 
