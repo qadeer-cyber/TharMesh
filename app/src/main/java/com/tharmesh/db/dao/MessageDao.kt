@@ -127,4 +127,19 @@ interface MessageDao {
         """
     )
     fun pendingOutbound(myUserId: String): List<MessageEntity>
+
+    /**
+     * Flip a QUEUED row to FAILED on a transport-layer send error. Skips rows that are
+     * already past QUEUED (SENT/DELIVERED/READ) so a late Error on a retry doesn't
+     * regress a successfully-delivered message. Returns rows affected.
+     */
+    @Query(
+        """
+        UPDATE messages
+           SET status = 'FAILED'
+         WHERE bundleId = :bundleId
+           AND status = 'QUEUED'
+        """
+    )
+    fun markFailedIfStillQueued(bundleId: String): Int
 }

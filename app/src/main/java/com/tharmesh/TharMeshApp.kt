@@ -8,6 +8,7 @@ import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.mesh.EmptyMeshDataSource
 import com.tharmesh.mesh.MeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
+import com.tharmesh.mesh.NearbyMeshDataSource
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.nearby.NearbyConnectionsTransport
 import kotlinx.coroutines.CoroutineScope
@@ -35,10 +36,10 @@ class TharMeshApp : Application() {
         private set
 
     /**
-     * Data source backing [directory]. Today this is [EmptyMeshDataSource] — it returns
-     * zero devices until the real Bluetooth / Wi-Fi Direct / Nearby transport is wired.
-     * Kept as a field so the future real implementation can replace it without touching
-     * any UI code.
+     * Data source backing [directory]. Before [ensureMeshStarted] this is an
+     * [EmptyMeshDataSource] (so screens that render pre-login don't crash); after
+     * [ensureMeshStarted] it is a [NearbyMeshDataSource] wired to the real mesh engine
+     * so `PeerFound / PeerConnected / PeerDisconnected` events land in the UI.
      */
     lateinit var meshDataSource: MeshDataSource
         private set
@@ -52,6 +53,8 @@ class TharMeshApp : Application() {
         instance = this
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         database = AppDatabase.getInstance(this)
+        // Pre-login placeholder. Swapped to NearbyMeshDataSource inside ensureMeshStarted()
+        // the first time a screen requests the mesh.
         meshDataSource = EmptyMeshDataSource()
         directory = NearbyDirectory(meshDataSource)
     }
@@ -74,11 +77,18 @@ class TharMeshApp : Application() {
             myUserId = { profile.userId },
             scope = appScope
         )
+        // Swap the UI-facing data source to the real one now that the engine exists.
+        val realSource = NearbyMeshDataSource(engine)
+        meshDataSource = realSource
+        directory = NearbyDirectory(realSource)
         transport = t
         meshEngine = engine
         repository = repo
         engine.start()
         repo.startStoreAndForwardLoop()
+        // Data source flips to SCANNING until the first peer arrives; makes the Devices
+        // tab show the correct empty-vs-searching copy without a separate button click.
+        realSource.startScan()
         started = true
     }
 
@@ -87,6 +97,10 @@ class TharMeshApp : Application() {
         if (!started) return
         repository.stopStoreAndForwardLoop()
         meshEngine?.stop()
+        // Reset the data source so any residual peer list is dropped — otherwise a user
+        // signing out and a different user signing back in would briefly see stale peers.
+        meshDataSource = EmptyMeshDataSource()
+        directory = NearbyDirectory(meshDataSource)
         started = false
     }
 

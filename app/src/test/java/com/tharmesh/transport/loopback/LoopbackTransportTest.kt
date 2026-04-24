@@ -17,7 +17,7 @@ class LoopbackTransportTest {
         a.start("a")
         b.start("b")
 
-        val ok = a.send("b", "hi".toByteArray())
+        val ok = a.send("b", "hi".toByteArray(), sendId = 42L)
 
         assertTrue("send should succeed", ok)
         val payload = received.filterIsInstance<TransportEvent.PayloadReceived>().single()
@@ -33,9 +33,10 @@ class LoopbackTransportTest {
         a.setListener { events.add(it) }
         a.start("a")
 
-        val ok = a.send("ghost", "x".toByteArray())
+        val ok = a.send("ghost", "x".toByteArray(), sendId = 7L)
 
         assertEquals(false, ok)
-        assertTrue(events.any { it is TransportEvent.Error })
+        val err = events.filterIsInstance<TransportEvent.Error>().single()
+        assertEquals(7L, err.sendId)
     }
 }

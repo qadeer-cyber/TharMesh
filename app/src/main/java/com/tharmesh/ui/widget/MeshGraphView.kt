@@ -60,6 +60,12 @@ class MeshGraphView @JvmOverloads constructor(
         strokeWidth = 1f
         color = stroke
     }
+    // Class-level to avoid allocating a Paint on every onDraw frame under the infinite
+    // ValueAnimator (onDraw fires >100 Hz, GC pressure otherwise).
+    private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = green
+    }
 
     private var phase = 0f
     private val animator: ValueAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -171,11 +177,7 @@ class MeshGraphView @JvmOverloads constructor(
         val pulse = 1f + 0.15f * sin(phase * Math.PI * 2).toFloat()
         canvas.drawCircle(cx, cy, 18f * pulse, nodeFill)
         canvas.drawCircle(cx, cy, 18f * pulse, nodeStroke)
-        // Inner green core
-        val core = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = green
-        }
-        canvas.drawCircle(cx, cy, 6f, core)
+        // Inner green core (uses class-level [corePaint] — do not allocate in onDraw).
+        canvas.drawCircle(cx, cy, 6f, corePaint)
     }
 }

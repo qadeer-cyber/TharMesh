@@ -3,6 +3,7 @@ package com.tharmesh.dtn
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.TransportEvent
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * DTN (delay-tolerant networking) engine. Owns the bundle cache and the on-wire protocol.
@@ -13,17 +14,32 @@ import java.util.UUID
 class MeshEngine(
     private val localUserId: String,
     private val transport: Transport,
-    private val now: () -> Long = { System.currentTimeMillis() }
+    private val now: () -> Long = { System.currentTimeMillis() },
+    private val maxCacheSize: Int = DEFAULT_MAX_CACHE_SIZE
 ) {
 
     private val router = Router()
     // Bundle cache is read/written from both IO dispatcher threads (repository sends, retry
     // loop) and Google Nearby Connections callback threads (handleBundle/handleAck/handleRead).
     // LinkedHashMap is NOT thread-safe; wrap every access in [cacheLock] below. We keep
-    // LinkedHashMap to preserve insertion order for inventory-sync determinism.
+    // LinkedHashMap to preserve insertion order for inventory-sync determinism AND LRU
+    // eviction when we exceed [maxCacheSize].
     private val cacheLock = Any()
     private val cache: MutableMap<String, MeshBundle> = linkedMapOf()
     @Volatile private var eventListener: ((MeshEvent) -> Unit)? = null
+
+    // Additional peer-lifecycle listeners — the data source that feeds the Devices UI
+    // subscribes here so it can update its StateFlow as TransportEvents arrive.
+    // Copy-on-write list so fire paths don't need to hold a lock.
+    @Volatile private var peerListeners: List<(MeshEvent) -> Unit> = emptyList()
+    private val peerListenersLock = Any()
+
+    // sendId → bundleId, for correlating PayloadSent / Error callbacks back to the BUNDLE
+    // they acknowledge. Non-BUNDLE sends (INV/GET/ACK/READ) do not populate this map —
+    // their PayloadSent events are ignored for BundleSent purposes.
+    private val pendingLock = Any()
+    private val pendingBundleSends: MutableMap<Long, String> = HashMap()
+    private val sendIdSeq = AtomicLong(1L)
 
     init {
         transport.setListener { event: TransportEvent ->
@@ -44,7 +60,36 @@ class MeshEngine(
     }
 
     /**
-     * Queue outbound text. [originHint] is optional — if non-null it seeds [MeshBundle.bundleId],
+     * Subscribe to peer-lifecycle [MeshEvent.PeerFound] / [MeshEvent.PeerConnected] /
+     * [MeshEvent.PeerDisconnected] (the data source uses this to keep the Devices tab
+     * in sync with the real transport). These listeners are additive and coexist with
+     * the single [setEventListener] used by the repository.
+     */
+    fun addPeerListener(listener: (MeshEvent) -> Unit) {
+        synchronized(peerListenersLock) {
+            peerListeners = peerListeners + listener
+        }
+    }
+
+    fun removePeerListener(listener: (MeshEvent) -> Unit) {
+        synchronized(peerListenersLock) {
+            peerListeners = peerListeners - listener
+        }
+    }
+
+    private fun firePeerEvent(event: MeshEvent) {
+        val snapshot = peerListeners
+        for (l in snapshot) {
+            try {
+                l(event)
+            } catch (_: Throwable) {
+                // Listener failures must not break the mesh engine.
+            }
+        }
+    }
+
+    /**
+     * Queue outbound text. [bundleIdHint] is optional — if non-null it seeds [MeshBundle.bundleId],
      * which lets the repository map ACKs back to a local [MessageEntity] row.
      */
     fun queueText(
@@ -61,14 +106,19 @@ class MeshEngine(
             destId = destId,
             payloadCiphertext = payloadCiphertext,
             ttlUntil = now() + ttlMs,
-            hopsLeft = hops,
+            hopsLeft = hops.coerceAtLeast(0),
             signature = "TODO_SIG",
             status = "PENDING"
         )
-        synchronized(cacheLock) { cache[bundle.bundleId] = bundle }
+        cachePut(bundle)
         // Try to send immediately to every connected peer; routing decides if we actually do.
         broadcastBundle(bundle)
         return bundle
+    }
+
+    /** Non-bundle frame send — no BundleSent correlation needed. */
+    private fun sendFrame(peerId: String, frame: ProtocolFrame) {
+        transport.send(peerId, encodeFrame(frame), sendId = 0L)
     }
 
     /**
@@ -76,39 +126,60 @@ class MeshEngine(
      * it just queues the frame in memory (lost on process death — acceptable for MVP).
      */
     fun sendRead(bundleId: String, toPeerId: String) {
-        val frame = ProtocolFrame(ProtocolType.READ, localUserId, bundleId)
-        transport.send(toPeerId, encodeFrame(frame))
+        sendFrame(toPeerId, ProtocolFrame(ProtocolType.READ, localUserId, bundleId))
     }
 
     /**
      * Re-broadcast a cached outbound bundle. Called by the repository's store-and-forward
-     * retry loop. If the bundle is no longer in the cache (unlikely) or was already marked
-     * delivered this is a no-op.
+     * retry loop and opportunistically on PeerConnected. If the bundle is no longer in the
+     * cache, already marked delivered, or expired, this is a no-op.
      */
     fun retryBundle(bundleId: String) {
         val bundle = synchronized(cacheLock) { cache[bundleId] } ?: return
         if (bundle.srcId != localUserId) return
         if (bundle.status == "DELIVERED_FINAL") return
+        if (bundle.ttlUntil < now()) return
         broadcastBundle(bundle)
+    }
+
+    /**
+     * Called by the repository on PeerConnected — re-broadcasts all of our own cached
+     * outbound bundles that are not yet DELIVERED, so the new peer gets them immediately
+     * instead of waiting for the retry timer.
+     */
+    fun retryAllPendingForLocalUser() {
+        val snapshot = synchronized(cacheLock) {
+            cache.values.filter { it.srcId == localUserId && it.status != "DELIVERED_FINAL" }.toList()
+        }
+        val nowMs = now()
+        for (bundle in snapshot) {
+            if (bundle.ttlUntil < nowMs) continue
+            broadcastBundle(bundle)
+        }
     }
 
     fun syncWithPeer(peerId: String) {
         val snapshot = synchronized(cacheLock) { cache.keys.toList() }
         val inv = BundleCodec.encodeInventory(snapshot)
-        val frame = ProtocolFrame(ProtocolType.INV, localUserId, inv)
-        transport.send(peerId, encodeFrame(frame))
+        sendFrame(peerId, ProtocolFrame(ProtocolType.INV, localUserId, inv))
     }
 
     private fun broadcastBundle(bundle: MeshBundle) {
+        if (bundle.ttlUntil < now()) return
         val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(bundle))
-        // Naive: try destId directly — real Nearby transport resolves userId → endpoint.
-        val ok = transport.send(bundle.destId, encodeFrame(frame))
-        // We emit BundleSent directly here rather than inferring it from PayloadSent —
-        // otherwise non-BUNDLE frames (INV/GET/ACK/READ) sent to the same peer would
-        // prematurely flip our outbound message to SENT.
-        if (ok && bundle.srcId == localUserId) {
-            eventListener?.invoke(MeshEvent.BundleSent(bundle.bundleId))
+        val sendId = sendIdSeq.getAndIncrement()
+        // Track the correlation BEFORE calling send — a synchronous failure path inside
+        // send (e.g. LoopbackTransport "Peer not connected") will fire Error(sendId)
+        // synchronously and pop from the map.
+        synchronized(pendingLock) { pendingBundleSends[sendId] = bundle.bundleId }
+        val accepted = transport.send(bundle.destId, encodeFrame(frame), sendId)
+        if (!accepted) {
+            // Defensive: if the transport returned false AND didn't fire Error synchronously
+            // for some reason, release the correlation so we don't leak.
+            synchronized(pendingLock) { pendingBundleSends.remove(sendId) }
         }
+        // NB: BundleSent is NOT emitted here. The repository only hears about it when
+        // TransportEvent.PayloadSent fires back with our sendId (see onTransportEvent).
     }
 
     private fun onTransportEvent(event: TransportEvent) {
@@ -127,17 +198,31 @@ class MeshEngine(
                 }
             }
             is TransportEvent.PayloadSent -> {
-                // BundleSent is now emitted directly from [broadcastBundle] on a successful
-                // transport.send — we don't sniff PayloadSent events here because the
-                // low-level byte count doesn't let us tell a BUNDLE from an INV/ACK/READ.
+                val bundleId = synchronized(pendingLock) { pendingBundleSends.remove(event.sendId) }
+                if (bundleId != null) {
+                    eventListener?.invoke(MeshEvent.BundleSent(bundleId))
+                }
+                // sendId == 0 or non-BUNDLE send → ignore; non-bundle frames don't surface as
+                // message-level BundleSent events.
             }
             is TransportEvent.PeerConnected -> {
+                // Opportunistic inventory sync with the new peer.
                 syncWithPeer(event.peerId)
+                val e = MeshEvent.PeerConnected(event.peerId)
+                firePeerEvent(e)
+                eventListener?.invoke(e)
             }
-            is TransportEvent.PeerFound,
-            is TransportEvent.PeerDisconnected,
+            is TransportEvent.PeerFound -> {
+                firePeerEvent(MeshEvent.PeerFound(event.peerId, event.displayName))
+            }
+            is TransportEvent.PeerDisconnected -> {
+                firePeerEvent(MeshEvent.PeerDisconnected(event.peerId))
+            }
             is TransportEvent.Error -> {
-                // Not interesting for the repository layer yet.
+                val bundleId = synchronized(pendingLock) { pendingBundleSends.remove(event.sendId) }
+                if (bundleId != null) {
+                    eventListener?.invoke(MeshEvent.BundleFailed(bundleId, event.reason))
+                }
             }
         }
     }
@@ -150,32 +235,39 @@ class MeshEngine(
         if (missing.isEmpty()) {
             return
         }
-        val frame = ProtocolFrame(ProtocolType.GET, localUserId, BundleCodec.encodeInventory(missing))
-        transport.send(peerId, encodeFrame(frame))
+        sendFrame(peerId, ProtocolFrame(ProtocolType.GET, localUserId, BundleCodec.encodeInventory(missing)))
     }
 
     private fun handleGet(peerId: String, payload: String) {
         val requested = BundleCodec.decodeInventory(payload)
+        val nowMs = now()
         val toForward: List<MeshBundle> = synchronized(cacheLock) {
             requested.mapNotNull { id -> cache[id] }
         }
         for (bundle in toForward) {
-            if (!router.shouldForward(bundle, peerId, now())) {
-                continue
-            }
-            val next = bundle.copy(hopsLeft = bundle.hopsLeft - 1, status = "FORWARDED")
+            if (bundle.ttlUntil < nowMs) continue
+            if (bundle.hopsLeft <= 0) continue
+            if (!router.shouldForward(bundle, peerId, nowMs)) continue
+            val nextHops = (bundle.hopsLeft - 1).coerceAtLeast(0)
+            val next = bundle.copy(hopsLeft = nextHops, status = "FORWARDED")
             val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(next))
-            transport.send(peerId, encodeFrame(frame))
+            sendFrame(peerId, frame)
         }
     }
 
     private fun handleBundle(peerId: String, payload: String) {
         val bundle = BundleCodec.decode(payload) ?: return
+        val nowMs = now()
+        // Drop expired / hop-exhausted at receive time too — we don't want to cache them,
+        // we don't want to ACK them, we don't want to forward them.
+        if (bundle.ttlUntil < nowMs) return
+        if (bundle.hopsLeft < 0) return
+
         var alreadyDelivered = false
         var deliveredSnapshot: MeshBundle? = null
         synchronized(cacheLock) {
             if (!cache.containsKey(bundle.bundleId)) {
-                cache[bundle.bundleId] = bundle
+                cachePutLocked(bundle)
             }
             if (bundle.destId == localUserId) {
                 alreadyDelivered = cache[bundle.bundleId]?.status == "DELIVERED_FINAL"
@@ -192,7 +284,7 @@ class MeshEngine(
                 eventListener?.invoke(MeshEvent.BundleDelivered(deliveredSnapshot!!))
             }
             val ack = ProtocolFrame(ProtocolType.ACK, localUserId, bundle.bundleId)
-            transport.send(peerId, encodeFrame(ack))
+            sendFrame(peerId, ack)
         }
     }
 
@@ -212,6 +304,34 @@ class MeshEngine(
             existing.srcId == localUserId
         }
         if (fireEvent) eventListener?.invoke(MeshEvent.BundleRead(bundleId, readBy))
+    }
+
+    /**
+     * Insert-or-update a bundle in the cache with LRU eviction when we exceed [maxCacheSize].
+     * Public-ish only for tests; production paths use this via queueText/handleBundle.
+     */
+    internal fun cachePut(bundle: MeshBundle) {
+        synchronized(cacheLock) { cachePutLocked(bundle) }
+    }
+
+    internal fun cacheSize(): Int = synchronized(cacheLock) { cache.size }
+
+    private fun cachePutLocked(bundle: MeshBundle) {
+        // LinkedHashMap keeps insertion order; remove-then-put refreshes "recency".
+        cache.remove(bundle.bundleId)
+        cache[bundle.bundleId] = bundle
+        // Evict oldest until within cap. Never evict a bundle we're currently tracking
+        // as pending (the sender still needs it); instead skip and evict the next oldest.
+        while (cache.size > maxCacheSize) {
+            val it = cache.entries.iterator()
+            if (!it.hasNext()) break
+            val oldest = it.next()
+            it.remove()
+            if (oldest.key == bundle.bundleId) {
+                // Shouldn't normally happen (we just inserted), but guard anyway.
+                break
+            }
+        }
     }
 
     private fun encodeFrame(frame: ProtocolFrame): ByteArray {
@@ -235,6 +355,11 @@ class MeshEngine(
             null
         }
     }
+
+    companion object {
+        /** Hard cap on the in-memory bundle cache (bundles, not bytes). */
+        const val DEFAULT_MAX_CACHE_SIZE: Int = 500
+    }
 }
 
 sealed class MeshEvent {
@@ -242,4 +367,16 @@ sealed class MeshEvent {
     data class BundleAcked(val bundleId: String, val ackedByUserId: String) : MeshEvent()
     data class BundleRead(val bundleId: String, val readByUserId: String) : MeshEvent()
     data class BundleDelivered(val bundle: MeshBundle) : MeshEvent()
+
+    /** Transmit failed at the link layer. Repository flips the row to FAILED. */
+    data class BundleFailed(val bundleId: String, val reason: String) : MeshEvent()
+
+    /** A peer has been discovered (radio range). Not yet connected. */
+    data class PeerFound(val peerId: String, val displayName: String) : MeshEvent()
+
+    /** A peer connection has been established. Safe to send to [peerId] now. */
+    data class PeerConnected(val peerId: String) : MeshEvent()
+
+    /** A peer connection has been lost. Any further sends to [peerId] will fail. */
+    data class PeerDisconnected(val peerId: String) : MeshEvent()
 }
