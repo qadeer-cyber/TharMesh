@@ -84,7 +84,13 @@ class MeshEngine(
     private fun broadcastBundle(bundle: MeshBundle) {
         val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(bundle))
         // Naive: try destId directly — real Nearby transport resolves userId → endpoint.
-        transport.send(bundle.destId, encodeFrame(frame))
+        val ok = transport.send(bundle.destId, encodeFrame(frame))
+        // We emit BundleSent directly here rather than inferring it from PayloadSent —
+        // otherwise non-BUNDLE frames (INV/GET/ACK/READ) sent to the same peer would
+        // prematurely flip our outbound message to SENT.
+        if (ok && bundle.srcId == localUserId) {
+            eventListener?.invoke(MeshEvent.BundleSent(bundle.bundleId))
+        }
     }
 
     private fun onTransportEvent(event: TransportEvent) {
@@ -103,16 +109,9 @@ class MeshEngine(
                 }
             }
             is TransportEvent.PayloadSent -> {
-                // Best-effort: treat successful link-layer send as SENT for every bundle that
-                // was broadcast in this instant. We reconstruct bundleId from the payload bytes
-                // because the low-level transport doesn't preserve semantic metadata.
-                val bundleId = sniffBundleIdFrom(event)
-                if (bundleId != null) {
-                    val bundle = cache[bundleId]
-                    if (bundle != null && bundle.srcId == localUserId) {
-                        eventListener?.invoke(MeshEvent.BundleSent(bundleId))
-                    }
-                }
+                // BundleSent is now emitted directly from [broadcastBundle] on a successful
+                // transport.send — we don't sniff PayloadSent events here because the
+                // low-level byte count doesn't let us tell a BUNDLE from an INV/ACK/READ.
             }
             is TransportEvent.PeerConnected -> {
                 syncWithPeer(event.peerId)
@@ -123,15 +122,6 @@ class MeshEngine(
                 // Not interesting for the repository layer yet.
             }
         }
-    }
-
-    private fun sniffBundleIdFrom(event: TransportEvent.PayloadSent): String? {
-        // PayloadSent only carries byte count in the current Transport contract; a richer
-        // contract would carry the bundleId. For the loopback transport we rely on the
-        // sender's own BUNDLE frame always using the format "BUNDLE|<from>|<json>" and
-        // parse it from the in-flight cache instead.
-        val candidates = cache.values.filter { it.srcId == localUserId && it.destId == event.peerId }
-        return candidates.maxByOrNull { it.ttlUntil }?.bundleId
     }
 
     private fun handleInv(peerId: String, payload: String) {

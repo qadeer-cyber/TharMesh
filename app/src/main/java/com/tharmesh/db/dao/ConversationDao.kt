@@ -22,6 +22,11 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE userId = :userId LIMIT 1")
     fun getByUserId(userId: String): ConversationEntity?
 
+    /**
+     * Update the last-message summary ONLY when the incoming timestamp is at least as new
+     * as the stored one. Prevents status updates for an older message from regressing the
+     * conversation row back to older body/ts.
+     */
     @Query(
         """
         UPDATE conversations
@@ -29,6 +34,7 @@ interface ConversationDao {
                lastTimestamp = :lastTimestamp,
                lastMessageStatus = :lastStatus
          WHERE userId = :userId
+           AND :lastTimestamp >= lastTimestamp
         """
     )
     fun setLastMessage(userId: String, lastMessage: String, lastTimestamp: Long, lastStatus: String): Int
