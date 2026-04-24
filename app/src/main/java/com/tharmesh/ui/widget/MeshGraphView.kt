@@ -72,9 +72,19 @@ class MeshGraphView @JvmOverloads constructor(
         }
     }
 
-    // 6 orbital peer nodes at slightly varying radii so it doesn't look too uniform.
+    // Up to 6 orbital slots; [peerCount] clamps how many are actually drawn so the graph
+    // reflects the real number of online nodes instead of always showing a full mesh.
     private val peerAngles = floatArrayOf(0f, 60f, 120f, 180f, 240f, 300f)
     private val peerRadii = floatArrayOf(0.82f, 0.95f, 0.70f, 0.88f, 0.75f, 0.92f)
+    private var peerCount: Int = 0
+
+    /** Sets how many peer nodes to draw in the orbit (clamped to 0..6). */
+    fun setPeerCount(count: Int) {
+        val clamped = count.coerceIn(0, peerAngles.size)
+        if (clamped == peerCount) return
+        peerCount = clamped
+        invalidate()
+    }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -108,46 +118,53 @@ class MeshGraphView @JvmOverloads constructor(
             canvas.drawCircle(cx, cy, r, strokePaint)
         }
 
-        // Rotation of peers gives a subtle animated feel.
-        val rotDeg = phase * 360f
-        val peerPositions = FloatArray(peerAngles.size * 2)
-        for (i in peerAngles.indices) {
-            val ang = Math.toRadians((peerAngles[i] + rotDeg).toDouble())
-            val r = maxR * peerRadii[i]
-            val px = cx + (r * cos(ang)).toFloat()
-            val py = cy + (r * sin(ang)).toFloat()
-            peerPositions[i * 2] = px
-            peerPositions[i * 2 + 1] = py
-        }
+        val drawCount = peerCount.coerceIn(0, peerAngles.size)
+        if (drawCount > 0) {
+            // Evenly redistribute visible peers around the orbit so 1..5 nodes don't
+            // cluster on one side.
+            val step = 360f / drawCount
+            val rotDeg = phase * 360f
+            val peerPositions = FloatArray(drawCount * 2)
+            for (i in 0 until drawCount) {
+                val ang = Math.toRadians((i * step + rotDeg).toDouble())
+                val r = maxR * peerRadii[i % peerRadii.size]
+                val px = cx + (r * cos(ang)).toFloat()
+                val py = cy + (r * sin(ang)).toFloat()
+                peerPositions[i * 2] = px
+                peerPositions[i * 2 + 1] = py
+            }
 
-        // Lines from center to each peer
-        for (i in peerAngles.indices) {
-            val px = peerPositions[i * 2]
-            val py = peerPositions[i * 2 + 1]
-            // Hot pulse travels around peers
-            val hotIndex = ((phase * peerAngles.size) % peerAngles.size).toInt()
-            val paint = if (i == hotIndex) lineHotPaint else linePaint
-            canvas.drawLine(cx, cy, px, py, paint)
-        }
+            // Lines from center to each visible peer, with one hot pulse highlight.
+            val hotIndex = ((phase * drawCount) % drawCount).toInt()
+            for (i in 0 until drawCount) {
+                val px = peerPositions[i * 2]
+                val py = peerPositions[i * 2 + 1]
+                val paint = if (i == hotIndex) lineHotPaint else linePaint
+                canvas.drawLine(cx, cy, px, py, paint)
+            }
 
-        // Sparse peer-to-peer mesh links
-        for (i in peerAngles.indices) {
-            val next = (i + 2) % peerAngles.size
-            canvas.drawLine(
-                peerPositions[i * 2],
-                peerPositions[i * 2 + 1],
-                peerPositions[next * 2],
-                peerPositions[next * 2 + 1],
-                linePaint
-            )
-        }
+            // Sparse peer-to-peer mesh links only when there are enough peers to connect.
+            if (drawCount >= 3) {
+                for (i in 0 until drawCount) {
+                    val next = (i + 2) % drawCount
+                    if (next == i) continue
+                    canvas.drawLine(
+                        peerPositions[i * 2],
+                        peerPositions[i * 2 + 1],
+                        peerPositions[next * 2],
+                        peerPositions[next * 2 + 1],
+                        linePaint
+                    )
+                }
+            }
 
-        // Draw peer nodes
-        for (i in peerAngles.indices) {
-            val px = peerPositions[i * 2]
-            val py = peerPositions[i * 2 + 1]
-            canvas.drawCircle(px, py, 10f, nodeFill)
-            canvas.drawCircle(px, py, 10f, if (i % 2 == 0) nodeStroke else nodeStrokeGreen)
+            // Draw peer nodes
+            for (i in 0 until drawCount) {
+                val px = peerPositions[i * 2]
+                val py = peerPositions[i * 2 + 1]
+                canvas.drawCircle(px, py, 10f, nodeFill)
+                canvas.drawCircle(px, py, 10f, if (i % 2 == 0) nodeStroke else nodeStrokeGreen)
+            }
         }
 
         // Pulsating center node

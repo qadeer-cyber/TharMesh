@@ -5,6 +5,8 @@ import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
 import com.tharmesh.dtn.MeshEngine
+import com.tharmesh.mesh.EmptyMeshDataSource
+import com.tharmesh.mesh.MeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.nearby.NearbyConnectionsTransport
@@ -32,6 +34,15 @@ class TharMeshApp : Application() {
     lateinit var directory: NearbyDirectory
         private set
 
+    /**
+     * Data source backing [directory]. Today this is [EmptyMeshDataSource] — it returns
+     * zero devices until the real Bluetooth / Wi-Fi Direct / Nearby transport is wired.
+     * Kept as a field so the future real implementation can replace it without touching
+     * any UI code.
+     */
+    lateinit var meshDataSource: MeshDataSource
+        private set
+
     private var transport: Transport? = null
     private var meshEngine: MeshEngine? = null
     @Volatile private var started: Boolean = false
@@ -41,8 +52,8 @@ class TharMeshApp : Application() {
         instance = this
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         database = AppDatabase.getInstance(this)
-        directory = NearbyDirectory(appScope)
-        directory.startSimulation()
+        meshDataSource = EmptyMeshDataSource()
+        directory = NearbyDirectory(meshDataSource)
     }
 
     /**

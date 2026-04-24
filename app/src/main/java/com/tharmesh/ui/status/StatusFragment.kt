@@ -42,9 +42,11 @@ class StatusFragment : Fragment() {
         val batteryStat: View = view.findViewById(R.id.health_battery)
         val meshStat: View = view.findViewById(R.id.health_mesh)
         val storageStat: View = view.findViewById(R.id.health_storage)
-        bindHealthStat(batteryStat, R.drawable.ic_battery, "86%", R.string.status_battery_label)
+        // Real battery level via BatteryManager; "—" for mesh/storage until we wire real
+        // counters. No fabricated percentages.
+        bindHealthStat(batteryStat, R.drawable.ic_battery, readBatteryLevelPercent(), R.string.status_battery_label)
         bindHealthStat(meshStat, R.drawable.ic_wifi, "0 nodes", R.string.status_network_label)
-        bindHealthStat(storageStat, R.drawable.ic_storage, "128 MB", R.string.status_storage_label)
+        bindHealthStat(storageStat, R.drawable.ic_storage, "—", R.string.status_storage_label)
 
         sosResultCard = view.findViewById(R.id.sos_result_card)
         sosResult = view.findViewById(R.id.sos_result_text)
@@ -106,5 +108,22 @@ class StatusFragment : Fragment() {
         stat.findViewById<ImageView>(R.id.health_icon).setImageResource(iconRes)
         stat.findViewById<TextView>(R.id.health_value).text = value
         stat.findViewById<TextView>(R.id.health_label).setText(labelRes)
+    }
+
+    /**
+     * Returns the current battery level as "NN%" from [android.os.BatteryManager]. Falls
+     * back to "—" when the system broadcast is unavailable so we never show a fabricated
+     * percentage.
+     */
+    private fun readBatteryLevelPercent(): String {
+        val intent = requireContext().registerReceiver(
+            null,
+            android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+        ) ?: return "—"
+        val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+        if (level < 0 || scale <= 0) return "—"
+        val pct = (level * 100f / scale).toInt().coerceIn(0, 100)
+        return "$pct%"
     }
 }

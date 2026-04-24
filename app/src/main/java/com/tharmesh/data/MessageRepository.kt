@@ -288,13 +288,20 @@ class MessageRepository(
         retryJob = null
     }
 
+    /**
+     * Advance the status of the message with [bundleId] to [target] atomically. The SQL
+     * UPDATE only fires when [target]'s rank is strictly higher than the current rank
+     * (see [com.tharmesh.db.dao.MessageDao.advanceStatusByBundleId]) so two concurrent
+     * mesh events cannot race to regress the status. Only refreshes the conversation row
+     * when the advance actually took effect.
+     */
     private fun advanceByBundleId(bundleId: String, target: String) {
         val msg = db.messageDao().getByBundleId(bundleId) ?: return
-        val next = MessageStatus.advance(msg.status, target)
-        if (next == msg.status) return
         val ts = now()
-        db.messageDao().updateStatusByBundleId(bundleId, next, ts)
-        db.conversationDao().setLastMessage(msg.peerUserId, msg.body, msg.timestamp, next)
+        val updated = db.messageDao().advanceStatusByBundleId(bundleId, target, ts)
+        if (updated > 0) {
+            db.conversationDao().setLastMessage(msg.peerUserId, msg.body, msg.timestamp, target)
+        }
     }
 
     private fun bumpConversation(
@@ -307,16 +314,25 @@ class MessageRepository(
         val convDao = db.conversationDao()
         val updated = convDao.setLastMessage(peerId, lastMessage, ts, lastStatus)
         if (updated == 0) {
-            convDao.upsert(
-                ConversationEntity(
-                    userId = peerId,
-                    title = peerId,
-                    lastMessage = lastMessage,
-                    lastTimestamp = ts,
-                    lastMessageStatus = lastStatus,
-                    unreadCount = if (incrementUnread) 1 else 0
+            // setLastMessage returns 0 both when (a) the row doesn't exist yet, and
+            // (b) the existing row already has a strictly-newer timestamp. Only insert
+            // in case (a); in case (b) an upsert(REPLACE) would clobber the newer row's
+            // body + unreadCount.
+            val existing = convDao.getByUserId(peerId)
+            if (existing == null) {
+                convDao.upsert(
+                    ConversationEntity(
+                        userId = peerId,
+                        title = peerId,
+                        lastMessage = lastMessage,
+                        lastTimestamp = ts,
+                        lastMessageStatus = lastStatus,
+                        unreadCount = if (incrementUnread) 1 else 0
+                    )
                 )
-            )
+            } else if (incrementUnread) {
+                convDao.incrementUnread(peerId)
+            }
         } else if (incrementUnread) {
             convDao.incrementUnread(peerId)
         }

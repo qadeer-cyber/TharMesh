@@ -53,6 +53,40 @@ interface MessageDao {
     fun updateStatusByBundleId(bundleId: String, status: String, ts: Long)
 
     /**
+     * Atomic monotonic status advance. Only applies the update if the target rank is
+     * strictly higher than the current rank, and never touches FAILED rows. Returns the
+     * number of rows affected so the caller can skip the conversation bump when the
+     * update was a no-op (e.g. a stale BundleSent arriving after BundleAcked). Prevents
+     * the read-then-write TOCTOU race when multiple mesh events fire concurrently.
+     */
+    @Query(
+        """
+        UPDATE messages
+           SET status = :status,
+               sentAt = CASE WHEN :status = 'SENT' THEN :ts ELSE sentAt END,
+               deliveredAt = CASE WHEN :status = 'DELIVERED' THEN :ts ELSE deliveredAt END,
+               readAt = CASE WHEN :status = 'READ' THEN :ts ELSE readAt END
+         WHERE bundleId = :bundleId
+           AND status != 'FAILED'
+           AND (CASE :status
+                  WHEN 'QUEUED' THEN 0
+                  WHEN 'SENT' THEN 1
+                  WHEN 'DELIVERED' THEN 2
+                  WHEN 'READ' THEN 3
+                  ELSE -1
+                END)
+             > (CASE status
+                  WHEN 'QUEUED' THEN 0
+                  WHEN 'SENT' THEN 1
+                  WHEN 'DELIVERED' THEN 2
+                  WHEN 'READ' THEN 3
+                  ELSE -1
+                END)
+        """
+    )
+    fun advanceStatusByBundleId(bundleId: String, status: String, ts: Long): Int
+
+    /**
      * Mark all messages from peerUserId (incoming) as READ with ts, returning the bundleIds
      * that just flipped to READ so the caller can emit READ ack frames.
      */

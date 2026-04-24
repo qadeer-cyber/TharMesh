@@ -86,17 +86,19 @@
                 android:orientation="vertical">
 
                 <TextView
+                    android:id="@+id/mesh_status_title"
                     style="@style/Text.H3"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/dash_connected_title" />
+                    android:text="@string/dash_searching_title" />
 
                 <TextView
+                    android:id="@+id/mesh_status_sub"
                     style="@style/Text.Caption"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="@string/dash_connected_sub" />
+                    android:text="@string/dash_searching_sub" />
             </LinearLayout>
 
             <ImageView
@@ -134,7 +136,7 @@
                     android:paddingEnd="10dp"
                     android:paddingTop="4dp"
                     android:paddingBottom="4dp"
-                    android:text="@string/dash_signal_excellent"
+                    android:text="@string/dash_signal_unknown"
                     android:textColor="@color/tm_neon_green"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -182,6 +184,7 @@
             </LinearLayout>
 
             <com.tharmesh.ui.widget.MeshGraphView
+                android:id="@+id/mesh_graph"
                 android:layout_width="match_parent"
                 android:layout_height="220dp"
                 android:layout_marginTop="8dp" />
@@ -220,6 +223,28 @@
                 android:layout_marginTop="8dp"
                 android:nestedScrollingEnabled="false"
                 android:overScrollMode="never" />
+
+            <LinearLayout
+                android:id="@+id/nearby_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/Text.Body"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dash_nearby_empty" />
+
+                <TextView
+                    style="@style/Text.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/dash_nearby_empty_sub" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

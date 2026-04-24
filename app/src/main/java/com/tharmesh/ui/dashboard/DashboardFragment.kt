@@ -4,12 +4,14 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tharmesh.TharMeshApp
 import com.tharmesh.mesh.MeshNode
+import com.tharmesh.ui.widget.MeshGraphView
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tharmesh.app.R
@@ -34,6 +36,10 @@ class DashboardFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val recycler: RecyclerView = view.findViewById(R.id.recycler_nearby)
+        val emptyView: View = view.findViewById(R.id.nearby_empty)
+        val graph: MeshGraphView = view.findViewById(R.id.mesh_graph)
+        val statusTitle: TextView = view.findViewById(R.id.mesh_status_title)
+        val statusSub: TextView = view.findViewById(R.id.mesh_status_sub)
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.isNestedScrollingEnabled = false
         adapter = NearbyAdapter(entries)
@@ -51,6 +57,19 @@ class DashboardFragment : Fragment() {
                 entries.clear()
                 entries.addAll(top)
                 adapter.notifyDataSetChanged()
+                val isEmpty = top.isEmpty()
+                recycler.visibility = if (isEmpty) View.GONE else View.VISIBLE
+                emptyView.visibility = if (isEmpty) View.VISIBLE else View.GONE
+
+                val onlineCount = nodes.count { it.online }
+                graph.setPeerCount(onlineCount)
+                if (onlineCount == 0) {
+                    statusTitle.setText(R.string.dash_searching_title)
+                    statusSub.setText(R.string.dash_searching_sub)
+                } else {
+                    statusTitle.setText(R.string.dash_connected_title)
+                    statusSub.text = getString(R.string.dash_connected_sub_fmt, onlineCount)
+                }
             }
         }
     }

@@ -5,12 +5,14 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tharmesh.TharMeshApp
 import com.tharmesh.mesh.MeshNode
+import com.tharmesh.mesh.ScanState
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tharmesh.app.R
@@ -18,10 +20,13 @@ import tharmesh.app.R
 /**
  * Nearby Mesh Nodes tab.
  *
- * Observes [com.tharmesh.mesh.NearbyDirectory] so the list stays in sync with signal /
- * online-state fluctuations from the simulation (and, later, from the real Nearby
- * transport). The scan button currently just flashes its label — the simulation is
- * always running under the hood so there's no "paused" state to resume.
+ * Renders the live device list from the real [com.tharmesh.mesh.MeshDataSource] — no
+ * demo data, no fabricated fluctuation. The screen has four display states driven by
+ * [com.tharmesh.mesh.ScanState]:
+ *   * IDLE     — "Ready to scan" copy + Scan button
+ *   * SCANNING — "Scanning..." copy + disabled button
+ *   * NONE     — "No nearby mesh nodes / turn on Bluetooth/Wi-Fi" empty card
+ *   * FOUND    — live list of devices
  */
 class DevicesFragment : Fragment() {
 
@@ -35,7 +40,9 @@ class DevicesFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         val recycler: RecyclerView = view.findViewById(R.id.recycler_devices)
-        val empty = view.findViewById<View>(R.id.empty_state)
+        val empty: View = view.findViewById(R.id.empty_state)
+        val emptyTitle: TextView = view.findViewById(R.id.empty_title)
+        val emptySub: TextView = view.findViewById(R.id.empty_sub)
         val scan: Button = view.findViewById(R.id.button_scan)
 
         recycler.layoutManager = LinearLayoutManager(requireContext())
@@ -43,6 +50,7 @@ class DevicesFragment : Fragment() {
         recycler.adapter = adapter
 
         val directory = TharMeshApp.get().directory
+
         viewLifecycleOwner.lifecycleScope.launch {
             directory.nodes.collectLatest { list ->
                 val ranked = list.sortedWith(
@@ -50,19 +58,47 @@ class DevicesFragment : Fragment() {
                         .thenByDescending { it.score() }
                 )
                 adapter.submit(ranked)
-                empty.visibility = if (ranked.isEmpty()) View.VISIBLE else View.GONE
             }
         }
 
-        scan.setOnClickListener {
-            scan.isEnabled = false
-            scan.setText(R.string.devices_scanning)
-            scan.postDelayed({
-                if (view.isAttachedToWindow) {
-                    scan.isEnabled = true
-                    scan.setText(R.string.devices_scan)
+        viewLifecycleOwner.lifecycleScope.launch {
+            directory.scanState.collectLatest { state ->
+                val nodesEmpty = directory.nodes.value.isEmpty()
+                when {
+                    !nodesEmpty -> {
+                        empty.visibility = View.GONE
+                        recycler.visibility = View.VISIBLE
+                        scan.isEnabled = true
+                        scan.setText(R.string.devices_scan)
+                    }
+                    state == ScanState.SCANNING -> {
+                        empty.visibility = View.VISIBLE
+                        recycler.visibility = View.GONE
+                        emptyTitle.setText(R.string.devices_scanning)
+                        emptySub.setText(R.string.devices_scanning_sub)
+                        scan.isEnabled = false
+                        scan.setText(R.string.devices_scanning)
+                    }
+                    state == ScanState.IDLE -> {
+                        empty.visibility = View.VISIBLE
+                        recycler.visibility = View.GONE
+                        emptyTitle.setText(R.string.devices_idle)
+                        emptySub.setText(R.string.devices_idle_sub)
+                        scan.isEnabled = true
+                        scan.setText(R.string.devices_scan)
+                    }
+                    else -> {
+                        empty.visibility = View.VISIBLE
+                        recycler.visibility = View.GONE
+                        emptyTitle.setText(R.string.devices_empty)
+                        emptySub.setText(R.string.devices_empty_sub)
+                        scan.isEnabled = true
+                        scan.setText(R.string.devices_scan)
+                    }
                 }
-            }, 1200L)
+            }
         }
+
+        scan.setOnClickListener { directory.startScan() }
     }
 }
