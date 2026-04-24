@@ -19,12 +19,16 @@ class MessageStatusTest {
     }
 
     @Test
-    fun advance_failedIsSticky() {
-        assertEquals(MessageStatus.FAILED, MessageStatus.advance(MessageStatus.FAILED, MessageStatus.SENT))
+    fun advance_allowsSuccessfulRetryAfterFailed() {
+        // FAILED rows are kept in the store-and-forward queue; a successful retry
+        // must be able to promote them forward (FAILED → SENT → DELIVERED → READ).
+        assertEquals(MessageStatus.SENT, MessageStatus.advance(MessageStatus.FAILED, MessageStatus.SENT))
+        assertEquals(MessageStatus.DELIVERED, MessageStatus.advance(MessageStatus.FAILED, MessageStatus.DELIVERED))
     }
 
     @Test
     fun advance_allowsFailingFromAnyState() {
         assertEquals(MessageStatus.FAILED, MessageStatus.advance(MessageStatus.SENT, MessageStatus.FAILED))
+        assertEquals(MessageStatus.FAILED, MessageStatus.advance(MessageStatus.DELIVERED, MessageStatus.FAILED))
     }
 }

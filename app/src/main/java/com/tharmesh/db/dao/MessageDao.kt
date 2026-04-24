@@ -54,10 +54,13 @@ interface MessageDao {
 
     /**
      * Atomic monotonic status advance. Only applies the update if the target rank is
-     * strictly higher than the current rank, and never touches FAILED rows. Returns the
-     * number of rows affected so the caller can skip the conversation bump when the
-     * update was a no-op (e.g. a stale BundleSent arriving after BundleAcked). Prevents
-     * the read-then-write TOCTOU race when multiple mesh events fire concurrently.
+     * strictly higher than the current rank. FAILED has rank -1, so a successful retry
+     * (BundleSent → rank 1, BundleDelivered → rank 2, BundleRead → rank 3) can promote
+     * a FAILED row forward; this is an advance, not a regression, and is intentional
+     * because [pendingOutbound] includes FAILED rows in the store-and-forward queue.
+     * Returns the number of rows affected so the caller can skip the conversation bump
+     * when the update was a no-op (e.g. a stale BundleSent arriving after BundleAcked).
+     * Prevents the read-then-write TOCTOU race when multiple mesh events fire concurrently.
      */
     @Query(
         """
@@ -67,7 +70,6 @@ interface MessageDao {
                deliveredAt = CASE WHEN :status = 'DELIVERED' THEN :ts ELSE deliveredAt END,
                readAt = CASE WHEN :status = 'READ' THEN :ts ELSE readAt END
          WHERE bundleId = :bundleId
-           AND status != 'FAILED'
            AND (CASE :status
                   WHEN 'QUEUED' THEN 0
                   WHEN 'SENT' THEN 1

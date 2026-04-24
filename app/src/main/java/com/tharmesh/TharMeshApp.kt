@@ -6,7 +6,6 @@ import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
 import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.mesh.EmptyMeshDataSource
-import com.tharmesh.mesh.MeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
 import com.tharmesh.mesh.NearbyMeshDataSource
 import com.tharmesh.permissions.NearbyPermissions
@@ -33,16 +32,15 @@ class TharMeshApp : Application() {
     lateinit var repository: MessageRepository
         private set
 
-    lateinit var directory: NearbyDirectory
-        private set
-
     /**
-     * Data source backing [directory]. Before [ensureMeshStarted] this is an
-     * [EmptyMeshDataSource] (so screens that render pre-login don't crash); after
-     * [ensureMeshStarted] it is a [NearbyMeshDataSource] wired to the real mesh engine
-     * so `PeerFound / PeerConnected / PeerDisconnected` events land in the UI.
+     * Process-wide directory. Created once in [onCreate]; its underlying data source is
+     * swapped via [NearbyDirectory.setSource] as the mesh engine comes up and down.
+     * Fragments capture this reference in `onViewCreated` and keep it for the view
+     * lifetime — so we MUST NOT reassign [directory], otherwise peers discovered after
+     * a deferred [ensureMeshStarted] (e.g. post-permission grant) would never reach the
+     * UI until the fragment recreated.
      */
-    lateinit var meshDataSource: MeshDataSource
+    lateinit var directory: NearbyDirectory
         private set
 
     private var transport: Transport? = null
@@ -54,10 +52,10 @@ class TharMeshApp : Application() {
         instance = this
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         database = AppDatabase.getInstance(this)
-        // Pre-login placeholder. Swapped to NearbyMeshDataSource inside ensureMeshStarted()
-        // the first time a screen requests the mesh.
-        meshDataSource = EmptyMeshDataSource()
-        directory = NearbyDirectory(meshDataSource)
+        // Pre-login placeholder. The directory holds its own StateFlows; setSource()
+        // will swap in NearbyMeshDataSource inside ensureMeshStarted() without changing
+        // the directory reference any Fragment is holding.
+        directory = NearbyDirectory(appScope, EmptyMeshDataSource())
     }
 
     /**
@@ -86,9 +84,10 @@ class TharMeshApp : Application() {
             scope = appScope
         )
         // Swap the UI-facing data source to the real one now that the engine exists.
+        // directory is a stable reference — callers that already captured it now see
+        // updates flow through from the real NearbyMeshDataSource without re-reading.
         val realSource = NearbyMeshDataSource(engine)
-        meshDataSource = realSource
-        directory = NearbyDirectory(realSource)
+        directory.setSource(realSource)
         transport = t
         meshEngine = engine
         repository = repo
@@ -105,10 +104,10 @@ class TharMeshApp : Application() {
         if (!started) return
         repository.stopStoreAndForwardLoop()
         meshEngine?.stop()
-        // Reset the data source so any residual peer list is dropped — otherwise a user
-        // signing out and a different user signing back in would briefly see stale peers.
-        meshDataSource = EmptyMeshDataSource()
-        directory = NearbyDirectory(meshDataSource)
+        // Swap back to an empty source so any residual peer list is dropped — otherwise
+        // a user signing out and a different user signing back in would briefly see
+        // stale peers. Directory reference stays stable.
+        directory.setSource(EmptyMeshDataSource())
         started = false
     }
 
