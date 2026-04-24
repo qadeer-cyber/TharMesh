@@ -5,7 +5,8 @@ enum class ProtocolType {
     INV,
     GET,
     BUNDLE,
-    ACK
+    ACK,
+    READ
 }
 
 data class ProtocolFrame(

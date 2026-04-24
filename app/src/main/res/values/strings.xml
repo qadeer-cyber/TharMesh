@@ -1,15 +1,155 @@
 <resources>
     <string name="app_name">TharMesh</string>
+    <string name="app_tagline">Connect. Share. Stay Safe.</string>
+    <string name="app_subtagline">Offline. Secure. Everywhere.</string>
 
-    <string name="tab_chats">Chats</string>
+    <!-- Bottom nav -->
+    <string name="tab_home">Home</string>
+    <string name="tab_devices">Devices</string>
+    <string name="tab_messages">Messages</string>
     <string name="tab_status">Status</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Legacy tabs (still referenced from older activities). -->
+    <string name="tab_chats">Messages</string>
     <string name="tab_groups">Groups</string>
     <string name="tab_contacts">Contacts</string>
 
-    <string name="empty_chats">No chats yet</string>
+    <string name="empty_chats">No conversations yet</string>
+    <string name="empty_chats_hint">Tap Start Mesh Chat to pick a nearby device and open a secure channel.</string>
+    <string name="empty_chats_button">Start Mesh Chat</string>
     <string name="new_chat">New chat</string>
 
-    <string name="hint_message">Type a message</string>
+    <!-- Device picker bottom sheet -->
+    <string name="picker_title">Nearby Mesh Nodes</string>
+    <string name="picker_subtitle">Tap a device to open a secure chat</string>
+    <string name="picker_count_fmt">%1$d online</string>
+    <string name="picker_empty_title">No nearby devices</string>
+    <string name="picker_empty_sub">Turn on Bluetooth/Wi-Fi and wait for a TharMesh device to come in range.</string>
+    <string name="picker_chat">Chat</string>
+
+    <!-- SOS -->
+    <string name="status_sos_default_body">SOS — I need help. Please relay this message.</string>
+    <string name="status_sos_sending">Sending SOS…</string>
+    <string name="status_sos_sent_fmt">SOS broadcast to %1$d node(s)</string>
+    <string name="status_sos_none">No devices in mesh range — SOS cannot be delivered right now.</string>
+
+    <!-- Profile editor -->
+    <string name="profile_edit_title">Edit display name</string>
+    <string name="profile_edit_hint">Display name</string>
+    <string name="profile_edit_save">Save</string>
+
+    <!-- Chat screen -->
+    <string name="hint_message">Type a secure message…</string>
     <string name="chat_send">Send</string>
     <string name="chat_attach">Attach</string>
+    <string name="chat_mic">Voice</string>
+    <string name="chat_header_offline">Online · via Mesh</string>
+    <string name="chat_header_encrypted">End-to-end encrypted</string>
+    <string name="chat_header_encrypted_sub">Messages are secured on the mesh</string>
+    <string name="chat_reply_to">Replying</string>
+    <string name="chat_cancel_reply">Cancel reply</string>
+
+    <!-- WhatsApp-style message status ticks. -->
+    <string name="status_queued">⏳</string>
+    <string name="status_sent">✓</string>
+    <string name="status_delivered">✓✓</string>
+    <string name="status_read">✓✓</string>
+    <string name="status_failed">!</string>
+
+    <string name="new_chat_recipient_hint">Recipient userId</string>
+    <string name="dialog_start_chat">Start chat</string>
+    <string name="dialog_start">Open</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <!-- Reply action in message bottom sheet. -->
+    <string name="action_reply">Reply</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_delete">Delete</string>
+
+    <!-- Login screen. -->
+    <string name="login_tagline">Offline mesh messaging — sign in once over internet.</string>
+    <string name="login_continue_with_google">Continue with Google</string>
+    <string name="login_continue_anonymously">Continue anonymously</string>
+    <string name="login_ready">Tap Continue with Google to create your profile.</string>
+    <string name="login_missing_oauth">Google sign-in not configured in this build — use Continue anonymously.</string>
+    <string name="login_failed_fmt">Sign-in failed: %1$s</string>
+
+    <!-- Contacts. -->
+    <string name="contacts_title">Contacts</string>
+    <string name="contacts_my_qr">My QR</string>
+    <string name="contacts_scan_qr">Scan QR</string>
+    <string name="contacts_add_by_invite">Add by invite code</string>
+    <string name="contacts_empty">No contacts yet</string>
+
+    <!-- Dashboard -->
+    <string name="dash_connected_title">Connected to Mesh</string>
+    <string name="dash_connected_sub">You are securely connected to the mesh network</string>
+    <string name="dash_searching_title">Listening for mesh</string>
+    <string name="dash_searching_sub">Waiting for TharMesh devices to come in range</string>
+    <string name="dash_connected_sub_fmt">%1$d device(s) in range · secure mesh</string>
+    <string name="dash_signal_title">Signal Strength</string>
+    <string name="dash_signal_excellent">Excellent · -45 dBm</string>
+    <string name="dash_signal_good">Good · -62 dBm</string>
+    <string name="dash_signal_weak">Weak · -84 dBm</string>
+    <string name="dash_signal_unknown">—</string>
+    <string name="dash_network_title">Network</string>
+    <string name="dash_network_live">LIVE</string>
+    <string name="dash_nearby_title">Nearby Devices</string>
+    <string name="dash_nearby_sub">People in range right now</string>
+    <string name="dash_nearby_empty">No devices in range yet</string>
+    <string name="dash_nearby_empty_sub">Nearby TharMesh devices will appear here once they connect.</string>
+
+    <!-- Devices -->
+    <string name="devices_title">Nearby Mesh Nodes</string>
+    <string name="devices_sub">Tap scan to discover nearby devices over Bluetooth + Wi-Fi.</string>
+    <string name="devices_scan">Scan</string>
+    <string name="devices_scanning">Scanning…</string>
+    <string name="devices_idle">Ready to scan</string>
+    <string name="devices_idle_sub">Tap Scan to look for TharMesh devices nearby.</string>
+    <string name="devices_empty">No nearby mesh nodes</string>
+    <string name="devices_empty_sub">Turn on Bluetooth/Wi-Fi and move within ~30 m of another TharMesh device, then tap Scan.</string>
+    <string name="devices_scanning_sub">Looking for TharMesh devices over Bluetooth + Wi-Fi…</string>
+    <string name="devices_connect">Connect</string>
+    <string name="devices_connected">Connected</string>
+
+    <!-- Signal quality labels -->
+    <string name="quality_strong">Strong</string>
+    <string name="quality_good">Good</string>
+    <string name="quality_fair">Fair</string>
+    <string name="quality_weak">Weak</string>
+
+    <!-- Status / emergency -->
+    <string name="status_title">Status</string>
+    <string name="status_emergency_title">Emergency Broadcast</string>
+    <string name="status_emergency_sub">Broadcast an SOS to every device in your mesh range.</string>
+    <string name="status_sos_button">Trigger SOS</string>
+    <string name="status_alerts_title">Network Alerts</string>
+    <string name="status_no_alerts">No network activity yet</string>
+    <string name="status_no_alerts_sub">Alerts and SOS broadcasts from the mesh will appear here.</string>
+    <string name="status_health_title">Network Health</string>
+    <string name="status_battery_label">Battery</string>
+    <string name="status_network_label">Mesh</string>
+    <string name="status_storage_label">Storage</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_profile">Profile</string>
+    <string name="settings_profile_sub">Name, avatar, user ID</string>
+    <string name="settings_security">Security</string>
+    <string name="settings_security_sub">Keys, encrypted storage, signature</string>
+    <string name="settings_mesh">Mesh preferences</string>
+    <string name="settings_mesh_sub">TTL, hops, relay behavior</string>
+    <string name="settings_storage">Offline storage</string>
+    <string name="settings_storage_sub">Cache size, auto-prune</string>
+    <string name="settings_battery">Battery saver mode</string>
+    <string name="settings_battery_sub">Throttle scanning when battery is low</string>
+    <string name="settings_about">About TharMesh</string>
+    <string name="settings_about_sub">Version, open-source credits</string>
+    <string name="settings_sign_out">Sign out</string>
+
+    <!-- Accessibility -->
+    <string name="cd_logo">TharMesh logo</string>
+    <string name="cd_profile">Profile</string>
+    <string name="cd_search">Search</string>
 </resources>

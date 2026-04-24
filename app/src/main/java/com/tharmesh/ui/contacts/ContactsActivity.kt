@@ -3,113 +3,85 @@ package com.tharmesh.ui.contacts
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.text.InputType
-import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import tharmesh.app.R
+import com.tharmesh.TharMeshApp
+import com.tharmesh.data.MessageRepository
+import com.tharmesh.db.entity.ContactEntity
+import com.tharmesh.ui.chat.ChatActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
+/** Room-backed contacts list; tap to open chat, buttons to scan / enter invite. */
 class ContactsActivity : AppCompatActivity() {
 
-    private val contacts: MutableList<String> = mutableListOf()
     private lateinit var adapter: ContactAdapter
+    private lateinit var repository: MessageRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_contacts)
+        TharMeshApp.get().ensureMeshStarted()
+        repository = TharMeshApp.get().repository
 
-        val root = LinearLayout(this)
-        root.orientation = LinearLayout.VERTICAL
-        val pad = (12 * resources.displayMetrics.density).toInt()
+        val recycler: RecyclerView = findViewById(R.id.recycler_contacts)
+        val empty: TextView = findViewById(R.id.text_empty)
+        recycler.layoutManager = LinearLayoutManager(this)
+        adapter = ContactAdapter { contact ->
+            val next = Intent(this, ChatActivity::class.java)
+            next.putExtra(ChatActivity.EXTRA_TO_USER_ID, contact.userId)
+            next.putExtra(ChatActivity.EXTRA_TITLE, contact.displayName)
+            startActivity(next)
+        }
+        recycler.adapter = adapter
 
-        val actions = LinearLayout(this)
-        actions.orientation = LinearLayout.HORIZONTAL
-        actions.gravity = Gravity.CENTER_VERTICAL
-        actions.setPadding(pad, pad, pad, pad)
-
-        val myQrButton = Button(this)
-        myQrButton.text = "My QR"
-        myQrButton.setOnClickListener {
+        findViewById<Button>(R.id.btn_my_qr).setOnClickListener {
             startActivity(Intent(this, MyQrActivity::class.java))
         }
-        actions.addView(myQrButton)
-
-        val scanQrButton = Button(this)
-        scanQrButton.text = "Scan QR"
-        scanQrButton.setOnClickListener {
+        findViewById<Button>(R.id.btn_scan_qr).setOnClickListener {
             startActivityForResult(Intent(this, ScanQrActivity::class.java), REQUEST_SCAN_QR)
         }
-        actions.addView(scanQrButton)
+        findViewById<Button>(R.id.btn_add_invite).setOnClickListener { showAddInviteDialog() }
 
-        val inviteButton = Button(this)
-        inviteButton.text = "Add by Invite Code"
-        inviteButton.setOnClickListener {
-            showAddInviteDialog()
+        lifecycleScope.launch {
+            repository.observeContacts().collectLatest { list ->
+                adapter.submitList(list)
+                empty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+            }
         }
-        actions.addView(inviteButton)
-
-        root.addView(
-            actions,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        val recyclerView = RecyclerView(this)
-        recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = ContactAdapter(contacts)
-        recyclerView.adapter = adapter
-        root.addView(
-            recyclerView,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-        )
-
-        setContentView(root)
-        title = "Contacts"
-
-        loadContactsFallback()
-    }
-
-    private fun loadContactsFallback() {
-        // TODO: replace with Room-backed contacts list when Contact table/DAO is available.
-        contacts.clear()
-        contacts.add("88001122")
-        contacts.add("99002233")
-        adapter.notifyDataSetChanged()
     }
 
     private fun showAddInviteDialog() {
         val input = EditText(this)
-        input.hint = "Enter invite code"
-        input.inputType = InputType.TYPE_CLASS_TEXT
-
+        input.hint = getString(R.string.contacts_add_by_invite)
         AlertDialog.Builder(this)
-            .setTitle("Add Contact")
+            .setTitle(R.string.contacts_add_by_invite)
             .setView(input)
-            .setPositiveButton("Add") { _, _ ->
+            .setPositiveButton(R.string.dialog_start) { _, _ ->
                 val code = input.text?.toString()?.trim().orEmpty()
-                if (code.isNotEmpty()) {
-                    addContact(code)
-                }
+                if (code.isEmpty()) return@setPositiveButton
+                addContact(code, code)
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
 
-    private fun addContact(value: String) {
-        contacts.add(0, value)
-        adapter.notifyItemInserted(0)
+    private fun addContact(userId: String, displayName: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            repository.addContact(userId, displayName)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -117,7 +89,7 @@ class ContactsActivity : AppCompatActivity() {
         if (requestCode == REQUEST_SCAN_QR && resultCode == Activity.RESULT_OK) {
             val code = data?.getStringExtra(ScanQrActivity.RESULT_CODE).orEmpty().trim()
             if (code.isNotEmpty()) {
-                addContact(code)
+                addContact(code, code)
             }
         }
     }
@@ -125,28 +97,37 @@ class ContactsActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_SCAN_QR = 4001
     }
-}
 
-private class ContactAdapter(
-    private val items: List<String>
-) : RecyclerView.Adapter<ContactAdapter.ContactViewHolder>() {
+    private class ContactAdapter(
+        private val onClick: (ContactEntity) -> Unit
+    ) : RecyclerView.Adapter<ContactAdapter.VH>() {
+        private val items: MutableList<ContactEntity> = mutableListOf()
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ContactViewHolder {
-        val textView = TextView(parent.context)
-        val pad = (12 * parent.resources.displayMetrics.density).toInt()
-        textView.setPadding(pad, pad, pad, pad)
-        return ContactViewHolder(textView)
-    }
+        fun submitList(list: List<ContactEntity>) {
+            items.clear()
+            items.addAll(list)
+            notifyDataSetChanged()
+        }
 
-    override fun onBindViewHolder(holder: ContactViewHolder, position: Int) {
-        holder.textView.text = items[position]
-    }
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_contact, parent, false)
+            return VH(view)
+        }
 
-    override fun getItemCount(): Int {
-        return items.size
-    }
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val contact = items[position]
+            holder.name.text = contact.displayName
+            holder.userId.text = contact.userId
+            holder.avatar.text = contact.displayName.take(1).uppercase()
+            holder.itemView.setOnClickListener { onClick(contact) }
+        }
 
-    class ContactViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val textView: TextView = itemView as TextView
+        override fun getItemCount(): Int = items.size
+
+        class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val avatar: TextView = itemView.findViewById(R.id.text_avatar)
+            val name: TextView = itemView.findViewById(R.id.text_name)
+            val userId: TextView = itemView.findViewById(R.id.text_userid)
+        }
     }
 }

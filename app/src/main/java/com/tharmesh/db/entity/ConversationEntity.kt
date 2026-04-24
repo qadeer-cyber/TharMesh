@@ -10,5 +10,6 @@ data class ConversationEntity(
     val title: String,
     val lastMessage: String,
     val lastTimestamp: Long,
-    val unreadCount: Int
+    val lastMessageStatus: String = "",
+    val unreadCount: Int = 0
 )

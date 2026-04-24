@@ -1,19 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:id="@+id/nav_chats"
-        android:icon="@android:drawable/ic_dialog_email"
-        android:title="@string/tab_chats" />
+        android:id="@+id/nav_home"
+        android:icon="@drawable/ic_home"
+        android:title="@string/tab_home" />
+    <item
+        android:id="@+id/nav_devices"
+        android:icon="@drawable/ic_devices"
+        android:title="@string/tab_devices" />
+    <item
+        android:id="@+id/nav_messages"
+        android:icon="@drawable/ic_message"
+        android:title="@string/tab_messages" />
     <item
         android:id="@+id/nav_status"
-        android:icon="@android:drawable/ic_menu_myplaces"
+        android:icon="@drawable/ic_alert"
         android:title="@string/tab_status" />
     <item
-        android:id="@+id/nav_groups"
-        android:icon="@android:drawable/ic_menu_agenda"
-        android:title="@string/tab_groups" />
-    <item
-        android:id="@+id/nav_contacts"
-        android:icon="@android:drawable/ic_menu_call"
-        android:title="@string/tab_contacts" />
+        android:id="@+id/nav_settings"
+        android:icon="@drawable/ic_settings"
+        android:title="@string/tab_settings" />
 </menu>

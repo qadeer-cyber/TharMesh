@@ -1,22 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="tharmesh.app">
 
+    <!-- Internet is required for one-time Google sign-in; mesh operates offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Bluetooth for Nearby Connections, Android <12. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- Bluetooth for Nearby Connections, Android 12+. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <!-- Wi-Fi for Nearby Connections. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- Location permissions needed for Bluetooth LE scanning on most OEMs. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <application
+        android:name="com.tharmesh.TharMeshApp"
         android:allowBackup="true"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="@string/app_name"
         android:roundIcon="@android:drawable/sym_def_app_icon"
         android:supportsRtl="true"
-        android:theme="@style/Theme.TharMesh">
+        android:theme="@style/Theme.TharMesh"
+        tools:ignore="UnusedAttribute">
 
+        <activity android:name="com.tharmesh.ui.auth.LoginActivity" />
         <activity android:name="com.tharmesh.ui.status.StatusActivity" />
         <activity android:name="com.tharmesh.ui.groups.GroupsActivity" />
         <activity android:name="com.tharmesh.ui.contacts.ScanQrActivity" />
         <activity android:name="com.tharmesh.ui.contacts.MyQrActivity" />
         <activity android:name="com.tharmesh.ui.contacts.ContactsActivity" />
         <activity android:name="com.tharmesh.ui.chat.ChatActivity" />
-        <activity android:name="com.tharmesh.ui.chats.ChatsActivity">
+        <activity android:name="com.tharmesh.ui.chats.ChatsActivity" />
+        <activity android:name="com.tharmesh.ui.main.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

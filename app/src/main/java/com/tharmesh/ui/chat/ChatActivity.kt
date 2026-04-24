@@ -1,257 +1,242 @@
 package com.tharmesh.ui.chat
 
 import android.os.Bundle
-import android.text.InputType
-import android.view.Gravity
+import android.text.format.DateFormat
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import tharmesh.app.R
+import com.tharmesh.TharMeshApp
+import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
-import com.tharmesh.db.AppDatabase
+import com.tharmesh.db.MessageStatus
 import com.tharmesh.db.entity.MessageEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Date
 
+/**
+ * WhatsApp-style one-to-one chat. Reads messages from [MessageRepository] as a Flow so
+ * status transitions (QUEUED → SENT → DELIVERED → READ) repaint automatically.
+ *
+ * The previous implementation built its UI programmatically, inherited no background color,
+ * and rendered as a blank/black screen on MaterialComponents DayNight themes. This version
+ * uses [R.layout.activity_chat] which has an explicit background and header.
+ */
 class ChatActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_TO_USER_ID = "toUserId"
+        const val EXTRA_TITLE = "title"
+        const val EXTRA_AVATAR_BG = "avatarBg"
     }
 
-    private lateinit var statusTextView: TextView
-    private lateinit var messageInput: EditText
+    private lateinit var recycler: RecyclerView
     private lateinit var adapter: MessageAdapter
+    private lateinit var input: EditText
+    private lateinit var sendButton: ImageButton
+    private lateinit var titleView: TextView
+    private lateinit var topStatus: TextView
+    private lateinit var chatAvatar: TextView
+    private lateinit var replyBar: View
+    private lateinit var replyBarAuthor: TextView
+    private lateinit var replyBarPreview: TextView
+    private lateinit var replyBarClose: ImageButton
 
-    private val messages: MutableList<MessageUi> = mutableListOf()
+    private lateinit var repository: MessageRepository
+    private var myUserId: String = ""
     private var toUserId: String = ""
+    private var replyingTo: MessageEntity? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_chat)
 
-        val root = LinearLayout(this)
-        root.orientation = LinearLayout.VERTICAL
-        root.layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        )
+        val app = TharMeshApp.get()
+        app.ensureMeshStarted()
+        repository = app.repository
+        myUserId = UserPrefs.ensureProfile(this).userId
 
-        statusTextView = TextView(this)
-        val pad = (12 * resources.displayMetrics.density).toInt()
-        statusTextView.setPadding(pad, pad, pad, pad)
-        statusTextView.text = "⏳ queued locally"
-        root.addView(
-            statusTextView,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
+        val provided = intent.getStringExtra(EXTRA_TO_USER_ID)?.trim().orEmpty()
+        val providedTitle = intent.getStringExtra(EXTRA_TITLE)?.trim().orEmpty()
+        val providedAvatarBg = intent.getIntExtra(EXTRA_AVATAR_BG, 0)
 
-        val recyclerView = RecyclerView(this)
-        recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = MessageAdapter(messages)
-        recyclerView.adapter = adapter
-        val listParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            0
-        )
-        listParams.weight = 1f
-        root.addView(recyclerView, listParams)
+        titleView = findViewById(R.id.text_chat_title)
+        topStatus = findViewById(R.id.text_top_status)
+        chatAvatar = findViewById(R.id.text_chat_avatar)
+        recycler = findViewById(R.id.recycler_messages)
+        input = findViewById(R.id.edit_message)
+        sendButton = findViewById(R.id.button_send)
+        replyBar = findViewById(R.id.reply_bar)
+        replyBarAuthor = findViewById(R.id.reply_bar_author)
+        replyBarPreview = findViewById(R.id.reply_bar_preview)
+        replyBarClose = findViewById(R.id.reply_bar_close)
 
-        val inputRow = LinearLayout(this)
-        inputRow.orientation = LinearLayout.HORIZONTAL
-        inputRow.gravity = Gravity.CENTER_VERTICAL
-        inputRow.setPadding(pad, pad, pad, pad)
+        adapter = MessageAdapter(myUserId) { msg -> startReply(msg) }
+        val lm = LinearLayoutManager(this)
+        lm.stackFromEnd = true
+        recycler.layoutManager = lm
+        recycler.adapter = adapter
 
-        messageInput = EditText(this)
-        messageInput.hint = "Type a message"
-        messageInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        val inputParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT)
-        inputParams.weight = 1f
-        inputRow.addView(messageInput, inputParams)
+        sendButton.setOnClickListener { onSendClicked() }
+        replyBarClose.setOnClickListener { cancelReply() }
 
-        val sendButton = Button(this)
-        sendButton.text = "Send"
-        sendButton.setOnClickListener {
-            onSendClicked()
+        if (provided.isEmpty()) {
+            // A ChatActivity should always be launched from a picker / conversation row
+            // that provides a userId. If we reach here with no target, bail cleanly
+            // rather than showing a dead screen.
+            finish()
+            return
         }
-        inputRow.addView(sendButton)
+        toUserId = provided
+        val title = providedTitle.ifBlank { toUserId }
+        titleView.text = title
+        chatAvatar.text = title.take(1).uppercase()
+        if (providedAvatarBg != 0) {
+            chatAvatar.setBackgroundResource(providedAvatarBg)
+        }
+        start()
+    }
 
-        root.addView(
-            inputRow,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        setContentView(root)
-
-        val providedToUserId = intent.getStringExtra(EXTRA_TO_USER_ID).orEmpty().trim()
-        if (providedToUserId.isNotEmpty()) {
-            toUserId = providedToUserId
-            title = toUserId
-            loadMessagesFromRoomOrFallback()
-        } else {
-            askRecipient()
+    override fun onResume() {
+        super.onResume()
+        if (toUserId.isNotEmpty()) {
+            lifecycleScope.launch { repository.markChatRead(toUserId) }
         }
     }
 
-    private fun askRecipient() {
-        val input = EditText(this)
-        input.hint = "Recipient userId / number"
-        input.inputType = InputType.TYPE_CLASS_TEXT
-
-        AlertDialog.Builder(this)
-            .setTitle("Start Chat")
-            .setCancelable(false)
-            .setView(input)
-            .setPositiveButton("Open") { _, _ ->
-                toUserId = input.text?.toString()?.trim().orEmpty()
-                if (toUserId.isEmpty()) {
-                    toUserId = "unknown"
-                }
-                title = toUserId
-                loadMessagesFromRoomOrFallback()
+    private fun start() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { repository.ensureConversation(toUserId) }
+            repository.markChatRead(toUserId)
+        }
+        lifecycleScope.launch {
+            repository.observeConversation(toUserId).collectLatest { msgs ->
+                adapter.submitList(msgs)
+                if (msgs.isNotEmpty()) recycler.scrollToPosition(msgs.size - 1)
+                updateTopStatus(msgs)
             }
-            .show()
+        }
     }
 
-    private fun loadMessagesFromRoomOrFallback() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val list = AppDatabase.getInstance(applicationContext).messageDao().getMessagesForUser(toUserId)
-                val mapped: List<MessageUi> = list.map { entity: MessageEntity ->
-                    MessageUi(
-                        id = entity.id,
-                        body = entity.body,
-                        isMine = entity.fromUserId != toUserId,
-                        status = entity.status,
-                        timestamp = entity.timestamp
-                    )
-                }
-                withContext(Dispatchers.Main) {
-                    messages.clear()
-                    messages.addAll(mapped)
-                    adapter.notifyDataSetChanged()
-                }
-            } catch (ignored: Throwable) {
-                withContext(Dispatchers.Main) {
-                    messages.clear()
-                    adapter.notifyDataSetChanged()
-                }
-            }
+    private fun updateTopStatus(msgs: List<MessageEntity>) {
+        val lastMine = msgs.lastOrNull { it.fromUserId == myUserId }
+        topStatus.text = when (lastMine?.status) {
+            MessageStatus.QUEUED -> getString(R.string.chat_header_offline) + " · ⏳"
+            MessageStatus.SENT -> "✓ sent"
+            MessageStatus.DELIVERED -> "✓✓ delivered"
+            MessageStatus.READ -> "✓✓ read"
+            MessageStatus.FAILED -> "! failed"
+            else -> getString(R.string.chat_header_offline)
         }
     }
 
     private fun onSendClicked() {
-        val text = messageInput.text?.toString()?.trim().orEmpty()
-        if (text.isEmpty()) {
-            return
-        }
-
-        val uiMessage = MessageUi(
-            id = System.currentTimeMillis(),
-            body = text,
-            isMine = true,
-            status = "Queued ⏳",
-            timestamp = System.currentTimeMillis()
-        )
-        messages.add(uiMessage)
-        adapter.notifyItemInserted(messages.size - 1)
-        messageInput.setText("")
-
-        statusTextView.text = "⏳ queued locally"
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            saveMessageToRoomIfAvailable(uiMessage)
-            // TODO: Hook relay state updates here (🕸 relayed)
-            // TODO: Hook ACK handling here (✅ delivered)
+        val text = input.text?.toString()?.trim().orEmpty()
+        if (text.isEmpty()) return
+        val replyId = replyingTo?.id
+        input.setText("")
+        cancelReply()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.send(toUserId, text, replyId)
+            }
         }
     }
 
-    private fun saveMessageToRoomIfAvailable(messageUi: MessageUi) {
-        try {
-            val me = UserPrefs.ensureProfile(applicationContext)
-            val entity = MessageEntity(
-                fromUserId = me.userId,
-                toUserId = toUserId,
-                body = messageUi.body,
-                status = messageUi.status,
-                timestamp = messageUi.timestamp
-            )
-            AppDatabase.getInstance(applicationContext).messageDao().insert(entity)
-        } catch (ignored: Throwable) {
-            // Keep UI safe if Room setup is unavailable.
+    private fun startReply(msg: MessageEntity) {
+        replyingTo = msg
+        replyBarAuthor.text = if (msg.fromUserId == myUserId) "You" else msg.fromUserId
+        replyBarPreview.text = msg.body
+        replyBar.visibility = View.VISIBLE
+    }
+
+    private fun cancelReply() {
+        replyingTo = null
+        replyBar.visibility = View.GONE
+    }
+
+    private class MessageAdapter(
+        private val myUserId: String,
+        private val onReply: (MessageEntity) -> Unit
+    ) : RecyclerView.Adapter<MessageAdapter.VH>() {
+
+        private val items: MutableList<MessageEntity> = mutableListOf()
+        private val timeFormat = "HH:mm"
+
+        fun submitList(msgs: List<MessageEntity>) {
+            items.clear()
+            items.addAll(msgs)
+            notifyDataSetChanged()
+        }
+
+        override fun getItemViewType(position: Int): Int =
+            if (items[position].fromUserId == myUserId) TYPE_ME else TYPE_PEER
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val layout = if (viewType == TYPE_ME) R.layout.item_msg_me else R.layout.item_msg_peer
+            val view = LayoutInflater.from(parent.context).inflate(layout, parent, false)
+            return VH(view)
+        }
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val msg = items[position]
+            val ctx = holder.itemView.context
+            holder.body.text = msg.body
+            holder.time.text = DateFormat.format(timeFormat, Date(msg.timestamp))
+
+            if (msg.replyToPreview != null) {
+                holder.replyContainer?.visibility = View.VISIBLE
+                holder.replyPreview?.text = msg.replyToPreview
+            } else {
+                holder.replyContainer?.visibility = View.GONE
+            }
+
+            if (holder.status != null) {
+                holder.status.text = statusGlyph(msg.status)
+                val color = if (msg.status == MessageStatus.READ) R.color.tm_tick_read else R.color.tm_tick_default
+                holder.status.setTextColor(ContextCompat.getColor(ctx, color))
+            }
+
+            holder.itemView.setOnLongClickListener {
+                onReply(msg)
+                true
+            }
+        }
+
+        private fun statusGlyph(status: String): String = when (status) {
+            MessageStatus.QUEUED -> "⏳"
+            MessageStatus.SENT -> "✓"
+            MessageStatus.DELIVERED -> "✓✓"
+            MessageStatus.READ -> "✓✓"
+            MessageStatus.FAILED -> "!"
+            else -> ""
+        }
+
+        override fun getItemCount(): Int = items.size
+
+        class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val body: TextView = itemView.findViewById(R.id.text_body)
+            val time: TextView = itemView.findViewById(R.id.text_time)
+            val status: TextView? = itemView.findViewById(R.id.text_status)
+            val replyContainer: LinearLayout? = itemView.findViewById(R.id.reply_container)
+            val replyPreview: TextView? = itemView.findViewById(R.id.reply_preview)
+        }
+
+        companion object {
+            private const val TYPE_ME = 1
+            private const val TYPE_PEER = 2
         }
     }
-}
-
-data class MessageUi(
-    val id: Long,
-    val body: String,
-    val isMine: Boolean,
-    val status: String,
-    val timestamp: Long
-)
-
-private class MessageAdapter(
-    private val items: List<MessageUi>
-) : RecyclerView.Adapter<MessageAdapter.MessageViewHolder>() {
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageViewHolder {
-        val container = LinearLayout(parent.context)
-        container.orientation = LinearLayout.VERTICAL
-        val pad = (8 * parent.resources.displayMetrics.density).toInt()
-        container.setPadding(pad, pad, pad, pad)
-
-        val messageText = TextView(parent.context)
-        messageText.textSize = 16f
-        container.addView(messageText)
-
-        val statusText = TextView(parent.context)
-        statusText.textSize = 12f
-        container.addView(statusText)
-
-        return MessageViewHolder(container, messageText, statusText)
-    }
-
-    override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
-        val item = items[position]
-        holder.messageText.text = item.body
-        holder.statusText.text = item.status
-
-        val params = holder.itemView.layoutParams as? RecyclerView.LayoutParams
-            ?: RecyclerView.LayoutParams(
-                RecyclerView.LayoutParams.MATCH_PARENT,
-                RecyclerView.LayoutParams.WRAP_CONTENT
-            )
-        if (item.isMine) {
-            params.marginStart = (32 * holder.itemView.resources.displayMetrics.density).toInt()
-            params.marginEnd = 0
-        } else {
-            params.marginStart = 0
-            params.marginEnd = (32 * holder.itemView.resources.displayMetrics.density).toInt()
-        }
-        holder.itemView.layoutParams = params
-    }
-
-    override fun getItemCount(): Int {
-        return items.size
-    }
-
-    class MessageViewHolder(
-        itemView: View,
-        val messageText: TextView,
-        val statusText: TextView
-    ) : RecyclerView.ViewHolder(itemView)
 }

@@ -1,3 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="#A0C4B8" />
+    <gradient
+        android:type="linear"
+        android:angle="135"
+        android:startColor="@color/tm_neon_cyan"
+        android:endColor="@color/tm_bubble_me_end" />
 </shape>
