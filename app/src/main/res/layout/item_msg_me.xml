@@ -2,10 +2,10 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingTop="4dp"
-    android:paddingBottom="4dp"
-    android:paddingStart="48dp"
-    android:paddingEnd="8dp">
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp"
+    android:paddingStart="56dp"
+    android:paddingEnd="12dp">
 
     <LinearLayout
         android:layout_width="wrap_content"
@@ -13,23 +13,26 @@
         android:layout_gravity="end"
         android:background="@drawable/bg_bubble_me"
         android:orientation="vertical"
-        android:padding="10dp">
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:id="@+id/reply_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#33FFFFFF"
+            android:background="@drawable/bg_reply_inline"
             android:orientation="vertical"
-            android:padding="6dp"
+            android:padding="8dp"
             android:visibility="gone"
-            android:layout_marginBottom="4dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:id="@+id/reply_author"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/tm_accent"
+                android:textColor="@color/tm_neon_cyan"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:text="Replying to" />
@@ -40,7 +43,7 @@
                 android:layout_height="wrap_content"
                 android:maxLines="2"
                 android:ellipsize="end"
-                android:textColor="@color/tm_text_secondary"
+                android:textColor="#CCE6F5FF"
                 android:textSize="12sp" />
         </LinearLayout>
 
@@ -48,20 +51,21 @@
             android:id="@+id/text_body"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/tm_text_primary"
-            android:textSize="16sp" />
+            android:textColor="@color/tm_bubble_text_me"
+            android:textSize="15sp" />
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
+            android:layout_marginTop="4dp"
             android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/text_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/tm_text_secondary"
+                android:textColor="#B3EAF6FF"
                 android:textSize="11sp" />
 
             <TextView
@@ -69,7 +73,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
-                android:textColor="@color/tm_text_secondary"
+                android:textColor="#B3EAF6FF"
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>

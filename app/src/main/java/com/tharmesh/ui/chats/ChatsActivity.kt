@@ -66,24 +66,9 @@ class ChatsActivity : AppCompatActivity() {
 
         fab.setOnClickListener { promptNewChat() }
 
-        bottomNav.setOnNavigationItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_chats -> true
-                R.id.nav_status -> {
-                    startActivity(Intent(this, StatusActivity::class.java))
-                    false
-                }
-                R.id.nav_groups -> {
-                    startActivity(Intent(this, GroupsActivity::class.java))
-                    false
-                }
-                R.id.nav_contacts -> {
-                    startActivity(Intent(this, ContactsActivity::class.java))
-                    false
-                }
-                else -> false
-            }
-        }
+        // Legacy nav items removed — new MainActivity owns the bottom-nav now.
+        // ChatsActivity is kept purely for compatibility; the new MessagesFragment
+        // duplicates this screen's contents inside the tab host.
 
         lifecycleScope.launch {
             repository.observeConversations().collectLatest { list ->

@@ -2,20 +2,27 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/tm_surface"
+    android:background="@drawable/bg_card_glass"
     android:gravity="center_vertical"
+    android:layout_marginStart="16dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="10dp"
     android:minHeight="72dp"
     android:orientation="horizontal"
-    android:padding="12dp">
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
 
     <TextView
         android:id="@+id/text_avatar"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
         android:background="@drawable/bg_avatar"
         android:gravity="center"
         android:text="A"
         android:textColor="@android:color/white"
+        android:textSize="15sp"
         android:textStyle="bold" />
 
     <LinearLayout
@@ -32,15 +39,17 @@
 
             <TextView
                 android:id="@+id/text_title"
-                style="@style/Text.Title"
+                style="@style/Text.H3"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:maxLines="1"
+                android:ellipsize="end"
                 android:text="Contact" />
 
             <TextView
                 android:id="@+id/text_time"
-                style="@style/Text.Subtle"
+                style="@style/Text.Caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="10:30" />
@@ -49,12 +58,13 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/text_preview"
-                style="@style/Text.Subtle"
+                style="@style/Text.Caption"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -72,8 +82,9 @@
                 android:paddingRight="8dp"
                 android:paddingBottom="2dp"
                 android:text="1"
-                android:textColor="@android:color/white"
+                android:textColor="@color/tm_bg"
                 android:textSize="11sp"
+                android:textStyle="bold"
                 android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>

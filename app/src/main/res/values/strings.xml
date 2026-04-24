@@ -1,18 +1,32 @@
 <resources>
     <string name="app_name">TharMesh</string>
+    <string name="app_tagline">Connect. Share. Stay Safe.</string>
+    <string name="app_subtagline">Offline. Secure. Everywhere.</string>
 
-    <string name="tab_chats">Chats</string>
+    <!-- Bottom nav -->
+    <string name="tab_home">Home</string>
+    <string name="tab_devices">Devices</string>
+    <string name="tab_messages">Messages</string>
     <string name="tab_status">Status</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Legacy tabs (still referenced from older activities). -->
+    <string name="tab_chats">Messages</string>
     <string name="tab_groups">Groups</string>
     <string name="tab_contacts">Contacts</string>
 
-    <string name="empty_chats">No chats yet</string>
+    <string name="empty_chats">No conversations yet</string>
+    <string name="empty_chats_hint">Tap the + button to start a secure mesh chat with a nearby device.</string>
     <string name="new_chat">New chat</string>
 
-    <string name="hint_message">Type a message</string>
+    <!-- Chat screen -->
+    <string name="hint_message">Type a secure message…</string>
     <string name="chat_send">Send</string>
     <string name="chat_attach">Attach</string>
-    <string name="chat_header_offline">Offline mesh</string>
+    <string name="chat_mic">Voice</string>
+    <string name="chat_header_offline">Online · via Mesh</string>
+    <string name="chat_header_encrypted">End-to-end encrypted</string>
+    <string name="chat_header_encrypted_sub">Messages are secured on the mesh</string>
     <string name="chat_reply_to">Replying</string>
     <string name="chat_cancel_reply">Cancel reply</string>
 
@@ -47,4 +61,66 @@
     <string name="contacts_scan_qr">Scan QR</string>
     <string name="contacts_add_by_invite">Add by invite code</string>
     <string name="contacts_empty">No contacts yet</string>
+
+    <!-- Dashboard -->
+    <string name="dash_connected_title">Connected to Mesh</string>
+    <string name="dash_connected_sub">You are securely connected to the mesh network</string>
+    <string name="dash_signal_title">Signal Strength</string>
+    <string name="dash_signal_excellent">Excellent · -45 dBm</string>
+    <string name="dash_signal_good">Good · -62 dBm</string>
+    <string name="dash_signal_weak">Weak · -84 dBm</string>
+    <string name="dash_network_title">Network</string>
+    <string name="dash_network_live">LIVE</string>
+    <string name="dash_nearby_title">Nearby Devices</string>
+    <string name="dash_nearby_sub">People in range right now</string>
+
+    <!-- Devices -->
+    <string name="devices_title">Nearby Mesh Nodes</string>
+    <string name="devices_sub">Tap scan to discover nearby devices over Bluetooth + Wi-Fi.</string>
+    <string name="devices_scan">Scan</string>
+    <string name="devices_scanning">Scanning…</string>
+    <string name="devices_empty">No mesh nodes found</string>
+    <string name="devices_empty_sub">Move closer to another TharMesh device and tap Scan.</string>
+    <string name="devices_connect">Connect</string>
+    <string name="devices_connected">Connected</string>
+
+    <!-- Signal quality labels -->
+    <string name="quality_strong">Strong</string>
+    <string name="quality_good">Good</string>
+    <string name="quality_fair">Fair</string>
+    <string name="quality_weak">Weak</string>
+
+    <!-- Status / emergency -->
+    <string name="status_title">Status</string>
+    <string name="status_emergency_title">Emergency Broadcast</string>
+    <string name="status_emergency_sub">Broadcast an SOS to every device in your mesh range.</string>
+    <string name="status_sos_button">Trigger SOS</string>
+    <string name="status_alerts_title">Network Alerts</string>
+    <string name="status_no_alerts">No active emergency alerts</string>
+    <string name="status_no_alerts_sub">All nodes on the mesh are reporting normal conditions.</string>
+    <string name="status_health_title">Network Health</string>
+    <string name="status_battery_label">Battery</string>
+    <string name="status_network_label">Mesh</string>
+    <string name="status_storage_label">Storage</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_profile">Profile</string>
+    <string name="settings_profile_sub">Name, avatar, user ID</string>
+    <string name="settings_security">Security</string>
+    <string name="settings_security_sub">Keys, encrypted storage, signature</string>
+    <string name="settings_mesh">Mesh preferences</string>
+    <string name="settings_mesh_sub">TTL, hops, relay behavior</string>
+    <string name="settings_storage">Offline storage</string>
+    <string name="settings_storage_sub">Cache size, auto-prune</string>
+    <string name="settings_battery">Battery saver mode</string>
+    <string name="settings_battery_sub">Throttle scanning when battery is low</string>
+    <string name="settings_about">About TharMesh</string>
+    <string name="settings_about_sub">Version, open-source credits</string>
+    <string name="settings_sign_out">Sign out</string>
+
+    <!-- Accessibility -->
+    <string name="cd_logo">TharMesh logo</string>
+    <string name="cd_profile">Profile</string>
+    <string name="cd_search">Search</string>
 </resources>

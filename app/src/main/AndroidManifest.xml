@@ -45,7 +45,8 @@
         <activity android:name="com.tharmesh.ui.contacts.MyQrActivity" />
         <activity android:name="com.tharmesh.ui.contacts.ContactsActivity" />
         <activity android:name="com.tharmesh.ui.chat.ChatActivity" />
-        <activity android:name="com.tharmesh.ui.chats.ChatsActivity">
+        <activity android:name="com.tharmesh.ui.chats.ChatsActivity" />
+        <activity android:name="com.tharmesh.ui.main.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

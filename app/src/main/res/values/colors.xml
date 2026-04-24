@@ -1,19 +1,57 @@
 <resources>
+    <!-- Legacy aliases (kept so older layouts like activity_chats.xml still compile). -->
+    <color name="tm_primary">#0B1120</color>
+    <color name="tm_accent">#00E5FF</color>
+    <!-- Legacy Material defaults (kept so generated code still compiles). -->
     <color name="purple_500">#6200EE</color>
     <color name="purple_700">#3700B3</color>
     <color name="teal_200">#03DAC5</color>
     <color name="black">#000000</color>
     <color name="white">#FFFFFF</color>
 
-    <color name="tm_primary">#128C7E</color>
-    <color name="tm_accent">#25D366</color>
-    <color name="tm_bg">#ECE5DD</color>
-    <color name="tm_surface">#FFFFFF</color>
-    <color name="tm_text_primary">#1F2937</color>
-    <color name="tm_text_secondary">#6B7280</color>
-    <color name="tm_bubble_me">#DCF8C6</color>
-    <color name="tm_bubble_peer">#FFFFFF</color>
-    <color name="tm_unread_badge">#25D366</color>
-    <color name="tm_tick_read">#34B7F1</color>
-    <color name="tm_tick_default">#6B7280</color>
+    <!--
+        TharMesh premium dark palette. "Offline survival communication system" vibe:
+        deep desert night as the base, neon cyan + neon green as accents, muted
+        desert amber as a warm highlight.
+    -->
+    <color name="tm_bg">#0A0E1A</color>              <!-- deep desert night -->
+    <color name="tm_bg_2">#0F1524</color>            <!-- elevated background -->
+    <color name="tm_surface">#131A2B</color>         <!-- card surface -->
+    <color name="tm_surface_2">#1A2238</color>       <!-- elevated card surface -->
+    <color name="tm_surface_glass">#1F2940</color>   <!-- glassmorphism card -->
+    <color name="tm_stroke">#2A3757</color>          <!-- card border -->
+    <color name="tm_stroke_soft">#1E2A45</color>     <!-- subtle divider -->
+
+    <color name="tm_text_primary">#E6ECF5</color>
+    <color name="tm_text_secondary">#8A97B5</color>
+    <color name="tm_text_muted">#5E6B87</color>
+
+    <!-- Accents -->
+    <color name="tm_neon_cyan">#00E5FF</color>
+    <color name="tm_neon_cyan_dim">#1A4B5C</color>
+    <color name="tm_neon_green">#00E676</color>
+    <color name="tm_neon_green_dim">#0F3B26</color>
+    <color name="tm_desert_amber">#F0B070</color>
+    <color name="tm_danger">#FF4E6A</color>
+    <color name="tm_danger_dim">#3B1520</color>
+    <color name="tm_warning">#FFC857</color>
+
+    <!-- Chat -->
+    <color name="tm_bubble_me_start">#0EA5E9</color>
+    <color name="tm_bubble_me_end">#2563EB</color>
+    <color name="tm_bubble_peer">#1A2238</color>
+    <color name="tm_bubble_text_me">#FFFFFF</color>
+    <color name="tm_bubble_text_peer">#E6ECF5</color>
+
+    <!-- Status ticks -->
+    <color name="tm_tick_read">#00E5FF</color>
+    <color name="tm_tick_default">#8A97B5</color>
+    <color name="tm_unread_badge">#00E676</color>
+
+    <!-- Gradients / glows -->
+    <color name="tm_gradient_top">#0F1524</color>
+    <color name="tm_gradient_bottom">#050812</color>
+    <color name="tm_glow_cyan_20">#3300E5FF</color>
+    <color name="tm_glow_green_20">#3300E676</color>
+    <color name="tm_glow_danger_20">#33FF4E6A</color>
 </resources>

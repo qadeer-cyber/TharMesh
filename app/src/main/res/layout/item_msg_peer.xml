@@ -2,10 +2,10 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingTop="4dp"
-    android:paddingBottom="4dp"
-    android:paddingStart="8dp"
-    android:paddingEnd="48dp">
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp"
+    android:paddingStart="12dp"
+    android:paddingEnd="56dp">
 
     <LinearLayout
         android:layout_width="wrap_content"
@@ -13,23 +13,26 @@
         android:layout_gravity="start"
         android:background="@drawable/bg_bubble_peer"
         android:orientation="vertical"
-        android:padding="10dp">
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:id="@+id/reply_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#22000000"
+            android:background="@drawable/bg_reply_inline"
             android:orientation="vertical"
-            android:padding="6dp"
+            android:padding="8dp"
             android:visibility="gone"
-            android:layout_marginBottom="4dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:id="@+id/reply_author"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/tm_accent"
+                android:textColor="@color/tm_neon_cyan"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:text="Replying to" />
@@ -48,14 +51,15 @@
             android:id="@+id/text_body"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/tm_text_primary"
-            android:textSize="16sp" />
+            android:textColor="@color/tm_bubble_text_peer"
+            android:textSize="15sp" />
 
         <TextView
             android:id="@+id/text_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
+            android:layout_marginTop="4dp"
             android:textColor="@color/tm_text_secondary"
             android:textSize="11sp" />
     </LinearLayout>

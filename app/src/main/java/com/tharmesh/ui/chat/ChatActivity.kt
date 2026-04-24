@@ -5,7 +5,6 @@ import android.text.format.DateFormat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -46,9 +45,10 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var recycler: RecyclerView
     private lateinit var adapter: MessageAdapter
     private lateinit var input: EditText
-    private lateinit var sendButton: Button
+    private lateinit var sendButton: ImageButton
     private lateinit var titleView: TextView
     private lateinit var topStatus: TextView
+    private lateinit var chatAvatar: TextView
     private lateinit var replyBar: View
     private lateinit var replyBarAuthor: TextView
     private lateinit var replyBarPreview: TextView
@@ -73,6 +73,7 @@ class ChatActivity : AppCompatActivity() {
 
         titleView = findViewById(R.id.text_chat_title)
         topStatus = findViewById(R.id.text_top_status)
+        chatAvatar = findViewById(R.id.text_chat_avatar)
         recycler = findViewById(R.id.recycler_messages)
         input = findViewById(R.id.edit_message)
         sendButton = findViewById(R.id.button_send)
@@ -94,7 +95,9 @@ class ChatActivity : AppCompatActivity() {
             askRecipient()
         } else {
             toUserId = provided
-            titleView.text = providedTitle.ifBlank { toUserId }
+            val title = providedTitle.ifBlank { toUserId }
+            titleView.text = title
+            chatAvatar.text = title.take(1).uppercase()
             start()
         }
     }
@@ -116,6 +119,7 @@ class ChatActivity : AppCompatActivity() {
             .setPositiveButton(R.string.dialog_start) { _, _ ->
                 toUserId = editText.text?.toString()?.trim().orEmpty().ifBlank { "unknown" }
                 titleView.text = toUserId
+                chatAvatar.text = toUserId.take(1).uppercase()
                 start()
             }
             .setNegativeButton(R.string.dialog_cancel) { _, _ -> finish() }

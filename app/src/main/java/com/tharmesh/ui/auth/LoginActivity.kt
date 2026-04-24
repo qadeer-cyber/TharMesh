@@ -11,10 +11,10 @@ import com.tharmesh.TharMeshApp
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.data.UserProfile
-import com.tharmesh.ui.chats.ChatsActivity
+import com.tharmesh.ui.main.MainActivity
 
 /**
- * First-run gate. If a profile already exists, skip straight to [ChatsActivity]. Otherwise
+ * First-run gate. If a profile already exists, skip straight to [MainActivity]. Otherwise
  * show "Continue with Google" (if `BuildConfig.GOOGLE_WEB_CLIENT_ID` is configured) and
  * "Continue anonymously" (always available — kept so the app still runs without OAuth
  * credentials during development).
@@ -26,7 +26,7 @@ class LoginActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (UserPrefs.hasProfile(this)) {
-            goToChats()
+            goToMain()
             return
         }
         setContentView(R.layout.activity_login)
@@ -92,11 +92,11 @@ class LoginActivity : AppCompatActivity() {
     private fun finishWith(profile: UserProfile) {
         UserPrefs.saveProfile(this, profile)
         TharMeshApp.get().ensureMeshStarted()
-        goToChats()
+        goToMain()
     }
 
-    private fun goToChats() {
-        val next = Intent(this, ChatsActivity::class.java)
+    private fun goToMain() {
+        val next = Intent(this, MainActivity::class.java)
         next.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(next)
         setResult(Activity.RESULT_OK)
