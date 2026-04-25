@@ -92,8 +92,14 @@ class ScanQrActivity : AppCompatActivity() {
             override fun barcodeResult(result: BarcodeResult) {
                 // The terminal `hasReturned` guard lives inside [returnResult]
                 // so paste-dialog and scanner paths gate against each other.
+                // Pause first to stop the decode loop while we commit the
+                // result; if [returnResult] declines (empty text, already
+                // returned), resume so the user isn't stuck on a frozen
+                // preview (Devin Review: PR #33).
                 barcodeView.pause()
-                returnResult(result.text.orEmpty())
+                if (!returnResult(result.text.orEmpty())) {
+                    barcodeView.resume()
+                }
             }
         })
         barcodeView.resume()
@@ -153,21 +159,24 @@ class ScanQrActivity : AppCompatActivity() {
      * and finally treat it as a literal userId. Sets the activity result
      * with whichever fields could be resolved.
      *
+     * Returns `true` when the result was committed (and the activity
+     * is finishing), `false` when the input was empty / already returned
+     * — the camera caller uses that to resume the scanner so the user
+     * isn't stuck on a frozen preview.
+     *
      * Single source of truth for [hasReturned]: both the scanner callback
      * and the paste dialog funnel through here, so a queued
      * `barcodeResult` event firing after the user has already submitted
      * a pasted invite cannot overwrite the deliberate paste with an
      * unrelated scan (Devin Review: PR #33).
      */
-    private fun returnResult(raw: String) {
-        if (hasReturned) return
+    private fun returnResult(raw: String): Boolean {
+        if (hasReturned) return false
 
         val text = raw.trim()
         // Set hasReturned only AFTER the empty-text guard, otherwise an
-        // empty barcode result locks the activity: the scanner is already
-        // paused and every subsequent paste / scan would be a no-op
-        // (Devin Review: PR #33).
-        if (text.isEmpty()) return
+        // empty barcode result locks the activity (Devin Review: PR #33).
+        if (text.isEmpty()) return false
         hasReturned = true
 
         val qr = QrCodec.decode(text)
@@ -186,5 +195,6 @@ class ScanQrActivity : AppCompatActivity() {
         if (resolvedName != null) data.putExtra(RESULT_DISPLAY_NAME, resolvedName)
         setResult(Activity.RESULT_OK, data)
         finish()
+        return true
     }
 }
