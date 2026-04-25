@@ -144,4 +144,47 @@ class RetryPolicyTest {
         }
         assertEquals(1_000, p.currentState("b")!!.attemptCount)
     }
+
+    // ---------- Stage 5.3 — configOverride for SOS / Field Test curves ----------
+
+    @Test
+    fun computeDelayMs_overload_appliesProvidedConfigCurve() {
+        val p = RetryPolicy(config = RetryConfig.DEFAULT.copy(jitterFraction = 0.0), rand = { 0.5 })
+        // Default curve at attempt 3 → 20s; SOS curve at attempt 3 → 4s.
+        assertEquals(20_000L, p.computeDelayMs(3))
+        assertEquals(4_000L, p.computeDelayMs(3, RetryConfig.SOS))
+    }
+
+    @Test
+    fun recordAttempt_withSOSConfigOverride_usesAggressiveCurve() {
+        val p = policyNoJitter()
+        val t0 = 0L
+        // First attempt with SOS override should schedule next retry at t0 + 1000ms
+        // (vs. 5000ms with the default curve).
+        p.recordAttempt("sos1", t0, RetryConfig.SOS)
+        val s = p.currentState("sos1")!!
+        assertEquals(1, s.attemptCount)
+        assertEquals(t0 + 1_000L, s.nextRetryAt)
+        // Second SOS attempt → 2s.
+        p.recordAttempt("sos1", s.nextRetryAt, RetryConfig.SOS)
+        val s2 = p.currentState("sos1")!!
+        assertEquals(s.nextRetryAt + 2_000L, s2.nextRetryAt)
+    }
+
+    @Test
+    fun sosCurveCapsAt8s() {
+        val p = RetryPolicy(config = RetryConfig.DEFAULT, rand = { 0.5 })
+        // attempt N → expected delay under SOS curve
+        val expected = listOf(
+            1 to 1_000L,
+            2 to 2_000L,
+            3 to 4_000L,
+            4 to 8_000L,
+            5 to 8_000L,  // clamped
+            10 to 8_000L
+        )
+        for ((attempt, want) in expected) {
+            assertEquals("SOS attempt=$attempt", want, p.computeDelayMs(attempt, RetryConfig.SOS))
+        }
+    }
 }

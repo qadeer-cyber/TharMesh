@@ -232,7 +232,13 @@ class MeshEngine(
         payloadCiphertext: String,
         ttlMs: Long,
         hops: Int,
-        bundleIdHint: String? = null
+        bundleIdHint: String? = null,
+        /**
+         * Stage 5.3 — origination-only priority bit. Set by the SOS path so the
+         * resulting bundle bypasses [PerPeerSendPacer] in [broadcastBundle] /
+         * [forwardBundle] / [handleGet]. Off-wire (see [MeshBundle.priority]).
+         */
+        priority: Boolean = false
     ): MeshBundle {
         val bundleId = bundleIdHint ?: UUID.randomUUID().toString()
         val ttlUntil = now() + ttlMs
@@ -266,7 +272,8 @@ class MeshEngine(
             hopsLeft = hops.coerceAtLeast(0),
             signature = signature,
             status = "PENDING",
-            srcPubKey = srcPubKey
+            srcPubKey = srcPubKey,
+            priority = priority
         )
         cachePut(bundle)
         // Try to send immediately to every connected peer; routing decides if we actually do.
@@ -374,7 +381,11 @@ class MeshEngine(
             //
             // Stage 5.2: per-peer send pacing. If the pacer rejects, defer this peer
             // (the next retry tick re-issues the broadcast and the gap will have elapsed).
-            if (pacer != null && !pacer.acquireSlot(peer, nowMs)) {
+            // Stage 5.3: priority bundles (SOS) skip the pacer — they fan out at the
+            // full rate even when many normal bundles are paced. The pacer's per-peer
+            // 40 ms gap exists to avoid overwhelming Nearby's send buffer; SOS payloads
+            // are tiny and the spec demands aggressive delivery.
+            if (!bundle.priority && pacer != null && !pacer.acquireSlot(peer, nowMs)) {
                 onSendPaced(peer)
                 continue
             }
@@ -547,6 +558,16 @@ class MeshEngine(
             if (bundle.ttlUntil < nowMs) continue
             if (bundle.hopsLeft <= 0) continue
             if (!router.shouldForward(bundle, peerId, nowMs)) continue
+            // Stage 5.3: per-peer pacing applies to GET responses too — without
+            // this, a peer that requested many bundles via INV/GET would receive
+            // them all in a tight burst and could overwhelm the Nearby send
+            // buffer (the very scenario PerPeerSendPacer was added to prevent).
+            // Skip-and-let-originator-retry is fine: dropped GET responses are
+            // covered by the next origination retry tick.
+            if (pacer != null && !pacer.acquireSlot(peerId, nowMs)) {
+                onSendPaced(peerId)
+                continue
+            }
             val nextHops = (bundle.hopsLeft - 1).coerceAtLeast(0)
             val next = bundle.copy(hopsLeft = nextHops, status = "FORWARDED")
             val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(next))

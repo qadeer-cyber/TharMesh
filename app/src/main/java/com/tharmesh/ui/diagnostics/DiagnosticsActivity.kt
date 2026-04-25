@@ -5,10 +5,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Button
+import android.widget.CompoundButton
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import com.tharmesh.TharMeshApp
 import com.tharmesh.diagnostics.DiagnosticsCollector
+import com.tharmesh.diagnostics.FieldTestMode
 import tharmesh.app.R
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,6 +53,31 @@ class DiagnosticsActivity : AppCompatActivity() {
             render()
         }
         findViewById<Button>(R.id.button_share).setOnClickListener { share() }
+
+        // Stage 5.3 — Field Test retry-tuning toggles. We deliberately apply
+        // a radio-style mutual exclusion: turning one on auto-disables the
+        // other, both in the prefs (so resolveRetryConfig() sees a clean
+        // pick) and in the UI (so the user sees the picked state).
+        val backoff = findViewById<SwitchCompat>(R.id.switch_disable_backoff)
+        val highFreq = findViewById<SwitchCompat>(R.id.switch_force_high_freq)
+        backoff.isChecked = FieldTestMode.isBackoffDisabled(this)
+        highFreq.isChecked = FieldTestMode.isHighFrequencyForced(this)
+        val backoffListener = CompoundButton.OnCheckedChangeListener { _, checked ->
+            FieldTestMode.setBackoffDisabled(this, checked)
+            if (checked && highFreq.isChecked) {
+                highFreq.isChecked = false
+                FieldTestMode.setHighFrequencyForced(this, false)
+            }
+        }
+        val highFreqListener = CompoundButton.OnCheckedChangeListener { _, checked ->
+            FieldTestMode.setHighFrequencyForced(this, checked)
+            if (checked && backoff.isChecked) {
+                backoff.isChecked = false
+                FieldTestMode.setBackoffDisabled(this, false)
+            }
+        }
+        backoff.setOnCheckedChangeListener(backoffListener)
+        highFreq.setOnCheckedChangeListener(highFreqListener)
     }
 
     override fun onResume() {

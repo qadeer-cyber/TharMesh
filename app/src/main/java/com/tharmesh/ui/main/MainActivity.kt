@@ -3,28 +3,47 @@ package com.tharmesh.ui.main
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
+import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.tharmesh.TharMeshApp
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.permissions.NearbyPermissions
+import com.tharmesh.permissions.PermissionMonitor
+import com.tharmesh.permissions.PermissionStatus
 import com.tharmesh.ui.auth.LoginActivity
 import com.tharmesh.ui.dashboard.DashboardFragment
 import com.tharmesh.ui.devices.DevicesFragment
 import com.tharmesh.ui.messages.MessagesFragment
 import com.tharmesh.ui.settings.SettingsFragment
 import com.tharmesh.ui.status.StatusFragment
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import tharmesh.app.R
 
 /**
  * Single-activity shell that hosts the 5 primary screens behind a bottom nav:
  * Home (dashboard) · Devices · Messages · Status · Settings.
+ *
+ * Stage 5.3 — also owns the global mesh status banner (R.id.mesh_status_banner)
+ * which surfaces missing-permission / Bluetooth-off / Location-off / scanning
+ * / N-peers state. The banner is updated on every onResume + every directory
+ * peer-list change, so the user always knows whether the mesh is alive.
  */
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var statusBanner: LinearLayout
+    private lateinit var statusText: TextView
+    private lateinit var statusAction: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +55,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         TharMeshApp.get().ensureMeshStarted()
         requestNearbyPermissionsIfMissing()
+
+        statusBanner = findViewById(R.id.mesh_status_banner)
+        statusText = findViewById(R.id.mesh_status_text)
+        statusAction = findViewById(R.id.mesh_status_action)
 
         val nav: BottomNavigationView = findViewById(R.id.bottom_nav)
         nav.setOnNavigationItemSelectedListener { item ->
@@ -54,12 +77,117 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             nav.selectedItemId = R.id.nav_home
         }
+
+        // Stage 5.3 — keep the banner copy in sync with the live peer count.
+        // The directory's nodes Flow is process-singleton (TharMeshApp owns it)
+        // so the only thing we need here is to trigger a refresh when it
+        // changes. The actual rendering goes through refreshStatusBanner()
+        // which also factors in permission state.
+        val app = TharMeshApp.get()
+        lifecycleScope.launch {
+            app.directory.nodes.collectLatest {
+                refreshStatusBanner()
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Stage 5.3 — runtime conditions (BT / Location / permissions) can
+        // change while we're paused (Settings → toggles), so re-evaluate on
+        // every resume rather than relying on the directory flow alone.
+        refreshStatusBanner()
+        // If the user just flipped a missing permission (or BT/Location)
+        // back on while in Settings, kick the mesh in case it failed to
+        // start the first time.
+        TharMeshApp.get().ensureMeshStarted()
     }
 
     private fun showFragment(frag: Fragment) {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragment_container, frag)
             .commit()
+    }
+
+    /**
+     * Stage 5.3 — render the global mesh status banner. Permission/runtime
+     * issues take precedence (they block the mesh entirely); when everything
+     * is green we surface the live peer count for connection visibility.
+     *
+     * The banner is hidden when the mesh is up and at least one peer is
+     * connected — at that point the per-screen UI (Dashboard's "Connected to
+     * N devices" card, Devices tab list, etc.) carries the signal and the
+     * banner would just be visual noise.
+     */
+    private fun refreshStatusBanner() {
+        when (PermissionMonitor.snapshot(this)) {
+            is PermissionStatus.PermissionDenied -> {
+                showBanner(getString(R.string.banner_perm_missing), getString(R.string.banner_action_retry)) {
+                    requestNearbyPermissionsIfMissing()
+                }
+            }
+            is PermissionStatus.BluetoothOff -> {
+                showBanner(getString(R.string.banner_bluetooth_off), getString(R.string.banner_action_settings)) {
+                    // Try the system Bluetooth settings panel first; fall back
+                    // to the generic Settings root if the device doesn't
+                    // expose the panel intent.
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                    if (intent.resolveActivity(packageManager) != null) {
+                        startActivity(intent)
+                    } else {
+                        startActivity(Intent(Settings.ACTION_SETTINGS))
+                    }
+                }
+            }
+            is PermissionStatus.LocationOff -> {
+                showBanner(getString(R.string.banner_location_off), getString(R.string.banner_action_settings)) {
+                    startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                }
+            }
+            is PermissionStatus.Ready -> {
+                renderConnectionVisibilityBanner()
+            }
+        }
+    }
+
+    /**
+     * Stage 5.3 D2 — connection visibility. When permissions are green, show
+     * "Searching…" if no peers, and the connected count otherwise. Hidden
+     * once a peer is online (the dashboard card carries the same signal in
+     * a richer form, so duplicating it in the banner is just noise).
+     */
+    private fun renderConnectionVisibilityBanner() {
+        val app = TharMeshApp.get()
+        val nodes = app.directory.nodes.value
+        val onlineCount = nodes.count { it.online }
+        if (onlineCount > 0) {
+            // Mesh is alive and a peer is connected — let the per-screen UI
+            // tell the story; banner is redundant.
+            statusBanner.visibility = View.GONE
+            return
+        }
+        val text = if (nodes.isEmpty()) {
+            getString(R.string.banner_searching)
+        } else {
+            // Discovered but not connected yet — phrase it as "no devices found"
+            // because the user-relevant property is "can I send right now" and
+            // the answer is still no.
+            getString(R.string.banner_no_devices)
+        }
+        showBanner(text, action = null, onAction = null)
+    }
+
+    private fun showBanner(text: String, action: String?, onAction: (() -> Unit)?) {
+        statusText.text = text
+        if (action != null && onAction != null) {
+            statusAction.text = action
+            statusAction.visibility = View.VISIBLE
+            statusAction.setOnClickListener { onAction() }
+        } else {
+            statusAction.visibility = View.GONE
+            statusAction.setOnClickListener(null)
+        }
+        statusBanner.visibility = View.VISIBLE
     }
 
     /**
@@ -100,6 +228,7 @@ class MainActivity : AppCompatActivity() {
             // so calling it again now actually wires the transport.
             TharMeshApp.get().ensureMeshStarted()
         }
+        refreshStatusBanner()
     }
 
     companion object {

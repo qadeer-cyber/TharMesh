@@ -78,11 +78,23 @@ class RetryPolicy(
      * Record that the retry loop has re-broadcast [bundleId] at [nowMs]. Increments
      * `attemptCount` and computes the next eligible retry timestamp using the
      * [RetryConfig] curve.
+     *
+     * Stage 5.3 — [configOverride] lets the caller use a different curve for a
+     * single attempt without spinning up a second [RetryPolicy]. This is the
+     * SOS hardening hook: priority bundles use [RetryConfig.SOS]'s aggressive
+     * 1s→2s→4s→8s curve while normal bundles continue on [config]. The override
+     * applies only to the next-delay computation; per-bundle state is stored
+     * the same way in either case.
      */
-    fun recordAttempt(bundleId: String, nowMs: Long) = synchronized(lock) {
+    @JvmOverloads
+    fun recordAttempt(
+        bundleId: String,
+        nowMs: Long,
+        configOverride: RetryConfig? = null
+    ) = synchronized(lock) {
         val prev = state[bundleId]
         val nextAttempt = (prev?.attemptCount ?: 0) + 1
-        val delay = computeDelayMs(nextAttempt)
+        val delay = computeDelayMs(nextAttempt, configOverride ?: config)
         state[bundleId] = BundleState(
             attemptCount = nextAttempt,
             nextRetryAt = nowMs + delay
@@ -94,11 +106,14 @@ class RetryPolicy(
      * Compute the next-attempt delay using `base * factor^(attempt-1)` clamped
      * at `maxDelayMs`, then apply symmetric jitter. Visible for testing.
      */
-    internal fun computeDelayMs(attemptCount: Int): Long {
+    internal fun computeDelayMs(attemptCount: Int): Long = computeDelayMs(attemptCount, config)
+
+    /** Compute delay using a specific [RetryConfig] (Stage 5.3 — SOS override). */
+    internal fun computeDelayMs(attemptCount: Int, cfg: RetryConfig): Long {
         // attemptCount=1 → base, =2 → base*factor, =3 → base*factor^2, …, then clamp.
-        val raw = config.baseDelayMs.toDouble() * config.growthFactor.pow((attemptCount - 1).coerceAtLeast(0))
-        val clamped = min(raw, config.maxDelayMs.toDouble())
-        val jitter = config.jitterFraction
+        val raw = cfg.baseDelayMs.toDouble() * cfg.growthFactor.pow((attemptCount - 1).coerceAtLeast(0))
+        val clamped = min(raw, cfg.maxDelayMs.toDouble())
+        val jitter = cfg.jitterFraction
         val factor = if (jitter == 0.0) 1.0 else 1.0 + ((rand() * 2.0 - 1.0) * jitter)
         // Guard against rand() returning out-of-spec values that would zero-out the delay.
         val jittered = max(0.0, clamped * factor)
