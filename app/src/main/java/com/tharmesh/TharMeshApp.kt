@@ -4,6 +4,7 @@ import android.app.Application
 import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
+import com.tharmesh.disaster.DisasterModeController
 import com.tharmesh.db.RoomBundleStore
 import com.tharmesh.diagnostics.DiagnosticsCollector
 import com.tharmesh.diagnostics.FieldTestMode
@@ -89,6 +90,10 @@ class TharMeshApp : Application() {
         // recreation cleanly when the user later changes the mode from
         // Settings; we never call recreate() ourselves.
         ThemeManager.applyFromPrefs(this)
+        // Stage 6.3 — bootstrap disaster-mode state from prefs and register
+        // the battery-low broadcast receiver. Cheap; no side effects when
+        // disabled (the controller's flows just stay false).
+        DisasterModeController.init(this)
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         database = AppDatabase.getInstance(this)
         // Pre-login placeholder. The directory holds its own StateFlows; setSource()
@@ -157,7 +162,14 @@ class TharMeshApp : Application() {
             retryConfig = retryConfig,
             onRetryAttempt = { bundleId -> diag.recordRetryAttempt(bundleId) },
             onStuckSendingRecovered = { bundleId -> diag.recordStuckSendingRecovered(bundleId) },
-            onPeerChurnSuppressed = { peerId -> diag.recordPeerChurnSuppressed(peerId) }
+            onPeerChurnSuppressed = { peerId -> diag.recordPeerChurnSuppressed(peerId) },
+            // Stage 6.3 — wire disaster-mode hooks. The send path consults
+            // [isDisasterModeEnabled] on every outgoing bundle, and the
+            // receive path calls [onSosReceived] on inbound SOS-marked
+            // payloads so the controller can vibrate + ring (it is itself
+            // gated by the persisted toggle, so off-mode peers stay silent).
+            onSosReceived = { DisasterModeController.onSosReceived(this) },
+            isDisasterModeEnabled = { DisasterModeController.shouldForcePriority() }
         )
         val source = NearbyMeshDataSource(engine)
         directory.setSource(source)

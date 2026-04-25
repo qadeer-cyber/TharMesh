@@ -17,6 +17,8 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.tharmesh.TharMeshApp
 import com.tharmesh.data.UserPrefs
+import com.tharmesh.disaster.DisasterModeController
+import kotlinx.coroutines.flow.combine
 import com.tharmesh.permissions.NearbyPermissions
 import com.tharmesh.permissions.PermissionMonitor
 import com.tharmesh.permissions.PermissionStatus
@@ -44,6 +46,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusBanner: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var statusAction: Button
+    private lateinit var disasterBanner: LinearLayout
+    private lateinit var disasterText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +63,8 @@ class MainActivity : AppCompatActivity() {
         statusBanner = findViewById(R.id.mesh_status_banner)
         statusText = findViewById(R.id.mesh_status_text)
         statusAction = findViewById(R.id.mesh_status_action)
+        disasterBanner = findViewById(R.id.disaster_mode_banner)
+        disasterText = findViewById(R.id.disaster_mode_text)
 
         // Stage 6.1 — WhatsApp-style nav structure (Chats / Devices / Alerts /
         // Relay / Settings). Channels (6.4) and Topology (6.5) have not landed
@@ -96,6 +102,30 @@ class MainActivity : AppCompatActivity() {
                 refreshStatusBanner()
             }
         }
+
+        // Stage 6.3 — disaster-mode + battery-low state drive the persistent
+        // red banner. Combined so a single collector handles both flips.
+        lifecycleScope.launch {
+            combine(
+                DisasterModeController.enabled,
+                DisasterModeController.batteryLow
+            ) { on, low -> on to low }.collectLatest { (on, low) ->
+                renderDisasterBanner(on, low)
+            }
+        }
+    }
+
+    private fun renderDisasterBanner(enabled: Boolean, batteryLow: Boolean) {
+        if (!enabled) {
+            disasterBanner.visibility = View.GONE
+            return
+        }
+        disasterText.text = if (batteryLow) {
+            getString(R.string.disaster_banner_active_low_battery)
+        } else {
+            getString(R.string.disaster_banner_active)
+        }
+        disasterBanner.visibility = View.VISIBLE
     }
 
     override fun onResume() {

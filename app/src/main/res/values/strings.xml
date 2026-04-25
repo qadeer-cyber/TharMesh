@@ -170,6 +170,19 @@
     <string name="settings_about_sub">Version, open-source credits</string>
     <string name="settings_sign_out">Sign out</string>
 
+    <!-- Stage 6.3 — Disaster Mode -->
+    <string name="settings_disaster">Disaster Mode</string>
+    <string name="settings_disaster_sub_off">Off — normal mesh behaviour</string>
+    <string name="settings_disaster_sub_on">On — SOS priority + persistent scan</string>
+    <string name="settings_disaster_dialog_title">Enable Disaster Mode?</string>
+    <string name="settings_disaster_dialog_body">All outgoing messages will use the SOS priority retry curve, scanning stays active, and inbound SOS-marked messages will vibrate + ring this device. Battery use will be higher.\n\nThis mode is reversible from this same row.</string>
+    <string name="settings_disaster_dialog_disable_title">Disable Disaster Mode?</string>
+    <string name="settings_disaster_dialog_disable_body">Outgoing messages return to the standard retry curve and the SOS alert on receive is muted.</string>
+    <string name="settings_disaster_dialog_enable">Enable</string>
+    <string name="settings_disaster_dialog_disable">Disable</string>
+    <string name="disaster_banner_active">Disaster Mode active — SOS priority on every send</string>
+    <string name="disaster_banner_active_low_battery">Disaster Mode active — battery low, plug in to keep scanning</string>
+
     <!-- Stage 5.1 — Field Test Mode + Diagnostics. -->
     <string name="diagnostics_title">Diagnostics</string>
     <string name="diagnostics_subtitle">Live mesh counters. Enabled only in Field Test Mode.</string>

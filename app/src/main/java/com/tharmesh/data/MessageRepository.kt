@@ -55,7 +55,24 @@ class MessageRepository(
     /** Diagnostic hook: a bundle row was found in SENDING state and re-issued. */
     private val onStuckSendingRecovered: (bundleId: String) -> Unit = { _ -> },
     /** Diagnostic hook: a peer reconnect was suppressed by the churn debouncer. */
-    private val onPeerChurnSuppressed: (peerId: String) -> Unit = { _ -> }
+    private val onPeerChurnSuppressed: (peerId: String) -> Unit = { _ -> },
+    /**
+     * Stage 6.3 — fired from [handleIncomingBundle] when an inbound bundle
+     * carries the SOS payload prefix. The default no-op keeps the receive
+     * path side-effect-free in tests; production wiring sets this to
+     * [com.tharmesh.disaster.DisasterModeController.onSosReceived] so the
+     * device vibrates + rings on inbound priority traffic when disaster
+     * mode is locally enabled.
+     */
+    private val onSosReceived: () -> Unit = {},
+    /**
+     * Stage 6.3 — gating predicate consulted on every [send] / [broadcastSos]
+     * call. When true, every outgoing bundle is force-marked priority (SOS
+     * retry curve + pacer bypass) and its body is wrapped with the SOS
+     * payload prefix so receivers can recognise it. Defaults to `false` so
+     * tests don't accidentally trigger disaster behaviour.
+     */
+    private val isDisasterModeEnabled: () -> Boolean = { false }
 ) {
 
     /**
@@ -203,6 +220,17 @@ class MessageRepository(
         val ts = now()
         val me = myUserId()
         val replyPreview = replyToId?.let { runIo { db.messageDao().getById(it) }?.body }
+        // Stage 6.3 — when disaster mode is on globally, force every outgoing
+        // bundle onto the SOS retry curve + pacer-bypass + alert path.
+        val effectivePriority = priority || isDisasterModeEnabled()
+        // Local DB stores the user's raw body so the chat history is clean;
+        // the wire-side payload carries the SOS prefix only when the bundle
+        // is actually priority. Idempotent — broadcastSos can also pre-mark.
+        val wireBody = if (effectivePriority) {
+            com.tharmesh.disaster.SosPayload.encode(body)
+        } else {
+            body
+        }
         val entity = MessageEntity(
             fromUserId = me,
             toUserId = toUserId,
@@ -220,17 +248,17 @@ class MessageRepository(
             id
         }
 
-        if (priority) {
+        if (effectivePriority) {
             synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
         }
         // Plaintext body on the wire for now; TODO: CryptoBox.encrypt(body, perContactKey, iv).
         mesh.queueText(
             destId = toUserId,
-            payloadCiphertext = body,
+            payloadCiphertext = wireBody,
             ttlMs = DEFAULT_TTL_MS,
             hops = DEFAULT_HOPS,
             bundleIdHint = bundleId,
-            priority = priority
+            priority = effectivePriority
         )
         return SendResult(messageId, bundleId)
     }
@@ -262,7 +290,17 @@ class MessageRepository(
             if (existing != null) return@launch
 
             // TODO: CryptoBox.decrypt(bundle.payloadCiphertext, perContactKey, iv)
-            val plaintext = bundle.payloadCiphertext
+            val raw = bundle.payloadCiphertext
+            val decoded = com.tharmesh.disaster.SosPayload.decode(raw)
+            val plaintext = decoded.body
+            if (decoded.isSos) {
+                // Fire the alert hook regardless of whether the local user is
+                // the bundle's intended destination — a relayed SOS that we
+                // happen to overhear should still alert if disaster mode is
+                // on. The hook itself is gated by the controller's enabled
+                // flag, so off-mode peers stay silent.
+                onSosReceived()
+            }
             val ts = now()
             val entity = MessageEntity(
                 fromUserId = bundle.srcId,
@@ -389,6 +427,9 @@ class MessageRepository(
      */
     suspend fun broadcastSos(text: String, targets: List<String>): Int {
         if (targets.isEmpty()) return 0
+        // The SOS payload prefix is added by [send] when priority=true, so we
+        // pass the raw body here. The local message row keeps the clean text
+        // and the wire bundle carries the SOS:: marker for receiver detection.
         for (target in targets) {
             send(target, text, priority = true)
         }
@@ -502,7 +543,12 @@ class MessageRepository(
             retryBundle = { bid -> mesh.retryBundle(bid) },
             // Stage 5.3 — SOS bundles use the aggressive curve; non-priority
             // bundles fall through to the policy's default config.
-            configFor = { bid -> if (isPriority(bid)) RetryConfig.SOS else null },
+            // Stage 6.3 — when disaster mode is on, every pending bundle is
+            // promoted to the SOS curve so even pre-toggle queued messages
+            // benefit from the aggressive backoff.
+            configFor = { bid ->
+                if (isPriority(bid) || isDisasterModeEnabled()) RetryConfig.SOS else null
+            },
             // Stage 5.3 — drop SOS priority tracking on TTL expiry too, not
             // just on DELIVERED / READ. Without this the priority set leaks
             // one UUID per SOS target whose TTL eventually elapses.

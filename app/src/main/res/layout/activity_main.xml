@@ -8,6 +8,35 @@
     android:fitsSystemWindows="true">
 
     <!--
+      Stage 6.3 — persistent Disaster Mode banner. Sits above the mesh-status
+      banner so the user always sees it regardless of permission / scanning
+      state. Drawable is a solid red; tinted via theme attrs so light + dark
+      both render as urgent red without redesigning either palette.
+    -->
+    <LinearLayout
+        android:id="@+id/disaster_mode_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:visibility="gone"
+        android:background="?attr/tmDanger">
+
+        <TextView
+            android:id="@+id/disaster_mode_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:text="@string/disaster_banner_active"
+            xmlns:tools="http://schemas.android.com/tools"
+            tools:text="Disaster Mode active — battery low" />
+    </LinearLayout>
+
+    <!--
       Stage 5.3 — global mesh status banner. Hidden by default; MainActivity
       flips it visible when permissions are missing / BT off / Location off,
       and otherwise shows scanning / N peers when the mesh is up. Reuses
