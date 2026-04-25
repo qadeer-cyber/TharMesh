@@ -1,7 +1,9 @@
 package com.tharmesh.ui.messages
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateFormat
@@ -26,15 +28,19 @@ import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.MessageStatus
 import com.tharmesh.db.entity.ConversationEntity
 import com.tharmesh.mesh.MeshNode
+import com.tharmesh.permissions.PermissionMonitor
+import com.tharmesh.permissions.PermissionStatus
 import com.tharmesh.ui.chat.ChatActivity
 import com.tharmesh.ui.devices.DevicePickerSheet
 import com.tharmesh.ui.diagnostics.DiagnosticsActivity
+import com.tharmesh.ui.profile.ProfileActivity
 import com.tharmesh.ui.theme.ThemeManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tharmesh.app.R
+import java.io.File
 import java.util.Date
 
 /**
@@ -84,25 +90,44 @@ class MessagesFragment : Fragment() {
                 applyFilter()
             }
         }
+        viewLifecycleOwner.lifecycleScope.launch {
+            TharMeshApp.get().directory.nodes.collectLatest { refreshMeshWarningDot() }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        view?.let {
+            renderProfileAvatar(it)
+            refreshMeshWarningDot()
+        }
     }
 
     /**
-     * Top icon row: theme toggle, alerts shortcut, profile, overflow.
-     * Mesh / camera icons are decorative on this stage; future stages wire
-     * them to topology and file-attachment surfaces.
+     * Top icon row: mesh status · theme toggle · profile avatar · overflow.
+     * Mesh icon carries a small warning dot when BT/Location/perms are not
+     * ready and opens an enable-Bluetooth dialog on tap (replaces the old
+     * full-width banner). Camera / Alerts icons live elsewhere now.
      */
     private fun bindTopBar(view: View) {
         val ctx = requireContext()
-        val profile = UserPrefs.readProfile(ctx)
-        val avatar = view.findViewById<TextView>(R.id.top_profile_avatar)
-        avatar.text = profile?.username?.take(1)?.uppercase() ?: "T"
+        renderProfileAvatar(view)
+
+        view.findViewById<FrameLayout>(R.id.btn_top_mesh).setOnClickListener {
+            showMeshStatusDialog()
+        }
 
         view.findViewById<ImageView>(R.id.btn_top_theme).setOnClickListener { showThemePicker() }
 
         view.findViewById<ImageView>(R.id.btn_top_overflow).setOnClickListener { anchor ->
             val popup = PopupMenu(ctx, anchor)
-            popup.menu.add(R.string.settings_theme).setOnMenuItemClickListener {
-                showThemePicker(); true
+            popup.menu.add(R.string.settings_title).setOnMenuItemClickListener {
+                // Switch the bottom-nav to the Settings tab; ProfileActivity
+                // remains the primary surface for personal account info, but
+                // the overflow gives a one-tap path here too.
+                val nav = requireActivity().findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.bottom_nav)
+                nav?.selectedItemId = R.id.nav_settings
+                true
             }
             popup.menu.add(R.string.diagnostics_title).setOnMenuItemClickListener {
                 startActivity(Intent(ctx, DiagnosticsActivity::class.java)); true
@@ -111,8 +136,105 @@ class MessagesFragment : Fragment() {
         }
 
         view.findViewById<FrameLayout>(R.id.btn_top_profile).setOnClickListener {
-            startActivity(Intent(ctx, com.tharmesh.ui.profile.ProfileActivity::class.java))
+            startActivity(Intent(ctx, ProfileActivity::class.java))
         }
+    }
+
+    /**
+     * Render the top-right avatar from the saved profile photo (if any),
+     * falling back to the first letter of the username on a tinted circle.
+     */
+    private fun renderProfileAvatar(view: View) {
+        val ctx = requireContext()
+        val profile = UserPrefs.readProfile(ctx)
+        val initial = view.findViewById<TextView>(R.id.top_profile_avatar)
+        val image = view.findViewById<ImageView>(R.id.top_profile_avatar_image)
+        initial.text = profile?.username?.take(1)?.uppercase() ?: "T"
+
+        val photoPath = UserPrefs.getAvatarLocalPath(ctx)
+        val photoFile = photoPath?.let { File(it) }
+        val bitmap = photoFile?.takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        if (bitmap != null) {
+            image.setImageBitmap(bitmap)
+            image.clipToOutline = true
+            image.background = ctx.getDrawable(R.drawable.bg_avatar)
+            image.visibility = View.VISIBLE
+            initial.visibility = View.GONE
+        } else {
+            image.visibility = View.GONE
+            initial.visibility = View.VISIBLE
+        }
+    }
+
+    /**
+     * Refresh the warning dot on the mesh status icon based on the live
+     * permission/runtime state. Replaces the old full-width banner; same
+     * signal, less chrome.
+     */
+    private fun refreshMeshWarningDot() {
+        val view = view ?: return
+        val dot = view.findViewById<View>(R.id.top_mesh_warning_dot)
+        val ready = PermissionMonitor.snapshot(requireContext()) is PermissionStatus.Ready
+        dot.visibility = if (ready) View.GONE else View.VISIBLE
+    }
+
+    /**
+     * Tap-handler for the mesh icon: surfaces the next-blocking runtime
+     * issue (BT / Location / permissions) with a one-tap action that opens
+     * the relevant system Settings panel. When the mesh is already up the
+     * dialog reports a friendly status instead of suppressing the tap.
+     */
+    private fun showMeshStatusDialog() {
+        val ctx = requireContext()
+        when (PermissionMonitor.snapshot(ctx)) {
+            is PermissionStatus.BluetoothOff -> AlertDialog.Builder(ctx)
+                .setTitle(R.string.mesh_warning_title)
+                .setMessage(R.string.mesh_warning_bluetooth)
+                .setPositiveButton(R.string.mesh_warning_open_settings) { _, _ ->
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                    if (intent.resolveActivity(ctx.packageManager) != null) {
+                        startActivity(intent)
+                    } else {
+                        startActivity(Intent(Settings.ACTION_SETTINGS))
+                    }
+                }
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show()
+            is PermissionStatus.LocationOff -> AlertDialog.Builder(ctx)
+                .setTitle(R.string.mesh_warning_title)
+                .setMessage(R.string.mesh_warning_location)
+                .setPositiveButton(R.string.mesh_warning_open_settings) { _, _ ->
+                    startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                }
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show()
+            is PermissionStatus.PermissionDenied -> AlertDialog.Builder(ctx)
+                .setTitle(R.string.mesh_warning_title)
+                .setMessage(R.string.mesh_warning_permissions)
+                .setPositiveButton(R.string.mesh_warning_open_settings) { _, _ ->
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    intent.data = android.net.Uri.fromParts("package", ctx.packageName, null)
+                    startActivity(intent)
+                }
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show()
+            is PermissionStatus.Ready -> {
+                val nodes = TharMeshApp.get().directory.nodes.value
+                val online = nodes.count { it.online }
+                val msg = if (online > 0) {
+                    getString(R.string.mesh_warning_connected_fmt, online)
+                } else {
+                    getString(R.string.mesh_warning_searching)
+                }
+                AlertDialog.Builder(ctx)
+                    .setTitle(R.string.dash_network_title)
+                    .setMessage(msg)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }
+        // Permission state may change inside the system Settings panel —
+        // onResume refreshes the warning dot when we come back.
     }
 
     private fun bindSearch(view: View) {

@@ -37,44 +37,10 @@
     </LinearLayout>
 
     <!--
-      Stage 5.3 — global mesh status banner. Hidden by default; MainActivity
-      flips it visible when permissions are missing / BT off / Location off,
-      and otherwise shows scanning / N peers when the mesh is up. Reuses
-      existing colour + typography styles; no new theme.
+      Mesh status banner removed in the Profile/UI polish pass — the same
+      signal is now surfaced as a small warning dot on the mesh icon in the
+      Chats top bar (tap → enable-Bluetooth dialog). Keeps the chrome clean.
     -->
-    <LinearLayout
-        android:id="@+id/mesh_status_banner"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:padding="12dp"
-        android:visibility="gone"
-        android:background="?attr/tmBg2">
-
-        <TextView
-            android:id="@+id/mesh_status_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textColor="?attr/tmTextPrimary"
-            android:textSize="14sp"
-            tools:text="Bluetooth is off — turn it on to use the mesh"
-            xmlns:tools="http://schemas.android.com/tools" />
-
-        <Button
-            android:id="@+id/mesh_status_action"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:textColor="?attr/tmNeonCyan"
-            android:background="@android:color/transparent"
-            android:text="@string/banner_action_retry"
-            android:visibility="gone" />
-    </LinearLayout>
 
     <FrameLayout
         android:id="@+id/fragment_container"

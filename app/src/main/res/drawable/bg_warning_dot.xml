@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Small warning indicator that overlays the mesh status icon in the Chats
+  top bar. Visible when Bluetooth / Location / Nearby permissions are
+  missing. Themed amber so it reads as a soft warning in light mode and a
+  saturated alert in dark mode without redesigning the palette.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="?attr/tmWarning" />
+    <stroke android:width="1dp" android:color="?attr/tmBg" />
+</shape>

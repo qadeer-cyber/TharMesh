@@ -34,7 +34,18 @@
     <string name="settings_theme_dark">Dark</string>
 
     <string name="empty_chats">No conversations yet</string>
-    <string name="empty_chats_hint">Tap Start Mesh Chat to pick a nearby device and open a secure channel.</string>
+    <string name="empty_chats_hint">Start a mesh chat with nearby devices.</string>
+
+    <!-- Chats top-bar mesh status icon + warning dialog. -->
+    <string name="cd_mesh_status">Mesh status</string>
+    <string name="mesh_warning_title">Mesh not ready</string>
+    <string name="mesh_warning_bluetooth">Bluetooth is required for mesh communication. Enable now?</string>
+    <string name="mesh_warning_location">Location must be on so the mesh can discover nearby devices.</string>
+    <string name="mesh_warning_permissions">Nearby permissions are missing. Grant them to start the mesh.</string>
+    <string name="mesh_warning_searching">Mesh is on and looking for nearby devices.</string>
+    <string name="mesh_warning_connected_fmt">Mesh is on. %1$d device(s) connected.</string>
+    <string name="mesh_warning_open_settings">Open Settings</string>
+    <string name="mesh_warning_grant">Grant</string>
     <string name="empty_chats_button">Start Mesh Chat</string>
     <string name="new_chat">New chat</string>
 
