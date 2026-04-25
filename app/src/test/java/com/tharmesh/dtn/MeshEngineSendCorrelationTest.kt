@@ -40,12 +40,22 @@ class MeshEngineSendCorrelationTest {
         }
     }
 
+    /** Declare [peerId] as a connected peer so [MeshEngine.broadcastBundle] actually sends. */
+    private fun FakeTransport.connect(peerId: String) {
+        fire(TransportEvent.PeerConnected(peerId))
+    }
+
+    /** Find the BUNDLE-framed send (skip the INV sync that syncWithPeer kicks off). */
+    private fun FakeTransport.bundleSends(): List<FakeTransport.SendCall> =
+        sends.filter { it.sendId != 0L }
+
     @Test
     fun bundleSent_onlyFiresAfterPayloadSent() {
         val transport = FakeTransport()
         val engine = MeshEngine(localUserId = "me", transport = transport)
         val events = mutableListOf<MeshEvent>()
         engine.setEventListener { events.add(it) }
+        transport.connect("peer")
 
         val bundle = engine.queueText(
             destId = "peer",
@@ -57,8 +67,8 @@ class MeshEngineSendCorrelationTest {
         // Before PayloadSent: no BundleSent yet — the bug used to flip SENT here.
         assertTrue("No BundleSent before transport confirms",
             events.none { it is MeshEvent.BundleSent })
-        assertEquals(1, transport.sends.size)
-        val sendId = transport.sends[0].sendId
+        assertEquals(1, transport.bundleSends().size)
+        val sendId = transport.bundleSends()[0].sendId
 
         transport.fire(TransportEvent.PayloadSent(peerId = "peer", sendId = sendId, bytesCount = 32))
 
@@ -72,6 +82,7 @@ class MeshEngineSendCorrelationTest {
         val engine = MeshEngine(localUserId = "me", transport = transport)
         val events = mutableListOf<MeshEvent>()
         engine.setEventListener { events.add(it) }
+        transport.connect("peer")
 
         val bundle = engine.queueText(
             destId = "peer",
@@ -79,7 +90,7 @@ class MeshEngineSendCorrelationTest {
             ttlMs = 60_000L,
             hops = 4
         )
-        val sendId = transport.sends[0].sendId
+        val sendId = transport.bundleSends()[0].sendId
 
         transport.fire(TransportEvent.Error(peerId = "peer", sendId = sendId, reason = "disconnected"))
 
@@ -95,6 +106,7 @@ class MeshEngineSendCorrelationTest {
         val engine = MeshEngine(localUserId = "me", transport = transport)
         val events = mutableListOf<MeshEvent>()
         engine.setEventListener { events.add(it) }
+        transport.connect("peer")
 
         val bundle = engine.queueText(
             destId = "peer",
@@ -109,7 +121,7 @@ class MeshEngineSendCorrelationTest {
         assertTrue("BundleSent must not precede PayloadSent",
             events.none { it is MeshEvent.BundleSent })
 
-        val sendId = transport.sends[0].sendId
+        val sendId = transport.bundleSends()[0].sendId
         transport.fire(TransportEvent.PayloadSent(peerId = "peer", sendId = sendId, bytesCount = 32))
 
         // Order: BundleSending first, then BundleSent.
@@ -124,6 +136,7 @@ class MeshEngineSendCorrelationTest {
         val engine = MeshEngine(localUserId = "me", transport = transport)
         val events = mutableListOf<MeshEvent>()
         engine.setEventListener { events.add(it) }
+        transport.connect("peer")
 
         engine.queueText(
             destId = "peer",

@@ -26,6 +26,12 @@ class MeshEngine(
     // eviction when we exceed [maxCacheSize].
     private val cacheLock = Any()
     private val cache: MutableMap<String, MeshBundle> = linkedMapOf()
+
+    // bundleId → set of peerIds that have sent us this bundle. Used to implement the
+    // anti-sender invariant: never forward a bundle back to a peer it arrived from.
+    // Cleared alongside cache eviction (same lock).
+    private val receivedFrom: MutableMap<String, MutableSet<String>> = HashMap()
+
     @Volatile private var eventListener: ((MeshEvent) -> Unit)? = null
 
     // Additional peer-lifecycle listeners — the data source that feeds the Devices UI
@@ -40,6 +46,13 @@ class MeshEngine(
     private val pendingLock = Any()
     private val pendingBundleSends: MutableMap<Long, String> = HashMap()
     private val sendIdSeq = AtomicLong(1L)
+
+    // Set of peerIds currently connected at the transport layer. Maintained from
+    // TransportEvent.PeerConnected / PeerDisconnected. Used by the fanout paths
+    // (origination + relay forwarding) so we can flood a bundle to every reachable
+    // peer without asking the transport to enumerate endpoints.
+    private val peersLock = Any()
+    private val connectedPeers: MutableSet<String> = HashSet()
 
     init {
         transport.setListener { event: TransportEvent ->
@@ -164,27 +177,107 @@ class MeshEngine(
         sendFrame(peerId, ProtocolFrame(ProtocolType.INV, localUserId, inv))
     }
 
+    /**
+     * Origination fanout: flood [bundle] to every currently-connected peer. The mesh
+     * decides routing — we do not assume direct connectivity to [bundle.destId]. Every
+     * peer that receives the bundle will either (a) deliver-to-local + ACK if it IS
+     * [bundle.destId], or (b) cache + forward (see [handleBundle] relay path).
+     *
+     * Emits [MeshEvent.BundleSending] once if at least one peer accepted the payload.
+     * [MeshEvent.BundleSent] follows per-peer on [TransportEvent.PayloadSent] — the
+     * repository's rank-protected advance makes repeat emissions idempotent.
+     *
+     * If no peers are connected, the bundle stays cached and the store-and-forward
+     * retry loop / PeerConnected flush will re-invoke this later.
+     */
     private fun broadcastBundle(bundle: MeshBundle) {
-        if (bundle.ttlUntil < now()) return
-        val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(bundle))
-        val sendId = sendIdSeq.getAndIncrement()
-        // Track the correlation BEFORE calling send — a synchronous failure path inside
-        // send (e.g. LoopbackTransport "Peer not connected") will fire Error(sendId)
-        // synchronously and pop from the map.
-        synchronized(pendingLock) { pendingBundleSends[sendId] = bundle.bundleId }
-        val accepted = transport.send(bundle.destId, encodeFrame(frame), sendId)
-        if (!accepted) {
-            // Defensive: if the transport returned false AND didn't fire Error synchronously
-            // for some reason, release the correlation so we don't leak. Message stays
-            // QUEUED; the retry loop will try again when a peer connects.
-            synchronized(pendingLock) { pendingBundleSends.remove(sendId) }
+        val nowMs = now()
+        if (bundle.ttlUntil < nowMs) {
+            MeshLog.droppedTtl(bundle.bundleId, fromPeer = "self")
             return
         }
-        // Transport accepted the bundle — repository advances QUEUED → SENDING. Actual
-        // "bytes on wire" confirmation still comes later via TransportEvent.PayloadSent,
-        // at which point BundleSent (→ status=SENT) is emitted in onTransportEvent.
-        eventListener?.invoke(MeshEvent.BundleSending(bundle.bundleId))
+        val peers = snapshotConnectedPeers()
+        if (peers.isEmpty()) {
+            MeshLog.noConnectedPeers(bundle.bundleId)
+            return
+        }
+        val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(bundle))
+        val payloadBytes = encodeFrame(frame)
+        var anyAccepted = false
+        for (peer in peers) {
+            // Router.shouldForward is the anti-storm memo for RELAY forwarding (one send
+            // per (bundleId, peer) pair). Origination / retry from the local user is
+            // not bounded by the memo — the store-and-forward retry loop must be free
+            // to re-broadcast after a PeerDisconnected + PeerConnected bounce.
+            val sendId = sendIdSeq.getAndIncrement()
+            // Track the correlation BEFORE calling send — a synchronous failure path inside
+            // send (e.g. LoopbackTransport "Peer not connected") will fire Error(sendId)
+            // synchronously and pop from the map.
+            synchronized(pendingLock) { pendingBundleSends[sendId] = bundle.bundleId }
+            val accepted = transport.send(peer, payloadBytes, sendId)
+            if (!accepted) {
+                synchronized(pendingLock) { pendingBundleSends.remove(sendId) }
+                continue
+            }
+            MeshLog.sending(bundle.bundleId, peer)
+            anyAccepted = true
+        }
+        if (anyAccepted) {
+            // Repository advances QUEUED → SENDING. Actual "bytes on wire" confirmation
+            // still comes later per-peer via TransportEvent.PayloadSent, at which point
+            // BundleSent (→ status=SENT) is emitted in onTransportEvent.
+            eventListener?.invoke(MeshEvent.BundleSending(bundle.bundleId))
+        }
     }
+
+    /**
+     * Relay forwarding: a bundle arrived from [fromPeerId] that is NOT addressed to us,
+     * has positive hopsLeft after decrement, and has not expired. Re-broadcast it to
+     * every OTHER connected peer — never back to [fromPeerId], never to a peer that has
+     * already sent us this same bundle (anti-ping-pong), and always respecting
+     * [Router.shouldForward] for the (bundleId, peerId) memo.
+     */
+    private fun forwardBundle(bundle: MeshBundle, fromPeerId: String) {
+        val nowMs = now()
+        if (bundle.ttlUntil < nowMs) {
+            MeshLog.droppedTtl(bundle.bundleId, fromPeer = fromPeerId)
+            return
+        }
+        // Spec: "IF hopsLeft <= 0 → DO NOT forward". A bundle with current hopsLeft > 0
+        // is still forwardable exactly once — decrement, emit, and the next hop
+        // receives it with hopsLeft-1 (which may itself be 0, meaning that hop can
+        // deliver-to-self but can no longer relay further).
+        if (bundle.hopsLeft <= 0) {
+            MeshLog.droppedHops(bundle.bundleId, fromPeerId, hopsLeft = bundle.hopsLeft)
+            return
+        }
+        val nextHops = bundle.hopsLeft - 1
+        val forwarded = bundle.copy(hopsLeft = nextHops, status = "FORWARDED")
+        val peers = snapshotConnectedPeers()
+        val seenFrom: Set<String> = synchronized(cacheLock) {
+            receivedFrom[bundle.bundleId]?.toSet() ?: emptySet()
+        }
+        val frame = ProtocolFrame(ProtocolType.BUNDLE, localUserId, BundleCodec.encode(forwarded))
+        val payloadBytes = encodeFrame(frame)
+        for (peer in peers) {
+            if (peer == fromPeerId) {
+                MeshLog.skippedAntiSender(bundle.bundleId, peer)
+                continue
+            }
+            if (peer in seenFrom) {
+                MeshLog.skippedAntiSender(bundle.bundleId, peer)
+                continue
+            }
+            if (!router.shouldForward(forwarded, peer, nowMs)) continue
+            // Relay forwards are not correlated with a local outbound message row —
+            // use sendId=0 so PayloadSent doesn't try to advance a non-existent row.
+            transport.send(peer, payloadBytes, sendId = 0L)
+            MeshLog.forwarded(bundle.bundleId, peer, nextHops)
+        }
+    }
+
+    private fun snapshotConnectedPeers(): List<String> =
+        synchronized(peersLock) { connectedPeers.toList() }
 
     private fun onTransportEvent(event: TransportEvent) {
         when (event) {
@@ -210,7 +303,9 @@ class MeshEngine(
                 // message-level BundleSent events.
             }
             is TransportEvent.PeerConnected -> {
-                // Opportunistic inventory sync with the new peer.
+                synchronized(peersLock) { connectedPeers.add(event.peerId) }
+                // Opportunistic inventory sync with the new peer — covers store-and-forward
+                // for bundles that arrived while this peer was offline.
                 syncWithPeer(event.peerId)
                 val e = MeshEvent.PeerConnected(event.peerId)
                 firePeerEvent(e)
@@ -220,6 +315,7 @@ class MeshEngine(
                 firePeerEvent(MeshEvent.PeerFound(event.peerId, event.displayName))
             }
             is TransportEvent.PeerDisconnected -> {
+                synchronized(peersLock) { connectedPeers.remove(event.peerId) }
                 firePeerEvent(MeshEvent.PeerDisconnected(event.peerId))
             }
             is TransportEvent.Error -> {
@@ -262,17 +358,27 @@ class MeshEngine(
     private fun handleBundle(peerId: String, payload: String) {
         val bundle = BundleCodec.decode(payload) ?: return
         val nowMs = now()
-        // Drop expired / hop-exhausted at receive time too — we don't want to cache them,
-        // we don't want to ACK them, we don't want to forward them.
-        if (bundle.ttlUntil < nowMs) return
-        if (bundle.hopsLeft < 0) return
+        // Drop expired / hop-exhausted at receive time — don't cache, don't ACK, don't forward.
+        if (bundle.ttlUntil < nowMs) {
+            MeshLog.droppedTtl(bundle.bundleId, peerId)
+            return
+        }
+        if (bundle.hopsLeft < 0) {
+            MeshLog.droppedHops(bundle.bundleId, peerId, bundle.hopsLeft)
+            return
+        }
 
+        val isFirstArrival: Boolean
         var alreadyDelivered = false
         var deliveredSnapshot: MeshBundle? = null
         synchronized(cacheLock) {
-            if (!cache.containsKey(bundle.bundleId)) {
+            isFirstArrival = !cache.containsKey(bundle.bundleId)
+            if (isFirstArrival) {
                 cachePutLocked(bundle)
             }
+            // Track which peers have given us this bundle — consulted by forwardBundle
+            // to implement the anti-sender invariant (never forward back upstream).
+            receivedFrom.getOrPut(bundle.bundleId) { HashSet() }.add(peerId)
             if (bundle.destId == localUserId) {
                 alreadyDelivered = cache[bundle.bundleId]?.status == "DELIVERED_FINAL"
                 val delivered = bundle.copy(status = "DELIVERED_FINAL")
@@ -280,26 +386,48 @@ class MeshEngine(
                 deliveredSnapshot = delivered
             }
         }
+        MeshLog.received(bundle.bundleId, peerId, bundle.destId, bundle.hopsLeft, isFirstArrival)
+
         if (deliveredSnapshot != null) {
-            // Relay paths can deliver the same bundle more than once. Only emit
-            // BundleDelivered on the first arrival; subsequent copies still ACK so
-            // the sender can retire its queue but do not re-notify the repository.
+            // Addressed to us: deliver (once) + ACK (every time, so a resend retires).
             if (!alreadyDelivered) {
                 eventListener?.invoke(MeshEvent.BundleDelivered(deliveredSnapshot!!))
+                MeshLog.delivered(bundle.bundleId)
+            } else {
+                MeshLog.droppedDuplicate(bundle.bundleId, peerId)
             }
             val ack = ProtocolFrame(ProtocolType.ACK, localUserId, bundle.bundleId)
             sendFrame(peerId, ack)
+            return
         }
+
+        // Not addressed to us → relay path. Forward ONLY on first arrival so a
+        // ping-ponging peer can't trigger another fanout. Storm prevention also enforced
+        // by Router.shouldForward's (bundleId, peerId) memo.
+        if (!isFirstArrival) {
+            MeshLog.droppedDuplicate(bundle.bundleId, peerId)
+            return
+        }
+        forwardBundle(bundle, fromPeerId = peerId)
     }
 
     private fun handleAck(ackedBy: String, bundleId: String) {
-        val updated: Boolean = synchronized(cacheLock) {
+        // First-ACK idempotency: fire BundleAcked exactly once per bundleId, on the
+        // first ACK that arrives for one of OUR outbound bundles. Duplicate ACKs
+        // (e.g. a relay chain feeding us back a second copy, or a peer sending the
+        // same ACK twice) hit the already-DELIVERED_FINAL guard and are silently
+        // dropped — no event fired, no state change.
+        val firstAck: Boolean = synchronized(cacheLock) {
             val existing = cache[bundleId] ?: return@synchronized false
             if (existing.srcId != localUserId) return@synchronized false
+            if (existing.status == "DELIVERED_FINAL") return@synchronized false
             cache[bundleId] = existing.copy(status = "DELIVERED_FINAL")
             true
         }
-        if (updated) eventListener?.invoke(MeshEvent.BundleAcked(bundleId, ackedBy))
+        if (firstAck) {
+            eventListener?.invoke(MeshEvent.BundleAcked(bundleId, ackedBy))
+            MeshLog.acked(bundleId, ackedBy)
+        }
     }
 
     private fun handleRead(readBy: String, bundleId: String) {
@@ -347,6 +475,10 @@ class MeshEngine(
                     v.srcId == localUserId && v.status != "DELIVERED_FINAL"
                 if (isLocalUndelivered) continue
                 iter.remove()
+                // Drop the parallel receivedFrom entry so we don't leak it into the
+                // future — if this bundleId reappears, it will be treated as a fresh
+                // first-arrival, which is the correct behavior after cache eviction.
+                receivedFrom.remove(key)
                 evicted = true
                 break
             }
