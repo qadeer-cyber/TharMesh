@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Filter-chip text colour selector. Selected chip uses the WhatsApp accent
+  green for the label so the colour cue lives in the text rather than a
+  saturated background. Unselected chip uses the secondary text colour
+  for a quieter row.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_activated="true" android:color="?attr/tmNeonGreen" />
+    <item android:color="?attr/tmTextSecondary" />
+</selector>

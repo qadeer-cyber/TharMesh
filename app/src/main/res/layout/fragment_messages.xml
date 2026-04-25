@@ -29,7 +29,9 @@
         android:orientation="vertical">
 
         <!-- ============================================================== -->
-        <!-- Top icon row                                                   -->
+        <!-- Top icon row — minimal: title · mesh-status · theme · avatar      -->
+        <!-- · overflow. Camera moved to chat-screen attach action; alerts    -->
+        <!-- moved to the dedicated bottom-nav Alerts tab.                  -->
         <!-- ============================================================== -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -37,7 +39,7 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="16dp"
-            android:paddingEnd="8dp"
+            android:paddingEnd="16dp"
             android:paddingTop="14dp"
             android:paddingBottom="6dp">
 
@@ -50,14 +52,32 @@
                 android:textSize="26sp"
                 android:textStyle="bold" />
 
-            <ImageView
+            <!-- Mesh status indicator: wifi icon + a small warning dot
+                 overlay that flips visible when BT/Location/perms are
+                 missing. Tap opens [mesh_warning_dialog]. -->
+            <FrameLayout
                 android:id="@+id/btn_top_mesh"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:background="@drawable/bg_top_icon"
-                android:contentDescription="@string/dash_network_title"
-                android:padding="8dp"
-                android:src="@drawable/ic_wifi" />
+                android:background="@drawable/bg_top_icon">
+
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@string/cd_mesh_status"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_wifi" />
+
+                <View
+                    android:id="@+id/top_mesh_warning_dot"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_warning_dot"
+                    android:visibility="gone" />
+            </FrameLayout>
 
             <ImageView
                 android:id="@+id/btn_top_theme"
@@ -67,24 +87,6 @@
                 android:contentDescription="@string/settings_theme"
                 android:padding="8dp"
                 android:src="@drawable/ic_moon" />
-
-            <ImageView
-                android:id="@+id/btn_top_alerts"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_top_icon"
-                android:contentDescription="@string/tab_alerts"
-                android:padding="8dp"
-                android:src="@drawable/ic_alert" />
-
-            <ImageView
-                android:id="@+id/btn_top_camera"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_top_icon"
-                android:contentDescription="@string/chat_attach"
-                android:padding="8dp"
-                android:src="@drawable/ic_camera" />
 
             <FrameLayout
                 android:id="@+id/btn_top_profile"
@@ -102,6 +104,14 @@
                     android:textColor="@android:color/white"
                     android:textSize="13sp"
                     android:textStyle="bold" />
+
+                <ImageView
+                    android:id="@+id/top_profile_avatar_image"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:visibility="gone"
+                    android:contentDescription="@string/profile_avatar_cd" />
             </FrameLayout>
 
             <ImageView
@@ -114,6 +124,13 @@
                 android:src="@drawable/ic_more_vert" />
         </LinearLayout>
 
+        <!-- Subtle hairline between the top bar and the search/chip stack. -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:background="?attr/tmStrokeSoft" />
+
         <!-- ============================================================== -->
         <!-- Search pill                                                    -->
         <!-- ============================================================== -->
@@ -122,8 +139,8 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
             android:layout_marginEnd="16dp"
-            android:layout_marginTop="6dp"
-            android:layout_marginBottom="10dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
             android:background="@drawable/bg_search_pill"
             android:gravity="center_vertical"
             android:minHeight="44dp"
@@ -159,9 +176,9 @@
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:paddingBottom="10dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="12dp"
             android:scrollbars="none">
 
             <LinearLayout
@@ -264,8 +281,9 @@
                     style="@style/Text.Caption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:gravity="center"
+                    android:textSize="15sp"
                     android:text="@string/empty_chats_hint" />
 
                 <Button
@@ -273,8 +291,8 @@
                     style="@style/TmButton.Primary"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
-                    android:minWidth="180dp"
+                    android:layout_marginTop="24dp"
+                    android:minWidth="200dp"
                     android:text="@string/empty_chats_button" />
             </LinearLayout>
         </FrameLayout>

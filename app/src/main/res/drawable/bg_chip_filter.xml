@@ -1,21 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Stage 6.1 — WhatsApp-style filter chip. Selected: accent green tint with
-  matching stroke; unselected: bg-2 fill with soft stroke. Selectors apply
-  to the activated state which the host fragment toggles per chip.
+  WhatsApp-style filter chip. Colour cue is carried by the chip's text
+  colour (see color/chip_filter_text.xml); the background stays neutral
+  in both states so a row of chips reads as a single rhythmic group
+  instead of a row of saturated badges.
+
+  Selected: very pale tinted fill + soft hairline.
+  Unselected: surface-2 fill + softer hairline.
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_activated="true">
         <shape android:shape="rectangle">
             <solid android:color="?attr/tmNeonGreenDim" />
-            <stroke android:width="1dp" android:color="?attr/tmNeonGreen" />
+            <stroke android:width="1dp" android:color="?attr/tmStrokeSoft" />
             <corners android:radius="100dp" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
             <solid android:color="?attr/tmBg2" />
-            <stroke android:width="1dp" android:color="?attr/tmStroke" />
+            <stroke android:width="1dp" android:color="?attr/tmStrokeSoft" />
             <corners android:radius="100dp" />
         </shape>
     </item>
