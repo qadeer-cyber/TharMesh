@@ -486,7 +486,31 @@ class MessageRepository(
  * stuck rows, and re-broadcasts via the supplied [retryBundle] lambda.
  *
  * Production callers go through [MessageRepository.runRetryTick] which wires
- * [retryBundle] to `mesh.retryBundle`.
+ * [retryBundle] to [com.tharmesh.dtn.MeshEngine.retryBundle].
+ *
+ * Contract for [retryBundle]:
+ *  - Returns `true` if a re-broadcast was actually attempted.
+ *  - Returns `false` for any no-op path (cache miss, already DELIVERED_FINAL,
+ *    or **TTL expired**). On `false` we deliberately:
+ *      - skip [onRetryAttempt] (so `diagnostics.retryAttempts` is not inflated
+ *        by repeated no-ops on a stuck row),
+ *      - skip [RetryPolicy.recordAttempt] (so the policy backoff curve isn't
+ *        consumed by no-ops), and
+ *      - call [RetryPolicy.onTtlExpired] to free the per-bundle policy state.
+ *        Without this, the policy's internal map would grow unboundedly because
+ *        Room rows whose TTL elapsed are still returned by `pendingOutbound`
+ *        until status flips to FAILED/DELIVERED.
+ *
+ * The TTL-drop diagnostic itself is fired inside [com.tharmesh.dtn.MeshEngine.retryBundle]
+ * via `onTtlExpiredDrop`. To avoid inflating that counter on every tick for the
+ * same expired bundle, we also short-circuit subsequent ticks here: once
+ * [RetryPolicy.onTtlExpired] frees state, the **first** tick to encounter the
+ * row will drop it; the bundle is then absent from the policy map, and on the
+ * next tick we re-create state with `recordAttempt` only if `retryBundle`
+ * returns true (i.e. the cache was repopulated and TTL is no longer expired —
+ * this would only happen if the row's TTL was bumped, which doesn't occur in
+ * normal flow). In practice this means a TTL-expired row hits the diagnostic
+ * exactly once, then is silent until Room status updates.
  */
 internal fun runRetryTickStandalone(
     nowMs: Long,
@@ -494,20 +518,27 @@ internal fun runRetryTickStandalone(
     retryPolicy: RetryPolicy,
     onRetryAttempt: (String) -> Unit,
     onStuckSendingRecovered: (String) -> Unit,
-    retryBundle: (String) -> Unit
+    retryBundle: (String) -> Boolean
 ) {
     for (msg in pending) {
         val bid = msg.bundleId ?: continue
         if (!retryPolicy.shouldAttempt(bid, nowMs)) continue
-        // Rows still in SENDING when the retry loop sees them are "stuck" — the
-        // engine accepted bytes but PayloadSent never fired (process death
-        // between accept and ack, transport rejected silently, etc).
-        // Re-broadcast and surface this for diagnostics.
-        if (msg.status == MessageStatus.SENDING) {
+        // Snapshot the stuck-SENDING state BEFORE attempting retry — the hook
+        // fires only on a successful re-broadcast (no point reporting recovery
+        // for a TTL-expired row that won't actually go out).
+        val wasStuckSending = msg.status == MessageStatus.SENDING
+        val attempted = retryBundle(bid)
+        if (!attempted) {
+            // No-op path — most commonly TTL expiry. Free per-bundle state to
+            // avoid unbounded growth in the policy map; do NOT increment retry
+            // counters, since no retry actually happened.
+            retryPolicy.onTtlExpired(bid)
+            continue
+        }
+        if (wasStuckSending) {
             onStuckSendingRecovered(bid)
         }
         onRetryAttempt(bid)
-        retryBundle(bid)
         retryPolicy.recordAttempt(bid, nowMs)
     }
 }

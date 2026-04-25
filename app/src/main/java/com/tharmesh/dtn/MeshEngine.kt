@@ -291,20 +291,29 @@ class MeshEngine(
      * Re-broadcast a cached outbound bundle. Called by the repository's store-and-forward
      * retry loop and opportunistically on PeerConnected. If the bundle is no longer in the
      * cache, already marked delivered, or expired, this is a no-op.
+     *
+     * Returns `true` when a re-broadcast was actually attempted, `false` when the call was
+     * a no-op (cache miss / already DELIVERED_FINAL / TTL expired). The repository uses the
+     * return value to decide whether to advance the [RetryPolicy] state and increment the
+     * `retryAttempts` diagnostic. On TTL expiry, callers should invoke
+     * [RetryPolicy.onTtlExpired] to free per-bundle state — otherwise the policy map would
+     * grow unboundedly because Room rows whose TTL elapsed are still returned by
+     * `pendingOutbound` until status flips to FAILED/DELIVERED.
      */
-    fun retryBundle(bundleId: String) {
-        val bundle = synchronized(cacheLock) { cache[bundleId] } ?: return
-        if (bundle.srcId != localUserId) return
-        if (bundle.status == "DELIVERED_FINAL") return
+    fun retryBundle(bundleId: String): Boolean {
+        val bundle = synchronized(cacheLock) { cache[bundleId] } ?: return false
+        if (bundle.srcId != localUserId) return false
+        if (bundle.status == "DELIVERED_FINAL") return false
         if (bundle.ttlUntil < now()) {
             // Stage 5.2: surface TTL-expired drops on the retry path so the
             // diagnostics collector counts them. broadcastBundle has its own
             // TTL guard for the origination path; retryBundle's early return
             // means broadcastBundle never sees this expired bundle.
             onTtlExpiredDrop(bundleId)
-            return
+            return false
         }
         broadcastBundle(bundle)
+        return true
     }
 
     /**

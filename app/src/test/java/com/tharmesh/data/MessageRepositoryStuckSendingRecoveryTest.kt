@@ -59,7 +59,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = policy,
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { stuck.add(it) },
-            retryBundle = { rebroadcast.add(it) }
+            retryBundle = { rebroadcast.add(it); true }
         )
         assertEquals(listOf("stuck-1"), stuck)
         assertEquals(listOf("stuck-1"), retried)
@@ -77,7 +77,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = newPolicy(),
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { stuck.add(it) },
-            retryBundle = { /* no-op */ }
+            retryBundle = { true }
         )
         assertTrue(stuck.isEmpty())
         assertEquals(listOf("fresh-1"), retried)
@@ -94,7 +94,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             nowMs = 0L, pending = pending, retryPolicy = policy,
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { },
-            retryBundle = { }
+            retryBundle = { true }
         )
         assertEquals(1, retried.size)
         // Next eligible time is t=5000 (base delay, jitter=0). Tick at t=4999 → no-op.
@@ -102,7 +102,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             nowMs = 4_999L, pending = pending, retryPolicy = policy,
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { },
-            retryBundle = { }
+            retryBundle = { true }
         )
         assertEquals(1, retried.size)
         // Tick at t=5000 → second attempt fires.
@@ -110,7 +110,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             nowMs = 5_000L, pending = pending, retryPolicy = policy,
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { },
-            retryBundle = { }
+            retryBundle = { true }
         )
         assertEquals(2, retried.size)
     }
@@ -124,7 +124,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = newPolicy(),
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { },
-            retryBundle = { }
+            retryBundle = { true }
         )
         assertTrue(retried.isEmpty())
     }
@@ -143,7 +143,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = newPolicy(),
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { stuck.add(it) },
-            retryBundle = { }
+            retryBundle = { true }
         )
         assertEquals(listOf("m1", "m2", "m3"), retried)
         assertEquals(listOf("m2"), stuck)
@@ -158,7 +158,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = newPolicy(),
             onRetryAttempt = { retried.add(it) },
             onStuckSendingRecovered = { },
-            retryBundle = { }
+            retryBundle = { true }
         )
         assertTrue(retried.isEmpty())
     }
@@ -175,7 +175,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = policy,
             onRetryAttempt = { },
             onStuckSendingRecovered = { stuckCount.incrementAndGet() },
-            retryBundle = { }
+            retryBundle = { true }
         )
         runRetryTickStandalone(
             nowMs = 100_000L,
@@ -186,7 +186,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = policy,
             onRetryAttempt = { },
             onStuckSendingRecovered = { stuckCount.incrementAndGet() },
-            retryBundle = { }
+            retryBundle = { true }
         )
         runRetryTickStandalone(
             nowMs = 1_000_000L,
@@ -194,7 +194,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = policy,
             onRetryAttempt = { },
             onStuckSendingRecovered = { stuckCount.incrementAndGet() },
-            retryBundle = { }
+            retryBundle = { true }
         )
         assertEquals(3L, stuckCount.get())
     }
@@ -218,12 +218,57 @@ class MessageRepositoryStuckSendingRecoveryTest {
             retryPolicy = policy,
             onRetryAttempt = { retried.incrementAndGet() },
             onStuckSendingRecovered = { stuck.incrementAndGet() },
-            retryBundle = { rebroadcast.add(it) }
+            retryBundle = { rebroadcast.add(it); true }
         )
         assertEquals(1L, stuck.get())
         assertEquals(1L, retried.get())
         assertEquals(listOf("x"), rebroadcast)
         assertNotNull(policy.currentState("x"))
         assertEquals(1, policy.currentState("x")?.attemptCount)
+    }
+
+    /**
+     * Regression for the Devin Review finding on PR #10: when retryBundle is a
+     * no-op (TTL expired in the engine cache), the tick must NOT advance the
+     * retryAttempts counter, must NOT call recordAttempt, and must call
+     * onTtlExpired so the policy state map can be freed. Without this, every
+     * eligible tick on a stuck-expired row would keep firing the diagnostic
+     * and keep growing the policy map.
+     */
+    @Test
+    fun ttlExpiredRetry_doesNotInflateCounters_andFreesPolicyState() {
+        val retried = AtomicLong(0L)
+        val stuck = AtomicLong(0L)
+        val policy = newPolicy()
+        // First tick: pretend the bundle is fresh — record an attempt so the
+        // policy map has state for this bid.
+        runRetryTickStandalone(
+            nowMs = 0L,
+            pending = listOf(row(20, "ttl-1", MessageStatus.QUEUED)),
+            retryPolicy = policy,
+            onRetryAttempt = { retried.incrementAndGet() },
+            onStuckSendingRecovered = { stuck.incrementAndGet() },
+            retryBundle = { true }
+        )
+        assertEquals(1L, retried.get())
+        assertNotNull(policy.currentState("ttl-1"))
+
+        // Second tick: simulate TTL expiry by returning false from retryBundle.
+        // Counters must NOT advance, policy state must be freed.
+        runRetryTickStandalone(
+            nowMs = 100_000L,
+            pending = listOf(row(20, "ttl-1", MessageStatus.QUEUED)),
+            retryPolicy = policy,
+            onRetryAttempt = { retried.incrementAndGet() },
+            onStuckSendingRecovered = { stuck.incrementAndGet() },
+            retryBundle = { false }
+        )
+        assertEquals("retryAttempts must not increment on TTL no-op", 1L, retried.get())
+        assertEquals("stuckSendingRecovered must not fire on TTL no-op", 0L, stuck.get())
+        assertEquals(
+            "policy state must be freed after TTL expiry",
+            null,
+            policy.currentState("ttl-1")
+        )
     }
 }
