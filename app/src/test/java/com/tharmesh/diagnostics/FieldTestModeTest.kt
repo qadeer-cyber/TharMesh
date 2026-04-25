@@ -2,8 +2,10 @@ package com.tharmesh.diagnostics
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.tharmesh.dtn.RetryConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.ArgumentMatchers.anyBoolean
@@ -71,5 +73,42 @@ class FieldTestModeTest {
 
         assertFalse(FieldTestMode.toggle(ctx))
         assertFalse(FieldTestMode.isEnabled(ctx))
+    }
+
+    // ---------- Stage 5.3 — retry-tuning toggles + resolveRetryConfig ----------
+
+    @Test
+    fun `resolveRetryConfig defaults to DEFAULT when both toggles are off`() {
+        val (ctx, _) = fakeContextWithPrefs()
+        assertFalse(FieldTestMode.isBackoffDisabled(ctx))
+        assertFalse(FieldTestMode.isHighFrequencyForced(ctx))
+        assertSame(RetryConfig.DEFAULT, FieldTestMode.resolveRetryConfig(ctx))
+    }
+
+    @Test
+    fun `setBackoffDisabled persists and switches resolveRetryConfig to FIELD_TEST_FLAT`() {
+        val (ctx, store) = fakeContextWithPrefs()
+        FieldTestMode.setBackoffDisabled(ctx, true)
+        assertTrue(FieldTestMode.isBackoffDisabled(ctx))
+        assertEquals(true, store["field_test_disable_backoff"])
+        assertSame(RetryConfig.FIELD_TEST_FLAT, FieldTestMode.resolveRetryConfig(ctx))
+    }
+
+    @Test
+    fun `setHighFrequencyForced persists and switches resolveRetryConfig to FIELD_TEST_FAST`() {
+        val (ctx, store) = fakeContextWithPrefs()
+        FieldTestMode.setHighFrequencyForced(ctx, true)
+        assertTrue(FieldTestMode.isHighFrequencyForced(ctx))
+        assertEquals(true, store["field_test_force_high_freq"])
+        assertSame(RetryConfig.FIELD_TEST_FAST, FieldTestMode.resolveRetryConfig(ctx))
+    }
+
+    @Test
+    fun `resolveRetryConfig precedence — FAST beats FLAT when both are on`() {
+        val (ctx, _) = fakeContextWithPrefs()
+        FieldTestMode.setBackoffDisabled(ctx, true)
+        FieldTestMode.setHighFrequencyForced(ctx, true)
+        // Defensive: even though the UI prevents this, FAST must win.
+        assertSame(RetryConfig.FIELD_TEST_FAST, FieldTestMode.resolveRetryConfig(ctx))
     }
 }

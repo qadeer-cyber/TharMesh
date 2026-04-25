@@ -9,6 +9,8 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -83,7 +85,21 @@ class ChatActivity : AppCompatActivity() {
         replyBarPreview = findViewById(R.id.reply_bar_preview)
         replyBarClose = findViewById(R.id.reply_bar_close)
 
-        adapter = MessageAdapter(myUserId) { msg -> startReply(msg) }
+        adapter = MessageAdapter(
+            myUserId = myUserId,
+            onLongPress = { msg ->
+                // Stage 5.3 — failed messages get a "Retry" affordance via the
+                // long-press menu. Non-failed messages keep the existing
+                // reply-on-long-press behaviour.
+                if (msg.fromUserId == myUserId &&
+                    msg.status == com.tharmesh.db.MessageStatus.FAILED
+                ) {
+                    confirmRetryFailed(msg)
+                } else {
+                    startReply(msg)
+                }
+            }
+        )
         val lm = LinearLayoutManager(this)
         lm.stackFromEnd = true
         recycler.layoutManager = lm
@@ -160,6 +176,35 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Stage 5.3 D3 — Failure feedback. Show a confirmation dialog for the
+     * failed [msg] and, on confirm, re-issue via [MessageRepository.retryFailedMessage].
+     * Concurrent recovery: if the row is no longer FAILED by the time the
+     * coroutine runs, surface a brief Toast rather than silently doing
+     * nothing — matches the "transparent failure" principle.
+     */
+    private fun confirmRetryFailed(msg: MessageEntity) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.chat_retry_failed_title)
+            .setMessage(R.string.chat_retry_failed_body)
+            .setPositiveButton(R.string.chat_retry_failed_action) { _, _ ->
+                lifecycleScope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        repository.retryFailedMessage(msg.id)
+                    }
+                    if (!ok) {
+                        Toast.makeText(
+                            this@ChatActivity,
+                            R.string.chat_retry_failed_unavailable,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+            .setNegativeButton(R.string.chat_retry_failed_cancel, null)
+            .show()
+    }
+
     private fun startReply(msg: MessageEntity) {
         replyingTo = msg
         replyBarAuthor.text = if (msg.fromUserId == myUserId) "You" else msg.fromUserId
@@ -174,7 +219,7 @@ class ChatActivity : AppCompatActivity() {
 
     private class MessageAdapter(
         private val myUserId: String,
-        private val onReply: (MessageEntity) -> Unit
+        private val onLongPress: (MessageEntity) -> Unit
     ) : RecyclerView.Adapter<MessageAdapter.VH>() {
 
         private val items: MutableList<MessageEntity> = mutableListOf()
@@ -215,7 +260,7 @@ class ChatActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnLongClickListener {
-                onReply(msg)
+                onLongPress(msg)
                 true
             }
         }

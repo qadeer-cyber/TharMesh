@@ -59,6 +59,17 @@ class MessageRepository(
 ) {
 
     /**
+     * Stage 5.3 — set of bundleIds that should be retried using the aggressive
+     * [RetryConfig.SOS] curve instead of the [retryConfig] default. Populated
+     * by [broadcastSos] and cleared in [onMeshEvent] when the bundle reaches a
+     * terminal state (delivered / read / failed). Synchronised on itself.
+     */
+    private val priorityBundleIds: MutableSet<String> = HashSet()
+
+    private fun isPriority(bundleId: String): Boolean =
+        synchronized(priorityBundleIds) { bundleId in priorityBundleIds }
+
+    /**
      * Stage 5.2 — coalesce rapid `PeerConnected` triggers for the same peer into
      * a single trailing flush. Driven by the retry-loop tick (see
      * [startStoreAndForwardLoop]).
@@ -167,8 +178,18 @@ class MessageRepository(
     /**
      * Enqueue a message to [toUserId]. Returns immediately after the row is written and the
      * bundle is handed off to the mesh engine; status transitions arrive asynchronously.
+     *
+     * Stage 5.3 — [priority] marks this bundle as SOS / urgent: the engine
+     * skips the per-peer pacer when fanning out, and the retry loop applies
+     * [RetryConfig.SOS] (1s→2s→4s→8s) instead of the standard backoff. The
+     * priority bit is local-only (not on the wire — see [MeshBundle.priority]).
      */
-    suspend fun send(toUserId: String, body: String, replyToId: Long? = null): SendResult {
+    suspend fun send(
+        toUserId: String,
+        body: String,
+        replyToId: Long? = null,
+        priority: Boolean = false
+    ): SendResult {
         val bundleId = UUID.randomUUID().toString()
         val ts = now()
         val me = myUserId()
@@ -190,13 +211,17 @@ class MessageRepository(
             id
         }
 
+        if (priority) {
+            synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
+        }
         // Plaintext body on the wire for now; TODO: CryptoBox.encrypt(body, perContactKey, iv).
         mesh.queueText(
             destId = toUserId,
             payloadCiphertext = body,
             ttlMs = DEFAULT_TTL_MS,
             hops = DEFAULT_HOPS,
-            bundleIdHint = bundleId
+            bundleIdHint = bundleId,
+            priority = priority
         )
         return SendResult(messageId, bundleId)
     }
@@ -280,10 +305,13 @@ class MessageRepository(
                 advanceByBundleId(event.bundleId, MessageStatus.DELIVERED)
                 // Stage 5.2: drop retry state — the bundle is delivered.
                 retryPolicy.onDelivered(event.bundleId)
+                // Stage 5.3: drop SOS priority tracking too.
+                synchronized(priorityBundleIds) { priorityBundleIds.remove(event.bundleId) }
             }
             is MeshEvent.BundleRead -> scope.launch(Dispatchers.IO) {
                 advanceByBundleId(event.bundleId, MessageStatus.READ)
                 retryPolicy.onDelivered(event.bundleId)
+                synchronized(priorityBundleIds) { priorityBundleIds.remove(event.bundleId) }
             }
             is MeshEvent.BundleDelivered -> {
                 messagesRelayed++
@@ -341,13 +369,62 @@ class MessageRepository(
      * Broadcast a best-effort SOS text to every currently online peer in the directory.
      * Returns the number of peers the SOS was queued to — the Status screen surfaces this
      * as "SOS sent to N nodes".
+     *
+     * Stage 5.3 — every emitted bundle is marked priority so it (a) bypasses the
+     * per-peer send pacer in the mesh engine, fanning out at full rate, and (b)
+     * is retried on the [RetryConfig.SOS] aggressive curve (1s→2s→4s→8s, no
+     * jitter) instead of the standard backoff. The priority bit is local-only
+     * (off-wire), so a relaying peer that forwards the bundle does NOT inherit
+     * priority — a deliberate guard against a malicious peer DDoSing the local
+     * pacer with a forged "priority" bit.
      */
     suspend fun broadcastSos(text: String, targets: List<String>): Int {
         if (targets.isEmpty()) return 0
         for (target in targets) {
-            send(target, text)
+            send(target, text, priority = true)
         }
         return targets.size
+    }
+
+    /**
+     * Stage 5.3 — manually re-issue a FAILED message. Tap-to-retry hook from
+     * the chat UI: the message row is flipped back to QUEUED (so it leaves the
+     * "FAILED" rendering immediately) and the bundle is re-queued through the
+     * engine using the SAME bundleId so any previously-cached relays still
+     * deduplicate correctly. Returns true when the row was found and was in
+     * FAILED state; false if it doesn't exist or has already advanced past
+     * FAILED (a concurrent recovery raced us — the user's tap should be a
+     * no-op rather than regressing the row).
+     *
+     * Implementation note — we deliberately do NOT re-insert the message row
+     * with a new bundleId; the mesh engine's cache is keyed on the original
+     * bundleId, so a fresh id would orphan the cached signature. Instead we
+     * advance status QUEUED → SENDING via the same path as the auto-retry
+     * loop and let the existing `pendingOutbound` query pick it up on the
+     * next tick (or fire immediately on `mesh.retryBundle`).
+     */
+    suspend fun retryFailedMessage(messageId: Long): Boolean = runIo {
+        val msg = db.messageDao().getById(messageId) ?: return@runIo false
+        val bid = msg.bundleId ?: return@runIo false
+        if (msg.status != MessageStatus.FAILED) return@runIo false
+        // Flip back to QUEUED so the chat list immediately drops the "!" glyph
+        // and shows "⏳" while we re-issue. The retry loop's pendingOutbound
+        // query already includes FAILED rows, but flipping to QUEUED makes the
+        // UI feedback instant.
+        db.messageDao().updateStatusById(messageId, MessageStatus.QUEUED, now())
+        db.conversationDao().setLastMessage(
+            msg.peerUserId, msg.body, msg.timestamp, MessageStatus.QUEUED
+        )
+        // Drop any stale retry-policy state for this bundleId so the manual
+        // retry doesn't have to wait out a backoff window — the next tick
+        // re-issues immediately.
+        retryPolicy.onDelivered(bid)
+        // Best-effort: kick the engine immediately so we don't wait for the
+        // next tick. retryBundle returns false on cache miss / TTL expiry —
+        // either way the result is silently ignored; the retry loop will
+        // pick it up if the cache repopulates.
+        mesh.retryBundle(bid)
+        true
     }
 
     /**
@@ -401,7 +478,10 @@ class MessageRepository(
             retryPolicy = retryPolicy,
             onRetryAttempt = onRetryAttempt,
             onStuckSendingRecovered = onStuckSendingRecovered,
-            retryBundle = { bid -> mesh.retryBundle(bid) }
+            retryBundle = { bid -> mesh.retryBundle(bid) },
+            // Stage 5.3 — SOS bundles use the aggressive curve; non-priority
+            // bundles fall through to the policy's default config.
+            configFor = { bid -> if (isPriority(bid)) RetryConfig.SOS else null }
         )
     }
 
@@ -518,7 +598,16 @@ internal fun runRetryTickStandalone(
     retryPolicy: RetryPolicy,
     onRetryAttempt: (String) -> Unit,
     onStuckSendingRecovered: (String) -> Unit,
-    retryBundle: (String) -> Boolean
+    retryBundle: (String) -> Boolean,
+    /**
+     * Stage 5.3 — per-bundle config override. Returns the [RetryConfig] to use
+     * when computing the next-attempt delay for [bundleId], or `null` to fall
+     * through to the policy's default config. The SOS path supplies
+     * [RetryConfig.SOS] so priority bundles retry aggressively (1s→2s→4s→8s)
+     * while normal bundles continue on the standard 5s→10s→…→60s curve.
+     * Default: always return null (single-curve behaviour, identical to Stage 5.2).
+     */
+    configFor: (String) -> RetryConfig? = { null }
 ) {
     for (msg in pending) {
         val bid = msg.bundleId ?: continue
@@ -539,6 +628,6 @@ internal fun runRetryTickStandalone(
             onStuckSendingRecovered(bid)
         }
         onRetryAttempt(bid)
-        retryPolicy.recordAttempt(bid, nowMs)
+        retryPolicy.recordAttempt(bid, nowMs, configFor(bid))
     }
 }

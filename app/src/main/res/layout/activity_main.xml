@@ -7,6 +7,46 @@
     android:orientation="vertical"
     android:fitsSystemWindows="true">
 
+    <!--
+      Stage 5.3 — global mesh status banner. Hidden by default; MainActivity
+      flips it visible when permissions are missing / BT off / Location off,
+      and otherwise shows scanning / N peers when the mesh is up. Reuses
+      existing colour + typography styles; no new theme.
+    -->
+    <LinearLayout
+        android:id="@+id/mesh_status_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:visibility="gone"
+        android:background="@color/tm_bg_2">
+
+        <TextView
+            android:id="@+id/mesh_status_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/tm_text_primary"
+            android:textSize="14sp"
+            tools:text="Bluetooth is off — turn it on to use the mesh"
+            xmlns:tools="http://schemas.android.com/tools" />
+
+        <Button
+            android:id="@+id/mesh_status_action"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="@color/tm_accent"
+            android:background="@android:color/transparent"
+            android:text="@string/banner_action_retry"
+            android:visibility="gone" />
+    </LinearLayout>
+
     <FrameLayout
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"

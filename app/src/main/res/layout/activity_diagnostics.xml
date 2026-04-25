@@ -83,6 +83,51 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
+            <!-- Stage 5.3 — Field Test retry-tuning toggles. -->
+            <LinearLayout
+                style="@style/TmCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_disable_backoff"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/tm_text_primary"
+                    android:text="@string/field_test_disable_backoff" />
+
+                <TextView
+                    style="@style/Text.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/field_test_disable_backoff_sub" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_force_high_freq"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/tm_text_primary"
+                    android:text="@string/field_test_force_high_freq" />
+
+                <TextView
+                    style="@style/Text.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/field_test_force_high_freq_sub" />
+
+                <TextView
+                    style="@style/Text.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/field_test_toggle_restart_hint" />
+            </LinearLayout>
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

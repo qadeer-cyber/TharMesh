@@ -20,7 +20,23 @@ data class MeshBundle(
      * [com.tharmesh.identity.CryptoIdentity.canonicalBundleBytes]) and to feed the
      * trust-on-first-use store ([com.tharmesh.identity.PeerTrustStore]).
      */
-    val srcPubKey: String = ""
+    val srcPubKey: String = "",
+    /**
+     * Stage 5.3 — origination-only priority bit for SOS broadcasts. Local-only:
+     * intentionally NOT serialised on the wire (see [BundleCodec.encode]) so
+     * the wire format stays byte-identical and we don't introduce an
+     * "untrusted priority bit" attack surface. The originator's [MeshEngine]
+     * uses it to bypass [PerPeerSendPacer] in [broadcastBundle] (so an SOS
+     * fans out at full rate even when many normal bundles are paced) and the
+     * repository uses it to apply [RetryConfig.SOS] (1s→2s→4s→8s, 8s ceiling)
+     * in place of the standard backoff. Relays do NOT inherit priority — they
+     * still receive an opaque MeshBundle and apply normal pacing for the
+     * forward hops. This is acceptable because (a) origination is the slowest
+     * step, (b) SOS payloads are tiny and unlikely to bottleneck on relays, and
+     * (c) we explicitly want to prevent a malicious peer from setting the
+     * priority bit on bundles it originates and DDoSing the local pacer.
+     */
+    val priority: Boolean = false
 )
 
 object BundleCodec {

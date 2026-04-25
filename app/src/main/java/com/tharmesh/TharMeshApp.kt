@@ -6,6 +6,7 @@ import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
 import com.tharmesh.db.RoomBundleStore
 import com.tharmesh.diagnostics.DiagnosticsCollector
+import com.tharmesh.diagnostics.FieldTestMode
 import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.dtn.MeshLog
 import com.tharmesh.dtn.PerPeerSendPacer
@@ -109,7 +110,11 @@ class TharMeshApp : Application() {
         // enforces a 40 ms minimum gap between sends to the same peer (defaults
         // from [RetryConfig.DEFAULT.perPeerSendGapMs]); the hooks bump the
         // diagnostics counters as the engine fires the corresponding events.
-        val retryConfig = RetryConfig.DEFAULT
+        // Stage 5.3 — Field Test toggles can swap in FIELD_TEST_FAST or
+        // FIELD_TEST_FLAT for A/B comparison without a code change. Resolved
+        // at construction time; toggling the prefs takes effect on the next
+        // ensureMeshReady (i.e. process restart or sign-out → sign-in cycle).
+        val retryConfig = FieldTestMode.resolveRetryConfig(this)
         val pacer = PerPeerSendPacer(retryConfig.perPeerSendGapMs)
         val diag = diagnostics
         val engine = MeshEngine(

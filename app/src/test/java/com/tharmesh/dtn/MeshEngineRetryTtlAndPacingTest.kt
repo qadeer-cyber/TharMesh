@@ -194,6 +194,95 @@ class MeshEngineRetryTtlAndPacingTest {
         assertTrue(ttlDrops.isEmpty())
     }
 
+    // ---------- Stage 5.3 — priority bundles bypass the per-peer pacer ----------
+
+    @Test
+    fun priorityBundle_bypassesPacer_whileNonPriorityIsDeferred() {
+        // Confirms the SOS hardening contract: a bundle with priority=true is
+        // sent through the pacer guard regardless of the per-peer gap, while
+        // the next normal bundle in the same tick is still deferred. This is
+        // the property the SOS path relies on for "always broadcast with high
+        // priority, bypass normal pacing".
+        val hub = LoopbackTransport.Hub()
+        val clock = AtomicLong(0L)
+        val nowFn: () -> Long = { clock.get() }
+        val pacer = PerPeerSendPacer(gapMs = 50L)
+        val pacedEvents = mutableListOf<String>()
+        val alice = MeshEngine(
+            localUserId = "alice",
+            transport = LoopbackTransport(hub),
+            now = nowFn,
+            pacer = pacer,
+            onSendPaced = { peerId -> pacedEvents.add(peerId) }
+        )
+        val bob = MeshEngine("bob", LoopbackTransport(hub), now = nowFn)
+        val bobEvents = CopyOnWriteArrayList<MeshEvent>()
+        bob.setEventListener { bobEvents.add(it) }
+        bob.start()
+        alice.start()
+
+        // First send acquires a slot.
+        alice.queueText(
+            destId = "bob",
+            payloadCiphertext = "n1",
+            ttlMs = 60_000L,
+            hops = 4,
+            bundleIdHint = "n1"
+        )
+        // Second send at the same clock — non-priority, must be paced.
+        alice.queueText(
+            destId = "bob",
+            payloadCiphertext = "n2",
+            ttlMs = 60_000L,
+            hops = 4,
+            bundleIdHint = "n2"
+        )
+        // Third send at the same clock — PRIORITY: must NOT be paced even
+        // though we're inside the 50 ms gap.
+        alice.queueText(
+            destId = "bob",
+            payloadCiphertext = "sos",
+            ttlMs = 60_000L,
+            hops = 4,
+            bundleIdHint = "sos1",
+            priority = true
+        )
+
+        val delivered = bobEvents.filterIsInstance<MeshEvent.BundleDelivered>().map { it.bundle.bundleId }
+        // n1 and sos1 delivered immediately; n2 was deferred by the pacer.
+        assertTrue("n1 must be delivered", delivered.contains("n1"))
+        assertTrue("sos1 must bypass pacer", delivered.contains("sos1"))
+        assertFalse("n2 must be deferred by pacer", delivered.contains("n2"))
+        // Pacer hook fired exactly once for the deferred non-priority bundle.
+        assertEquals(listOf("bob"), pacedEvents)
+    }
+
+    @Test
+    fun priorityBit_isLocalOnly_andNotInheritedByRelays() {
+        // Defensive — the priority bit must NOT be serialised on-wire. If a
+        // received bundle had priority=true, a malicious peer could DDoS the
+        // mesh by forging the bit. Confirm by round-tripping through
+        // BundleCodec and asserting decode() yields priority=false.
+        val originating = MeshBundle(
+            bundleId = "p1",
+            srcId = "alice",
+            destId = "bob",
+            payloadCiphertext = "x",
+            ttlUntil = 100_000L,
+            hopsLeft = 4,
+            signature = "",
+            status = "PENDING",
+            priority = true
+        )
+        val wire = BundleCodec.encode(originating)
+        val decoded = BundleCodec.decode(wire)
+        assertNotNull(decoded)
+        assertFalse(
+            "priority bit must not be carried on-wire — relays apply normal pacing",
+            decoded!!.priority
+        )
+    }
+
     @Test
     fun connectingBobAfterAliceQueued_deliversOnRetry_andHookNotFired() {
         // Confirms the happy "delay-tolerant" path: Bob comes online late, retry

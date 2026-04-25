@@ -44,5 +44,56 @@ data class RetryConfig(
     companion object {
         /** Production defaults, calibrated against the constraints in Stage 5.2 design notes. */
         val DEFAULT: RetryConfig = RetryConfig()
+
+        /**
+         * Stage 5.3 — aggressive curve for SOS / priority bundles. Same shape as
+         * [DEFAULT] but compressed an order of magnitude (1s → 2s → 4s → 8s, 8s
+         * ceiling, no jitter so multi-relay devices don't desynchronise on a
+         * panic broadcast). Applied per-bundle in
+         * [com.tharmesh.data.MessageRepository.runRetryTick] when the bundle's
+         * id is in the priority set.
+         */
+        val SOS: RetryConfig = RetryConfig(
+            baseDelayMs = 1_000L,
+            maxDelayMs = 8_000L,
+            growthFactor = 2.0,
+            jitterFraction = 0.0,
+            tickIntervalMs = 1_000L,
+            churnDebounceMs = 1_500L,
+            perPeerSendGapMs = 40L
+        )
+
+        /**
+         * Stage 5.3 Field Test Mode — flat 1 s schedule with no jitter and a
+         * 250 ms tick. Used by the diagnostics screen's "Force high-frequency
+         * retries" toggle to make retry behaviour visible in seconds rather
+         * than minutes during a field test. NOT a production curve — battery
+         * cost is high.
+         */
+        val FIELD_TEST_FAST: RetryConfig = RetryConfig(
+            baseDelayMs = 1_000L,
+            maxDelayMs = 1_000L,
+            growthFactor = 1.0,
+            jitterFraction = 0.0,
+            tickIntervalMs = 250L,
+            churnDebounceMs = 500L,
+            perPeerSendGapMs = 40L
+        )
+
+        /**
+         * Stage 5.3 Field Test Mode — backoff-disabled mirror of [DEFAULT]: a
+         * fixed 1 s curve with no growth and no jitter. Used by the "Disable
+         * backoff" toggle to make retries behave like the pre-5.2 flat sweep
+         * for A/B comparison.
+         */
+        val FIELD_TEST_FLAT: RetryConfig = RetryConfig(
+            baseDelayMs = 1_000L,
+            maxDelayMs = 1_000L,
+            growthFactor = 1.0,
+            jitterFraction = 0.0,
+            tickIntervalMs = 1_000L,
+            churnDebounceMs = 1_500L,
+            perPeerSendGapMs = 40L
+        )
     }
 }
