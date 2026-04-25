@@ -6,6 +6,8 @@ import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
 import com.tharmesh.db.RoomBundleStore
 import com.tharmesh.dtn.MeshEngine
+import com.tharmesh.dtn.MeshLog
+import com.tharmesh.identity.RoomPeerTrustStore
 import com.tharmesh.mesh.EmptyMeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
 import com.tharmesh.mesh.NearbyMeshDataSource
@@ -83,13 +85,21 @@ class TharMeshApp : Application() {
         if (meshReady) return
         val profile = UserPrefs.readProfile(this) ?: return
         val t: Transport = NearbyConnectionsTransport(this)
+        // Stage 4.6: long-term signing identity. ensureIdentity is synchronized and
+        // idempotent — call it the first time we construct the mesh graph for a
+        // given userId. SharedPreferences is cheap, so doing it here (on the main
+        // thread) adds <1ms. The private key never leaves the device.
+        val identity = UserPrefs.ensureIdentity(this)
+        MeshLog.identityReady(identity.fingerprint)
         // Wire the persistent bundle cache so the engine survives process death:
         // start() will restore non-expired bundles, every cachePut / status update
         // mirrors to disk, and the repository tick calls sweepExpiredPersistent().
         val engine = MeshEngine(
             localUserId = profile.userId,
             transport = t,
-            bundleStore = RoomBundleStore(database.bundleDao())
+            bundleStore = RoomBundleStore(database.bundleDao()),
+            identity = identity,
+            peerTrustStore = RoomPeerTrustStore(database.peerIdentityDao())
         )
         val repo = MessageRepository(
             db = database,

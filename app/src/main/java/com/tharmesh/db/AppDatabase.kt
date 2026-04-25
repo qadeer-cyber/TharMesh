@@ -8,19 +8,22 @@ import com.tharmesh.db.dao.BundleDao
 import com.tharmesh.db.dao.ContactDao
 import com.tharmesh.db.dao.ConversationDao
 import com.tharmesh.db.dao.MessageDao
+import com.tharmesh.db.dao.PeerIdentityDao
 import com.tharmesh.db.entity.BundleEntity
 import com.tharmesh.db.entity.ContactEntity
 import com.tharmesh.db.entity.ConversationEntity
 import com.tharmesh.db.entity.MessageEntity
+import com.tharmesh.db.entity.PeerIdentityEntity
 
 @Database(
     entities = [
         MessageEntity::class,
         BundleEntity::class,
         ConversationEntity::class,
-        ContactEntity::class
+        ContactEntity::class,
+        PeerIdentityEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun bundleDao(): BundleDao
     abstract fun conversationDao(): ConversationDao
     abstract fun contactDao(): ContactDao
+    abstract fun peerIdentityDao(): PeerIdentityDao
 
     companion object {
         @Volatile

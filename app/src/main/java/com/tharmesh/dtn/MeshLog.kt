@@ -57,4 +57,30 @@ internal object MeshLog {
     fun restored(count: Int) {
         Log.d(TAG, "restored count=$count source=persistent_bundle_store")
     }
+
+    // --- Stage 4.6: signature + identity -----------------------------------
+
+    fun identityReady(fingerprint: String) {
+        Log.d(TAG, "identity_ready fp=$fingerprint")
+    }
+
+    fun bundleSigned(bundleId: String) {
+        Log.d(TAG, "signed bundleId=$bundleId")
+    }
+
+    fun signatureVerified(bundleId: String, srcId: String, fp: String) {
+        Log.d(TAG, "sig_verified bundleId=$bundleId src=$srcId fp=$fp")
+    }
+
+    fun signatureFailed(bundleId: String, srcId: String, reason: String) {
+        Log.w(TAG, "sig_failed bundleId=$bundleId src=$srcId reason=$reason")
+    }
+
+    fun peerKeyFirstSeen(userId: String, fp: String) {
+        Log.d(TAG, "peer_key_first_seen userId=$userId fp=$fp")
+    }
+
+    fun peerKeyMismatch(userId: String, storedFp: String, presentedFp: String) {
+        Log.w(TAG, "peer_key_mismatch userId=$userId stored_fp=$storedFp presented_fp=$presentedFp")
+    }
 }

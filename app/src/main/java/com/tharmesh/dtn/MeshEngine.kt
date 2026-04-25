@@ -1,5 +1,7 @@
 package com.tharmesh.dtn
 
+import com.tharmesh.identity.CryptoIdentity
+import com.tharmesh.identity.PeerTrustStore
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.TransportEvent
 import java.util.UUID
@@ -16,8 +18,33 @@ class MeshEngine(
     private val transport: Transport,
     private val now: () -> Long = { System.currentTimeMillis() },
     private val maxCacheSize: Int = DEFAULT_MAX_CACHE_SIZE,
-    private val bundleStore: BundleStore? = null
+    private val bundleStore: BundleStore? = null,
+    /**
+     * Our own signing identity. If null, originated bundles go out without a
+     * signature (status == "PENDING", srcPubKey == "") — useful for tests that
+     * pair with [allowLegacyUnsigned]=true. Production wiring always supplies one.
+     */
+    private val identity: CryptoIdentity? = null,
+    /**
+     * Trust store for peer public keys (see [PeerTrustStore]). If null, signature
+     * verification still runs but the TOFU rule is skipped — every signed bundle
+     * is accepted as long as its signature verifies against its own srcPubKey.
+     */
+    private val peerTrustStore: PeerTrustStore? = null,
+    /**
+     * When true, bundles without a srcPubKey / signature are still accepted (the
+     * status they had pre-Stage-4.6). Useful for interop with older peers during a
+     * rolling upgrade.
+     *
+     * Default is derived: `identity == null` → true (an engine that cannot sign
+     * cannot reasonably demand signatures from peers either — this is the posture
+     * for unit tests that bypass identity entirely); `identity != null` → false
+     * (production: reject anything that isn't signed). Pass an explicit boolean to
+     * override either way.
+     */
+    allowLegacyUnsigned: Boolean? = null
 ) {
+    private val allowLegacyUnsigned: Boolean = allowLegacyUnsigned ?: (identity == null)
 
     private val router = Router()
     // Bundle cache is read/written from both IO dispatcher threads (repository sends, retry
@@ -143,15 +170,38 @@ class MeshEngine(
         bundleIdHint: String? = null
     ): MeshBundle {
         val bundleId = bundleIdHint ?: UUID.randomUUID().toString()
+        val ttlUntil = now() + ttlMs
+        // Sign the end-to-end-invariant fields (NOT hopsLeft / status — those mutate
+        // per relay hop and would invalidate the signature downstream). Fall back to
+        // empty signature + empty pubKey when no identity is wired (tests only).
+        val id = identity
+        val signature: String
+        val srcPubKey: String
+        if (id != null) {
+            val canonical = CryptoIdentity.canonicalBundleBytes(
+                bundleId = bundleId,
+                srcId = localUserId,
+                destId = destId,
+                payloadCiphertext = payloadCiphertext,
+                ttlUntil = ttlUntil
+            )
+            signature = id.sign(canonical)
+            srcPubKey = id.publicKeyBase64
+            MeshLog.bundleSigned(bundleId)
+        } else {
+            signature = ""
+            srcPubKey = ""
+        }
         val bundle = MeshBundle(
             bundleId = bundleId,
             srcId = localUserId,
             destId = destId,
             payloadCiphertext = payloadCiphertext,
-            ttlUntil = now() + ttlMs,
+            ttlUntil = ttlUntil,
             hopsLeft = hops.coerceAtLeast(0),
-            signature = "TODO_SIG",
-            status = "PENDING"
+            signature = signature,
+            status = "PENDING",
+            srcPubKey = srcPubKey
         )
         cachePut(bundle)
         // Try to send immediately to every connected peer; routing decides if we actually do.
@@ -398,6 +448,68 @@ class MeshEngine(
         }
     }
 
+    /**
+     * Run the Stage 4.6 signature + TOFU gate for an incoming [bundle]. Returns true
+     * if the bundle should continue into the handleBundle pipeline (cache, deliver,
+     * relay); false if the bundle must be silently dropped.
+     *
+     * Call sites: currently only [handleBundle]. Kept as a helper so tests can
+     * assert verification behaviour without driving the full transport path.
+     *
+     * Bundles originated by [localUserId] always pass (a device trusts its own
+     * origination; relays forward without re-signing).
+     */
+    private fun verifyIncoming(bundle: MeshBundle): Boolean {
+        // Our own bundle echoed back via relay — trust it. handleBundle's anti-sender
+        // and dedup guards still prevent infinite relay storms.
+        if (bundle.srcId == localUserId) return true
+
+        val unsigned = bundle.signature.isEmpty() || bundle.srcPubKey.isEmpty()
+        if (unsigned) {
+            if (allowLegacyUnsigned) return true
+            MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "unsigned_rejected")
+            return false
+        }
+
+        val trust = peerTrustStore
+        if (trust != null) {
+            when (val verdict = trust.verdict(bundle.srcId, bundle.srcPubKey)) {
+                is PeerTrustStore.Verdict.FirstSeen ->
+                    MeshLog.peerKeyFirstSeen(bundle.srcId, CryptoIdentity.fingerprintOf(bundle.srcPubKey))
+                is PeerTrustStore.Verdict.Match -> {
+                    // no-op, proceed to cryptographic verify below
+                }
+                is PeerTrustStore.Verdict.Mismatch -> {
+                    MeshLog.peerKeyMismatch(
+                        userId = bundle.srcId,
+                        storedFp = verdict.storedFingerprint,
+                        presentedFp = verdict.presentedFingerprint
+                    )
+                    return false
+                }
+            }
+        }
+
+        val canonical = CryptoIdentity.canonicalBundleBytes(
+            bundleId = bundle.bundleId,
+            srcId = bundle.srcId,
+            destId = bundle.destId,
+            payloadCiphertext = bundle.payloadCiphertext,
+            ttlUntil = bundle.ttlUntil
+        )
+        val ok = CryptoIdentity.verify(bundle.srcPubKey, canonical, bundle.signature)
+        if (!ok) {
+            MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "ecdsa_verify_failed")
+            return false
+        }
+        MeshLog.signatureVerified(
+            bundleId = bundle.bundleId,
+            srcId = bundle.srcId,
+            fp = CryptoIdentity.fingerprintOf(bundle.srcPubKey)
+        )
+        return true
+    }
+
     private fun handleBundle(peerId: String, payload: String) {
         val bundle = BundleCodec.decode(payload) ?: return
         val nowMs = now()
@@ -410,6 +522,18 @@ class MeshEngine(
             MeshLog.droppedHops(bundle.bundleId, peerId, bundle.hopsLeft)
             return
         }
+
+        // Stage 4.6 signature + TOFU gate. Order matters:
+        //   1) Unsigned bundle → reject unless allowLegacyUnsigned (tests / rolling upgrade).
+        //   2) TOFU check against peer_identity store — if the srcId previously signed with
+        //      a different key, reject here BEFORE cryptographic verify. This protects
+        //      against an attacker that minted a valid signature with their own keypair
+        //      but reused someone else's srcId.
+        //   3) ECDSA verify against the canonical signing blob. Any failure → reject.
+        // A rejected bundle is NOT cached, NOT ACK'd, NOT forwarded — as if it never
+        // arrived. That is the only safe posture: caching or ACK'ing a bad bundle would
+        // leak DoS amplification to the attacker.
+        if (!verifyIncoming(bundle)) return
 
         val isFirstArrival: Boolean
         var alreadyDelivered = false
