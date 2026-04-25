@@ -161,10 +161,14 @@ class ScanQrActivity : AppCompatActivity() {
      */
     private fun returnResult(raw: String) {
         if (hasReturned) return
-        hasReturned = true
 
         val text = raw.trim()
+        // Set hasReturned only AFTER the empty-text guard, otherwise an
+        // empty barcode result locks the activity: the scanner is already
+        // paused and every subsequent paste / scan would be a no-op
+        // (Devin Review: PR #33).
         if (text.isEmpty()) return
+        hasReturned = true
 
         val qr = QrCodec.decode(text)
         val invite = InviteCode.parse(text)
