@@ -218,13 +218,23 @@ class TharMeshApp : Application() {
             // a separate button click.
             realSource?.startScan()
             // Post-flight gate: if stopMesh / re-sign-in happened DURING the
-            // chain above, the just-started engine is now orphaned (stopMesh's
-            // engine.stop() ran before this transport actually came up, so it
-            // was effectively a no-op at the time). Tear down what we started
-            // so the OLD engine doesn't keep advertising.
+            // chain above, undo the parts that are NOT shared with a possibly
+            // freshly-created new engine — i.e. the store-and-forward loop on
+            // the OLD repo. Crucially, we MUST NOT call capturedEngine.stop()
+            // here: NearbyConnectionsTransport obtains its ConnectionsClient
+            // from Nearby.getConnectionsClient(applicationContext), which is a
+            // process-wide singleton. If a new engine has already started its
+            // transport (via a sign-in cycle), calling stopAllEndpoints /
+            // stopAdvertising / stopDiscovery on the old transport would tear
+            // down the SAME shared client and silently kill the new engine's
+            // advertising and discovery. Transport teardown is owned by
+            // stopMesh(); if stopMesh has run, it has already called
+            // meshEngine?.stop() on whatever the live engine was at that
+            // moment. The only loose end here is the retry loop we just kicked
+            // off on the old repository — that's safe to stop because each
+            // repository owns its own retryJob (no singleton).
             if (!isStartCurrent(capturedEngine)) {
                 capturedRepo.stopStoreAndForwardLoop()
-                capturedEngine.stop()
             }
         }
     }
