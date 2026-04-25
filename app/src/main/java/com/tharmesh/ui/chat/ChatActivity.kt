@@ -13,7 +13,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -292,8 +291,20 @@ class ChatActivity : AppCompatActivity() {
 
             if (holder.status != null) {
                 holder.status.text = statusGlyph(msg.status)
-                val color = if (msg.status == MessageStatus.READ) R.color.tm_tick_read else R.color.tm_tick_default
-                holder.status.setTextColor(ContextCompat.getColor(ctx, color))
+                // Resolve tick colour via theme attrs so the light-mode green
+                // bubble gets a contrast-correct slate (#8696A0) and the
+                // dark-mode bubble keeps its neon cyan/blue. Was hardcoded
+                // R.color.tm_tick_* (static, ignores DayNight); on the light
+                // green bubble the static neon-blue read tick was too saturated
+                // and the default tick-blue washed out against the green fill.
+                val attr = if (msg.status == MessageStatus.READ) {
+                    R.attr.tmTickRead
+                } else {
+                    R.attr.tmTickDefault
+                }
+                val tv = android.util.TypedValue()
+                ctx.theme.resolveAttribute(attr, tv, true)
+                holder.status.setTextColor(tv.data)
             }
 
             holder.itemView.setOnLongClickListener {
