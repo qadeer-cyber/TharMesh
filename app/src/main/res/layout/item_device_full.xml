@@ -63,7 +63,7 @@
                 style="@style/Text.Caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/tm_neon_green"
+                android:textColor="?attr/tmNeonGreen"
                 android:text="Strong signal" />
         </LinearLayout>
     </LinearLayout>

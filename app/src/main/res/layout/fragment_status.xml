@@ -110,7 +110,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="10dp"
                     android:layout_weight="1"
-                    android:textColor="@color/tm_danger"
+                    android:textColor="?attr/tmDanger"
                     android:textStyle="bold"
                     android:text="@string/status_sos_sending" />
             </LinearLayout>

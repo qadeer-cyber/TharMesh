@@ -137,7 +137,7 @@
                     android:paddingTop="4dp"
                     android:paddingBottom="4dp"
                     android:text="@string/dash_signal_unknown"
-                    android:textColor="@color/tm_neon_green"
+                    android:textColor="?attr/tmNeonGreen"
                     android:textSize="11sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -178,7 +178,7 @@
                     android:paddingTop="4dp"
                     android:paddingBottom="4dp"
                     android:text="@string/dash_network_live"
-                    android:textColor="@color/tm_neon_cyan"
+                    android:textColor="?attr/tmNeonCyan"
                     android:textSize="11sp"
                     android:textStyle="bold" />
             </LinearLayout>

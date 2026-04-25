@@ -3,17 +3,35 @@
     <string name="app_tagline">Connect. Share. Stay Safe.</string>
     <string name="app_subtagline">Offline. Secure. Everywhere.</string>
 
-    <!-- Bottom nav -->
-    <string name="tab_home">Home</string>
+    <!-- Bottom nav (Stage 6.1: WhatsApp-style 5-tab structure). -->
+    <string name="tab_chats">Chats</string>
     <string name="tab_devices">Devices</string>
-    <string name="tab_messages">Messages</string>
-    <string name="tab_status">Status</string>
+    <string name="tab_alerts">Alerts</string>
+    <string name="tab_relay">Relay</string>
     <string name="tab_settings">Settings</string>
 
-    <!-- Legacy tabs (still referenced from older activities). -->
-    <string name="tab_chats">Messages</string>
+    <!-- Legacy tab labels kept for older Activities (Status, Messages, Groups,
+         Contacts, Home / Dashboard) that still reference them by id. -->
+    <string name="tab_home">Home</string>
+    <string name="tab_messages">Messages</string>
+    <string name="tab_status">Status</string>
     <string name="tab_groups">Groups</string>
     <string name="tab_contacts">Contacts</string>
+
+    <!-- Stage 6.1 — Chats home (WhatsApp-style header / search / filter chips). -->
+    <string name="chats_search_hint">Search chats</string>
+    <string name="chat_filter_all">All</string>
+    <string name="chat_filter_unread">Unread</string>
+    <string name="chat_filter_nearby">Nearby</string>
+    <string name="chat_filter_trusted">Trusted</string>
+
+    <!-- Stage 6.1 — Theme picker. -->
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_sub">Light, Dark, or follow system</string>
+    <string name="settings_theme_dialog_title">Theme mode</string>
+    <string name="settings_theme_system">System default</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
 
     <string name="empty_chats">No conversations yet</string>
     <string name="empty_chats_hint">Tap Start Mesh Chat to pick a nearby device and open a secure channel.</string>

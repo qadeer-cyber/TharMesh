@@ -4,8 +4,8 @@
     <gradient
         android:type="linear"
         android:angle="225"
-        android:startColor="@color/tm_bubble_me_start"
-        android:endColor="@color/tm_bubble_me_end" />
+        android:startColor="?attr/tmBubbleMeStart"
+        android:endColor="?attr/tmBubbleMeEnd" />
     <corners
         android:topLeftRadius="18dp"
         android:topRightRadius="18dp"

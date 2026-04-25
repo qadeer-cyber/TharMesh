@@ -3,6 +3,6 @@
     <gradient
         android:type="linear"
         android:angle="135"
-        android:startColor="@color/tm_neon_cyan"
-        android:endColor="@color/tm_bubble_me_end" />
+        android:startColor="?attr/tmNeonCyan"
+        android:endColor="?attr/tmBubbleMeEnd" />
 </shape>

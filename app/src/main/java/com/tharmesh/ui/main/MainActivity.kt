@@ -60,13 +60,20 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.mesh_status_text)
         statusAction = findViewById(R.id.mesh_status_action)
 
+        // Stage 6.1 — WhatsApp-style nav structure (Chats / Devices / Alerts /
+        // Relay / Settings). Channels (6.4) and Topology (6.5) have not landed
+        // yet, so Alerts and Relay are wired to the existing Status and
+        // Dashboard fragments respectively as visual placeholders. The bound
+        // Fragment for each tab is the one whose data is closest to the future
+        // feature surface, so the user's mental model carries forward when 6.4
+        // / 6.5 replace the placeholders.
         val nav: BottomNavigationView = findViewById(R.id.bottom_nav)
         nav.setOnNavigationItemSelectedListener { item ->
             val frag: Fragment = when (item.itemId) {
-                R.id.nav_home -> DashboardFragment()
+                R.id.nav_chats -> MessagesFragment()
                 R.id.nav_devices -> DevicesFragment()
-                R.id.nav_messages -> MessagesFragment()
-                R.id.nav_status -> StatusFragment()
+                R.id.nav_alerts -> StatusFragment()
+                R.id.nav_relay -> DashboardFragment()
                 R.id.nav_settings -> SettingsFragment()
                 else -> return@setOnNavigationItemSelectedListener false
             }
@@ -75,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (savedInstanceState == null) {
-            nav.selectedItemId = R.id.nav_home
+            nav.selectedItemId = R.id.nav_chats
         }
 
         // Stage 5.3 — keep the banner copy in sync with the live peer count.

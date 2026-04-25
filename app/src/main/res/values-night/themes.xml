@@ -1,0 +1,67 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+        Stage 6.1 — DARK binding for Theme.TharMesh. Activated when the user
+        picks Theme Mode = Dark (AppCompatDelegate.MODE_NIGHT_YES) or when
+        Theme Mode = System and the device reports night.
+
+        Color values mirror the pre-6.1 premium cyber-mesh palette exactly so
+        the dark UI is visually unchanged from main as of PR #16.
+    -->
+    <style name="Theme.TharMesh" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/tm_dark_neon_cyan</item>
+        <item name="colorPrimaryVariant">@color/tm_dark_neon_cyan_dim</item>
+        <item name="colorOnPrimary">@color/tm_dark_bg</item>
+        <item name="colorSecondary">@color/tm_dark_neon_green</item>
+        <item name="colorSecondaryVariant">@color/tm_dark_neon_green_dim</item>
+        <item name="colorOnSecondary">@color/tm_dark_bg</item>
+        <item name="colorSurface">@color/tm_dark_surface</item>
+        <item name="colorOnSurface">@color/tm_dark_text_primary</item>
+        <item name="android:colorBackground">@color/tm_dark_bg</item>
+        <item name="android:textColorPrimary">@color/tm_dark_text_primary</item>
+        <item name="android:textColorSecondary">@color/tm_dark_text_secondary</item>
+        <item name="android:windowBackground">@color/tm_dark_bg</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/tm_dark_bg</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@color/tm_dark_bg</item>
+
+        <!-- TharMesh palette attrs — DARK bindings. -->
+        <item name="tmBg">@color/tm_dark_bg</item>
+        <item name="tmBg2">@color/tm_dark_bg_2</item>
+        <item name="tmSurface">@color/tm_dark_surface</item>
+        <item name="tmSurface2">@color/tm_dark_surface_2</item>
+        <item name="tmSurfaceGlass">@color/tm_dark_surface_glass</item>
+        <item name="tmStroke">@color/tm_dark_stroke</item>
+        <item name="tmStrokeSoft">@color/tm_dark_stroke_soft</item>
+
+        <item name="tmTextPrimary">@color/tm_dark_text_primary</item>
+        <item name="tmTextSecondary">@color/tm_dark_text_secondary</item>
+        <item name="tmTextMuted">@color/tm_dark_text_muted</item>
+
+        <item name="tmNeonCyan">@color/tm_dark_neon_cyan</item>
+        <item name="tmNeonCyanDim">@color/tm_dark_neon_cyan_dim</item>
+        <item name="tmNeonGreen">@color/tm_dark_neon_green</item>
+        <item name="tmNeonGreenDim">@color/tm_dark_neon_green_dim</item>
+        <item name="tmDesertAmber">@color/tm_dark_desert_amber</item>
+        <item name="tmDanger">@color/tm_dark_danger</item>
+        <item name="tmDangerDim">@color/tm_dark_danger_dim</item>
+        <item name="tmWarning">@color/tm_dark_warning</item>
+
+        <item name="tmBubbleMeStart">@color/tm_dark_bubble_me_start</item>
+        <item name="tmBubbleMeEnd">@color/tm_dark_bubble_me_end</item>
+        <item name="tmBubblePeer">@color/tm_dark_bubble_peer</item>
+        <item name="tmBubbleTextMe">@color/tm_dark_bubble_text_me</item>
+        <item name="tmBubbleTextPeer">@color/tm_dark_bubble_text_peer</item>
+
+        <item name="tmTickRead">@color/tm_dark_tick_read</item>
+        <item name="tmTickDefault">@color/tm_dark_tick_default</item>
+        <item name="tmUnreadBadge">@color/tm_dark_unread_badge</item>
+        <item name="tmUnreadBadgeText">@color/tm_dark_unread_badge_text</item>
+
+        <item name="tmGradientTop">@color/tm_dark_gradient_top</item>
+        <item name="tmGradientBottom">@color/tm_dark_gradient_bottom</item>
+        <item name="tmGlowCyan20">@color/tm_dark_glow_cyan_20</item>
+        <item name="tmGlowGreen20">@color/tm_dark_glow_green_20</item>
+        <item name="tmGlowDanger20">@color/tm_dark_glow_danger_20</item>
+
+        <item name="tmSearchFill">@color/tm_dark_search_fill</item>
+    </style>
+</resources>

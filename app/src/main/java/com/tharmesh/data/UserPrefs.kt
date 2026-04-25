@@ -3,6 +3,7 @@ package com.tharmesh.data
 import android.content.Context
 import com.tharmesh.crypto.CryptoBox
 import com.tharmesh.identity.CryptoIdentity
+import com.tharmesh.ui.theme.ThemeManager
 import java.util.UUID
 
 data class UserProfile(
@@ -25,6 +26,15 @@ object UserPrefs {
     private const val KEY_PRIVATE_KEY = "identity_private_key_b64"
     private const val KEY_PUBLIC_KEY = "identity_public_key_b64"
     private const val KEY_FINGERPRINT = "identity_fingerprint"
+
+    /**
+     * Stage 6.1 — persisted Theme Mode (System / Light / Dark). Stored as the
+     * stable enum name string. Default is SYSTEM so a fresh install follows
+     * the OS dark-mode setting, which on most devices means the user sees the
+     * same dark UI they had before this PR until they explicitly opt in to
+     * light mode.
+     */
+    private const val KEY_THEME_MODE = "theme_mode"
 
     const val PROVIDER_ANONYMOUS = "anonymous"
     const val PROVIDER_GOOGLE = "google"
@@ -131,5 +141,23 @@ object UserPrefs {
         val priv = prefs.getString(KEY_PRIVATE_KEY, null) ?: return null
         val pub = prefs.getString(KEY_PUBLIC_KEY, null) ?: return null
         return CryptoIdentity.fromBase64(priv, pub)
+    }
+
+    /**
+     * Stage 6.1 — return the persisted theme mode, defaulting to SYSTEM when
+     * the user has never picked a value. Tolerant of missing/garbled values
+     * (e.g. a downgrade from a future TharMesh version that adds new modes).
+     */
+    @JvmStatic
+    fun getThemeMode(context: Context): ThemeManager.Mode {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_THEME_MODE, null) ?: return ThemeManager.Mode.SYSTEM
+        return runCatching { ThemeManager.Mode.valueOf(raw) }.getOrDefault(ThemeManager.Mode.SYSTEM)
+    }
+
+    @JvmStatic
+    fun setThemeMode(context: Context, mode: ThemeManager.Mode) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     }
 }

@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/tm_surface"
+    android:background="?attr/tmSurface"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:padding="12dp">
@@ -27,7 +27,7 @@
             android:id="@+id/text_name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/tm_text_primary"
+            android:textColor="?attr/tmTextPrimary"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -35,7 +35,7 @@
             android:id="@+id/text_userid"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/tm_text_secondary"
+            android:textColor="?attr/tmTextSecondary"
             android:textSize="12sp" />
     </LinearLayout>
 

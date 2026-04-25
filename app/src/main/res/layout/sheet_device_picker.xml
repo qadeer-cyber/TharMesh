@@ -54,7 +54,7 @@
             android:paddingEnd="10dp"
             android:paddingTop="4dp"
             android:paddingBottom="4dp"
-            android:textColor="@color/tm_neon_cyan"
+            android:textColor="?attr/tmNeonCyan"
             android:text="0 online" />
     </LinearLayout>
 

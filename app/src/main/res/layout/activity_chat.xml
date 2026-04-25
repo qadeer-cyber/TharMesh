@@ -10,7 +10,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/tm_bg_2"
+        android:background="?attr/tmBg2"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="12dp"
@@ -49,7 +49,7 @@
                 style="@style/Text.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="@color/tm_neon_green"
+                android:textColor="?attr/tmNeonGreen"
                 android:text="@string/chat_header_offline" />
         </LinearLayout>
 
@@ -63,7 +63,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/tm_bg_2"
+        android:background="?attr/tmBg2"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="16dp"
@@ -82,21 +82,21 @@
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:text="@string/chat_header_encrypted"
-            android:textColor="@color/tm_neon_cyan" />
+            android:textColor="?attr/tmNeonCyan" />
 
         <TextView
             style="@style/Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/chat_header_encrypted_sub"
-            android:textColor="@color/tm_text_secondary"
+            android:textColor="?attr/tmTextSecondary"
             android:textSize="11sp" />
     </LinearLayout>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="@color/tm_stroke_soft" />
+        android:background="?attr/tmStrokeSoft" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_messages"
@@ -111,7 +111,7 @@
         android:id="@+id/reply_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/tm_bg_2"
+        android:background="?attr/tmBg2"
         android:orientation="horizontal"
         android:paddingStart="12dp"
         android:paddingEnd="8dp"
@@ -122,7 +122,7 @@
         <View
             android:layout_width="3dp"
             android:layout_height="match_parent"
-            android:background="@color/tm_neon_cyan" />
+            android:background="?attr/tmNeonCyan" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -136,7 +136,7 @@
                 android:id="@+id/reply_bar_author"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/tm_neon_cyan"
+                android:textColor="?attr/tmNeonCyan"
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:text="@string/chat_reply_to" />
@@ -147,7 +147,7 @@
                 android:layout_height="wrap_content"
                 android:maxLines="2"
                 android:ellipsize="end"
-                android:textColor="@color/tm_text_secondary"
+                android:textColor="?attr/tmTextSecondary"
                 android:textSize="13sp" />
         </LinearLayout>
 
@@ -164,7 +164,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/tm_bg_2"
+        android:background="?attr/tmBg2"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="10dp">
@@ -190,8 +190,8 @@
             android:maxLines="4"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:textColor="@color/tm_text_primary"
-            android:textColorHint="@color/tm_text_muted"
+            android:textColor="?attr/tmTextPrimary"
+            android:textColorHint="?attr/tmTextMuted"
             android:textSize="14sp" />
 
         <ImageButton

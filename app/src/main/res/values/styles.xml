@@ -1,45 +1,51 @@
 <resources>
+    <!--
+      Stage 6.1 — text styles now resolve color from theme attrs (?attr/tmX),
+      so the same TextView style produces dark text on dark in dark mode and
+      dark text on white in light mode without per-screen overrides.
+    -->
+
     <!-- Typography -->
     <style name="Text.Title" parent="TextAppearance.AppCompat.Title">
-        <item name="android:textColor">@color/tm_text_primary</item>
+        <item name="android:textColor">?attr/tmTextPrimary</item>
         <item name="android:textStyle">bold</item>
     </style>
 
     <style name="Text.Subtle" parent="TextAppearance.AppCompat.Body2">
-        <item name="android:textColor">@color/tm_text_secondary</item>
+        <item name="android:textColor">?attr/tmTextSecondary</item>
     </style>
 
     <style name="Text.H1" parent="TextAppearance.AppCompat">
-        <item name="android:textColor">@color/tm_text_primary</item>
+        <item name="android:textColor">?attr/tmTextPrimary</item>
         <item name="android:textSize">24sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">-0.01</item>
     </style>
 
     <style name="Text.H2" parent="TextAppearance.AppCompat">
-        <item name="android:textColor">@color/tm_text_primary</item>
+        <item name="android:textColor">?attr/tmTextPrimary</item>
         <item name="android:textSize">18sp</item>
         <item name="android:textStyle">bold</item>
     </style>
 
     <style name="Text.H3" parent="TextAppearance.AppCompat">
-        <item name="android:textColor">@color/tm_text_primary</item>
+        <item name="android:textColor">?attr/tmTextPrimary</item>
         <item name="android:textSize">15sp</item>
         <item name="android:textStyle">bold</item>
     </style>
 
     <style name="Text.Body" parent="TextAppearance.AppCompat">
-        <item name="android:textColor">@color/tm_text_primary</item>
+        <item name="android:textColor">?attr/tmTextPrimary</item>
         <item name="android:textSize">14sp</item>
     </style>
 
     <style name="Text.Caption" parent="TextAppearance.AppCompat">
-        <item name="android:textColor">@color/tm_text_secondary</item>
+        <item name="android:textColor">?attr/tmTextSecondary</item>
         <item name="android:textSize">12sp</item>
     </style>
 
     <style name="Text.Tag" parent="TextAppearance.AppCompat">
-        <item name="android:textColor">@color/tm_neon_cyan</item>
+        <item name="android:textColor">?attr/tmNeonCyan</item>
         <item name="android:textSize">11sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0.08</item>
@@ -55,7 +61,7 @@
     <!-- Buttons -->
     <style name="TmButton.Primary" parent="Widget.AppCompat.Button">
         <item name="android:background">@drawable/bg_button_primary</item>
-        <item name="android:textColor">@color/tm_bg</item>
+        <item name="android:textColor">?attr/tmBg</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textStyle">bold</item>
         <item name="android:minHeight">48dp</item>
@@ -65,8 +71,25 @@
 
     <style name="TmButton.Ghost" parent="Widget.AppCompat.Button">
         <item name="android:background">@drawable/bg_button_ghost</item>
-        <item name="android:textColor">@color/tm_text_primary</item>
+        <item name="android:textColor">?attr/tmTextPrimary</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:minHeight">48dp</item>
+    </style>
+
+    <!-- Stage 6.1 — WhatsApp-style filter chips on the Chats home (All /
+         Unread / Nearby / Trusted). bg_chip_filter resolves to a themed
+         pill that picks accent on selected, surface on unselected. -->
+    <style name="TmChip.Filter" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:background">@drawable/bg_chip_filter</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:layout_marginEnd">8dp</item>
+        <item name="android:textColor">?attr/tmTextPrimary</item>
     </style>
 </resources>

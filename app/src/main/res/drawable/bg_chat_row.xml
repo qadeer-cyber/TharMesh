@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 6.1 — chat-list row background, LIGHT mode. Flat (transparent fill,
+  no rounded card) per the WhatsApp screenshot brief; a thin bottom divider
+  is rendered separately by the row layout via a 0.5dp View. Tap ripple is
+  added by the host LinearLayout via ?attr/selectableItemBackground.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</selector>

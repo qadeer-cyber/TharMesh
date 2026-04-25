@@ -19,6 +19,7 @@ import com.tharmesh.data.UserPrefs
 import com.tharmesh.diagnostics.FieldTestMode
 import com.tharmesh.ui.auth.LoginActivity
 import com.tharmesh.ui.diagnostics.DiagnosticsActivity
+import com.tharmesh.ui.theme.ThemeManager
 import tharmesh.app.R
 
 /**
@@ -83,6 +84,13 @@ class SettingsFragment : Fragment() {
         val profileRow = addRow(rows, R.drawable.ic_user, R.drawable.bg_round_icon_cyan,
             R.string.settings_profile, R.string.settings_profile_sub)
         profileRow.setOnClickListener { showEditProfileDialog() }
+        // Stage 6.1 — Theme picker row (System / Light / Dark). Persists via
+        // UserPrefs and applies through AppCompat's DayNight delegate; the
+        // running activity is recreated cleanly by AppCompat itself.
+        val themeRow = addRow(rows, R.drawable.ic_moon, R.drawable.bg_round_icon_cyan,
+            R.string.settings_theme, R.string.settings_theme_sub)
+        themeRow.setOnClickListener { showThemePicker() }
+
         addRow(rows, R.drawable.ic_lock, R.drawable.bg_round_icon_green,
             R.string.settings_security, R.string.settings_security_sub)
         addRow(rows, R.drawable.ic_wifi, R.drawable.bg_round_icon_cyan,
@@ -123,6 +131,31 @@ class SettingsFragment : Fragment() {
         username.text = displayName
         userIdView.text = profile?.userId ?: "user-offline"
         avatar.text = displayName.take(1).uppercase()
+    }
+
+    /**
+     * Theme Mode picker — System default / Light / Dark. The chosen mode is
+     * persisted via [UserPrefs.setThemeMode] and applied through AppCompat's
+     * DayNight delegate via [ThemeManager.setAndApply]. AppCompat recreates
+     * the running activity itself; we never call recreate() manually.
+     */
+    private fun showThemePicker() {
+        val ctx = requireContext()
+        val labels = arrayOf(
+            getString(R.string.settings_theme_system),
+            getString(R.string.settings_theme_light),
+            getString(R.string.settings_theme_dark)
+        )
+        val current = UserPrefs.getThemeMode(ctx).ordinal
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.settings_theme_dialog_title)
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                val mode = ThemeManager.Mode.values()[which]
+                ThemeManager.setAndApply(ctx, mode)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
     }
 
     private fun showEditProfileDialog() {
