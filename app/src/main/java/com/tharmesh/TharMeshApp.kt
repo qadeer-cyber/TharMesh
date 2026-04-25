@@ -186,7 +186,13 @@ class TharMeshApp : Application() {
             // gated by the persisted toggle, so off-mode peers stay silent).
             onSosReceived = { DisasterModeController.onSosReceived(this) },
             isDisasterModeEnabled = { DisasterModeController.shouldForcePriority() },
-            peerKeyRing = keyRing
+            peerKeyRing = keyRing,
+            // Persist retry-curve state + SOS priority bit so a forced
+            // process kill doesn't lose the aggressive SOS curve for
+            // in-flight disaster bundles.
+            retryStatePersistence = com.tharmesh.data.RetryStatePersistence.Room(
+                database.retryStateDao()
+            )
         )
         val source = NearbyMeshDataSource(engine)
         directory.setSource(source)

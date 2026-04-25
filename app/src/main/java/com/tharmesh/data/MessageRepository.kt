@@ -101,7 +101,18 @@ class MessageRepository(
      * signatures are applied OUTSIDE the envelope, so this change is
      * invisible to relays and TOFU key-pinning.
      */
-    private val peerKeyRing: com.tharmesh.crypto.PeerKeyRing? = null
+    private val peerKeyRing: com.tharmesh.crypto.PeerKeyRing? = null,
+    /**
+     * Optional persistence mirror for [retryPolicy] + [priorityBundleIds].
+     * When present, retry-curve state and the SOS priority bit survive a
+     * forced process kill — on the next construction, [hydrateFromDisk]
+     * seeds [retryPolicy] and [priorityBundleIds] from the persisted rows
+     * so SOS bundles stay on their aggressive curve instead of falling
+     * back to the default 5s→60s curve after a crash. Null in tests that
+     * don't care about persistence; the plain in-memory behaviour is
+     * preserved in that case.
+     */
+    private val retryStatePersistence: RetryStatePersistence? = null
 ) {
 
     /**
@@ -142,12 +153,81 @@ class MessageRepository(
                 // (this peer might be the missing relay) so backoff on stale
                 // state is no longer informative.
                 retryPolicy.onPeerConnectedBypass(now())
+                // The bypass rewrote every tracked bundle's state; re-mirror
+                // each row so a subsequent cold start doesn't restart from
+                // the pre-bypass curve.
+                persistAllTrackedRetryState()
             }
         }
     )
 
     init {
         mesh.setEventListener { event -> onMeshEvent(event) }
+        // Hydrate persisted retry state + SOS priority set before any tick
+        // fires — the retry loop is started separately by
+        // [startStoreAndForwardLoop], which posts to [scope]; by then the
+        // blocking load below has already seeded the policy.
+        retryStatePersistence?.let { hydrateRetryStateFromDisk(it) }
+    }
+
+    private fun hydrateRetryStateFromDisk(p: RetryStatePersistence) {
+        val rows = try {
+            p.loadAll()
+        } catch (ignored: Throwable) {
+            return
+        }
+        if (rows.isEmpty()) return
+        val seed = HashMap<String, RetryPolicy.BundleState>(rows.size)
+        synchronized(priorityBundleIds) {
+            for (row in rows) {
+                seed[row.bundleId] = RetryPolicy.BundleState(
+                    attemptCount = row.attemptCount,
+                    nextRetryAt = row.nextRetryAt
+                )
+                if (row.priority) priorityBundleIds.add(row.bundleId)
+            }
+        }
+        retryPolicy.hydrate(seed)
+    }
+
+    private fun persistRetryState(bundleId: String) {
+        val p = retryStatePersistence ?: return
+        val state = retryPolicy.currentState(bundleId) ?: return
+        val priority = isPriority(bundleId)
+        scope.launch(Dispatchers.IO) {
+            try {
+                p.save(bundleId, state, priority)
+            } catch (ignored: Throwable) {
+                // Persistence is best-effort. A lost write means, at worst, the
+                // bundle restarts its curve from base delay on next cold start
+                // — i.e. the pre-PR behaviour. Swallow rather than crash.
+            }
+        }
+    }
+
+    private fun persistRetryStateRemove(bundleId: String) {
+        val p = retryStatePersistence ?: return
+        scope.launch(Dispatchers.IO) {
+            try {
+                p.remove(bundleId)
+            } catch (ignored: Throwable) {
+            }
+        }
+    }
+
+    private fun persistAllTrackedRetryState() {
+        val p = retryStatePersistence ?: return
+        val snapshot = retryPolicy.snapshot()
+        if (snapshot.isEmpty()) return
+        val priorityCopy = synchronized(priorityBundleIds) { priorityBundleIds.toSet() }
+        scope.launch(Dispatchers.IO) {
+            for ((bid, st) in snapshot) {
+                try {
+                    p.save(bid, st, bid in priorityCopy)
+                } catch (ignored: Throwable) {
+                }
+            }
+        }
     }
 
     /**
@@ -290,6 +370,8 @@ class MessageRepository(
         if (effectivePriority) {
             synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
         }
+        // See comment on markOriginated below for the ordering: we persist
+        // AFTER markOriginated so the row includes the seeded BundleState.
         mesh.queueText(
             destId = toUserId,
             payloadCiphertext = wireBody,
@@ -306,6 +388,7 @@ class MessageRepository(
         // RetryAttempt at t+580 ms because no policy state had been seeded.
         val cfg = if (effectivePriority) RetryConfig.SOS else null
         retryPolicy.markOriginated(bundleId, ts, cfg)
+        persistRetryState(bundleId)
         return SendResult(messageId, bundleId)
     }
 
@@ -413,11 +496,13 @@ class MessageRepository(
                 retryPolicy.onDelivered(event.bundleId)
                 // Stage 5.3: drop SOS priority tracking too.
                 synchronized(priorityBundleIds) { priorityBundleIds.remove(event.bundleId) }
+                persistRetryStateRemove(event.bundleId)
             }
             is MeshEvent.BundleRead -> scope.launch(Dispatchers.IO) {
                 advanceByBundleId(event.bundleId, MessageStatus.READ)
                 retryPolicy.onDelivered(event.bundleId)
                 synchronized(priorityBundleIds) { priorityBundleIds.remove(event.bundleId) }
+                persistRetryStateRemove(event.bundleId)
             }
             is MeshEvent.BundleDelivered -> {
                 messagesRelayed++
@@ -540,6 +625,7 @@ class MessageRepository(
         // retry doesn't have to wait out a backoff window — the next tick
         // re-issues immediately.
         retryPolicy.onDelivered(bid)
+        persistRetryStateRemove(bid)
         // Best-effort: kick the engine immediately so we don't wait for the
         // next tick. retryBundle returns false on cache miss / TTL expiry —
         // either way the result is silently ignored; the retry loop will
@@ -615,7 +701,9 @@ class MessageRepository(
             // Skip retry work when no peers are connected — prevents the
             // RetryPolicy backoff curve from being consumed during outages.
             hasConnectedPeers = { mesh.hasConnectedPeers() },
-            onRetrySuppressedNoPeers = onRetrySuppressedNoPeers
+            onRetrySuppressedNoPeers = onRetrySuppressedNoPeers,
+            onStatePersisted = { bid -> persistRetryState(bid) },
+            onStateForgotten = { bid -> persistRetryStateRemove(bid) }
         )
     }
 
@@ -764,7 +852,19 @@ internal fun runRetryTickStandalone(
      * correlate retry droughts with outages without inflating retryAttempts
      * (no send actually happened).
      */
-    onRetrySuppressedNoPeers: (String) -> Unit = { }
+    onRetrySuppressedNoPeers: (String) -> Unit = { },
+    /**
+     * Fires AFTER [retryPolicy] has recorded a successful attempt, so the
+     * caller can mirror the new [RetryPolicy.BundleState] to a persistence
+     * layer (see [RetryStatePersistence]). Default: no-op.
+     */
+    onStatePersisted: (String) -> Unit = { },
+    /**
+     * Fires AFTER [retryPolicy] has freed state via `onTtlExpired` inside
+     * this tick, so the caller can remove the corresponding persisted row.
+     * Default: no-op.
+     */
+    onStateForgotten: (String) -> Unit = { }
 ) {
     // Check peers once per tick rather than per bundle — the set changes at
     // transport-event granularity, not within a single sweep. Avoids taking
@@ -792,6 +892,7 @@ internal fun runRetryTickStandalone(
             // counters, since no retry actually happened.
             retryPolicy.onTtlExpired(bid)
             onTtlClear(bid)
+            onStateForgotten(bid)
             continue
         }
         if (wasStuckSending) {
@@ -799,5 +900,6 @@ internal fun runRetryTickStandalone(
         }
         onRetryAttempt(bid)
         retryPolicy.recordAttempt(bid, nowMs, configFor(bid))
+        onStatePersisted(bid)
     }
 }

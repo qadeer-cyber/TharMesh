@@ -60,6 +60,14 @@ class RetryPolicy(
     /** Test/diagnostics introspection — current state for [bundleId], or null if unknown. */
     fun currentState(bundleId: String): BundleState? = synchronized(lock) { state[bundleId] }
 
+    /**
+     * Snapshot of every tracked bundle's state. Returned as a plain copy so
+     * the caller can iterate without holding [lock]. Used by the persistence
+     * mirror to re-save every row after a topology-wide state rewrite (see
+     * [onPeerConnectedBypass]).
+     */
+    fun snapshot(): Map<String, BundleState> = synchronized(lock) { HashMap(state) }
+
     /** Test/diagnostics introspection — number of bundles with retry state. */
     fun trackedBundleCount(): Int = synchronized(lock) { state.size }
 
@@ -181,5 +189,20 @@ class RetryPolicy(
     fun reset() = synchronized(lock) {
         state.clear()
         attemptsTotal.set(0L)
+    }
+
+    /**
+     * Seed the per-bundle state map from persisted rows. Called by
+     * [com.tharmesh.data.MessageRepository] on startup when a
+     * retry-state persistence hook is wired — without this, a forced
+     * process kill would lose the curve position and every tracked
+     * bundle would restart its backoff from base delay, effectively
+     * "retry-storming" on the first post-restart tick. Does NOT touch
+     * [attemptsTotal] — that's a per-process diagnostic, not a
+     * per-bundle curve value.
+     */
+    fun hydrate(saved: Map<String, BundleState>) = synchronized(lock) {
+        state.clear()
+        state.putAll(saved)
     }
 }
