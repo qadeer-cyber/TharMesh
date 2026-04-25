@@ -1,39 +1,47 @@
+// SPDX-License-Identifier: LicenseRef-TharMesh-Proprietary
+// Copyright (c) 2026 Abdul Qadeer (Qadeer Cyber). All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification,
+// distribution, or use is strictly prohibited. See LICENSE for details.
 package com.tharmesh.ui.settings
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
-import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
-import com.tharmesh.TharMeshApp
-import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
-import com.tharmesh.diagnostics.FieldTestMode
-import com.tharmesh.disaster.DisasterModeController
-import com.tharmesh.ui.auth.LoginActivity
-import com.tharmesh.ui.diagnostics.DiagnosticsActivity
-import com.tharmesh.ui.theme.ThemeManager
+import com.tharmesh.ui.profile.ProfileActivity
 import tharmesh.app.R
+import java.io.File
 
 /**
- * Settings tab: profile summary + options list.
+ * WhatsApp-style settings tab.
  *
- * Tapping the Profile row opens an edit dialog that updates the local display name
- * (persisted via [UserPrefs]). Other rows are still demo-only for now.
+ * Layout:
+ *  - Profile preview row (avatar + display name + status). Taps open
+ *    [ProfileActivity] for the full editable header.
+ *  - Flat section list rendered by [SettingsSections] — every section
+ *    routes through [SettingsSectionActivity], so the bottom-nav tab and
+ *    the chats top-bar avatar share the exact same downstream surfaces.
  */
 class SettingsFragment : Fragment() {
 
-    private lateinit var avatar: TextView
+    private lateinit var avatarLetter: TextView
+    private lateinit var avatarImage: ImageView
     private lateinit var username: TextView
-    private lateinit var userIdView: TextView
+    private lateinit var status: TextView
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -45,203 +53,63 @@ class SettingsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val ctx = requireContext()
 
-        avatar = view.findViewById(R.id.settings_avatar)
+        avatarLetter = view.findViewById(R.id.settings_avatar)
+        avatarImage = view.findViewById(R.id.settings_avatar_image)
         username = view.findViewById(R.id.settings_username)
-        userIdView = view.findViewById(R.id.settings_userid)
-        renderProfile()
+        status = view.findViewById(R.id.settings_status)
 
-        val rows = view.findViewById<LinearLayout>(R.id.settings_rows)
-        renderRows(rows)
-
-        view.findViewById<Button>(R.id.button_sign_out).setOnClickListener {
-            AlertDialog.Builder(ctx)
-                .setTitle(R.string.settings_sign_out)
-                .setMessage("Sign out and clear your local profile?")
-                .setPositiveButton(R.string.settings_sign_out) { _, _ ->
-                    // Revoke Google session first so LoginActivity won't auto-re-sign-in via the
-                    // cached GoogleSignInAccount, then tear down the mesh so a different user
-                    // logging in afterwards gets a fresh MeshEngine bound to their userId.
-                    GoogleAuthService(ctx).signOut()
-                    TharMeshApp.get().stopMesh()
-                    UserPrefs.signOut(ctx)
-                    val intent = Intent(ctx, LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(intent)
-                    requireActivity().finish()
-                }
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show()
+        view.findViewById<View>(R.id.settings_profile_row).setOnClickListener {
+            startActivity(Intent(ctx, ProfileActivity::class.java))
         }
+
+        renderProfilePreview()
+        SettingsSections.render(ctx, view.findViewById(R.id.settings_rows))
     }
 
-    /**
-     * Rebuilds the settings rows. A long-press on the About row toggles Stage 5.1
-     * Field Test Mode; when enabled, a Diagnostics row becomes visible. No new
-     * XML resources or icons are needed — existing shield / wifi icons are reused.
-     */
-    private fun renderRows(rows: LinearLayout) {
-        val ctx = requireContext()
-        rows.removeAllViews()
-        val profileRow = addRow(rows, R.drawable.ic_user, R.drawable.bg_round_icon_cyan,
-            R.string.settings_profile, R.string.settings_profile_sub)
-        profileRow.setOnClickListener { showEditProfileDialog() }
-        // Stage 6.1 — Theme picker row (System / Light / Dark). Persists via
-        // UserPrefs and applies through AppCompat's DayNight delegate; the
-        // running activity is recreated cleanly by AppCompat itself.
-        val themeRow = addRow(rows, R.drawable.ic_moon, R.drawable.bg_round_icon_cyan,
-            R.string.settings_theme, R.string.settings_theme_sub)
-        themeRow.setOnClickListener { showThemePicker() }
-
-        addRow(rows, R.drawable.ic_lock, R.drawable.bg_round_icon_green,
-            R.string.settings_security, R.string.settings_security_sub)
-        addRow(rows, R.drawable.ic_wifi, R.drawable.bg_round_icon_cyan,
-            R.string.settings_mesh, R.string.settings_mesh_sub)
-        addRow(rows, R.drawable.ic_storage, R.drawable.bg_round_icon_amber,
-            R.string.settings_storage, R.string.settings_storage_sub)
-        addRow(rows, R.drawable.ic_bolt, R.drawable.bg_round_icon_amber,
-            R.string.settings_battery, R.string.settings_battery_sub)
-
-        // Stage 6.3 — Disaster Mode toggle row. Subtitle reflects current
-        // persisted state so the user can see at a glance whether their
-        // outgoing bundles are using the SOS curve.
-        val disasterOn = UserPrefs.isDisasterModeEnabled(ctx)
-        val disasterRow = addRow(
-            rows, R.drawable.ic_alert, R.drawable.bg_round_icon_danger,
-            R.string.settings_disaster,
-            if (disasterOn) R.string.settings_disaster_sub_on else R.string.settings_disaster_sub_off
-        )
-        disasterRow.setOnClickListener { showDisasterModeDialog(rows) }
-
-        if (FieldTestMode.isEnabled(ctx)) {
-            val diagRow = addRow(rows, R.drawable.ic_wifi, R.drawable.bg_round_icon_green,
-                R.string.settings_diagnostics, R.string.settings_diagnostics_sub)
-            diagRow.setOnClickListener {
-                startActivity(Intent(ctx, DiagnosticsActivity::class.java))
-            }
-        }
-
-        val aboutRow = addRow(rows, R.drawable.ic_shield, R.drawable.bg_round_icon_green,
-            R.string.settings_about, R.string.settings_about_sub)
-        // Hidden entry point: long-press About to toggle Field Test Mode. No
-        // visible affordance — field testers get instructions separately.
-        aboutRow.setOnLongClickListener {
-            val enabled = FieldTestMode.toggle(ctx)
-            Toast.makeText(
-                ctx,
-                if (enabled) R.string.field_test_enabled else R.string.field_test_disabled,
-                Toast.LENGTH_SHORT
-            ).show()
-            renderRows(rows)
-            true
-        }
+    override fun onResume() {
+        super.onResume()
+        renderProfilePreview()
     }
 
-    private fun renderProfile() {
-        val ctx = requireContext()
+    private fun renderProfilePreview() {
+        val ctx = context ?: return
         val profile = UserPrefs.readProfile(ctx)
-        val displayName = profile?.username ?: "Anonymous"
-        username.text = displayName
-        userIdView.text = profile?.userId ?: "user-offline"
-        avatar.text = displayName.take(1).uppercase()
-    }
+        val name = profile?.username?.takeIf { it.isNotBlank() }
+            ?: getString(R.string.profile_anonymous)
+        username.text = name
+        avatarLetter.text = name.take(1).uppercase()
 
-    /**
-     * Theme Mode picker — System default / Light / Dark. The chosen mode is
-     * persisted via [UserPrefs.setThemeMode] and applied through AppCompat's
-     * DayNight delegate via [ThemeManager.setAndApply]. AppCompat recreates
-     * the running activity itself; we never call recreate() manually.
-     */
-    private fun showThemePicker() {
-        val ctx = requireContext()
-        val labels = arrayOf(
-            getString(R.string.settings_theme_system),
-            getString(R.string.settings_theme_light),
-            getString(R.string.settings_theme_dark)
-        )
-        val current = UserPrefs.getThemeMode(ctx).ordinal
-        AlertDialog.Builder(ctx)
-            .setTitle(R.string.settings_theme_dialog_title)
-            .setSingleChoiceItems(labels, current) { dialog, which ->
-                val mode = ThemeManager.Mode.values()[which]
-                ThemeManager.setAndApply(ctx, mode)
-                dialog.dismiss()
+        val s = UserPrefs.getStatus(ctx)
+        status.text = if (s.isBlank()) getString(R.string.profile_status_placeholder) else s
+
+        val avatarPath = UserPrefs.getAvatarLocalPath(ctx)
+        if (avatarPath != null) {
+            val file = File(avatarPath)
+            val bmp = if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+            if (bmp != null) {
+                avatarImage.setImageBitmap(toCircularBitmap(bmp))
+                avatarImage.visibility = View.VISIBLE
+                avatarLetter.visibility = View.INVISIBLE
+                return
             }
-            .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
-    }
-
-    /**
-     * Confirm-then-toggle dialog for Disaster Mode. Always shows a
-     * confirmation step (the feature has measurable battery impact and the
-     * user pressed it from the Settings list, not from a panic-button); on
-     * confirm the persisted flag flips and the rows are re-rendered so the
-     * subtitle copy follows the new state. The MainActivity banner picks up
-     * the change via [DisasterModeController.enabled].
-     */
-    private fun showDisasterModeDialog(rows: LinearLayout) {
-        val ctx = requireContext()
-        val isOn = UserPrefs.isDisasterModeEnabled(ctx)
-        val titleRes = if (isOn) R.string.settings_disaster_dialog_disable_title
-                       else R.string.settings_disaster_dialog_title
-        val bodyRes = if (isOn) R.string.settings_disaster_dialog_disable_body
-                      else R.string.settings_disaster_dialog_body
-        val positiveRes = if (isOn) R.string.settings_disaster_dialog_disable
-                          else R.string.settings_disaster_dialog_enable
-        AlertDialog.Builder(ctx)
-            .setTitle(titleRes)
-            .setMessage(bodyRes)
-            .setPositiveButton(positiveRes) { _, _ ->
-                DisasterModeController.setEnabled(ctx, !isOn)
-                renderRows(rows)
-            }
-            .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
-    }
-
-    private fun showEditProfileDialog() {
-        val ctx = requireContext()
-        val current = UserPrefs.readProfile(ctx) ?: return
-        val input = EditText(ctx).apply {
-            setText(current.username)
-            setSelection(current.username.length)
-            hint = getString(R.string.profile_edit_hint)
         }
-        val wrapper = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            val pad = (resources.displayMetrics.density * 20).toInt()
-            setPadding(pad, pad / 2, pad, 0)
-            addView(input, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ))
-        }
-        AlertDialog.Builder(ctx)
-            .setTitle(R.string.profile_edit_title)
-            .setView(wrapper)
-            .setPositiveButton(R.string.profile_edit_save) { _, _ ->
-                val newName = input.text?.toString()?.trim().orEmpty()
-                if (newName.isNotEmpty() && newName != current.username) {
-                    UserPrefs.saveProfile(ctx, current.copy(username = newName))
-                    renderProfile()
-                }
-            }
-            .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
+        avatarImage.visibility = View.GONE
+        avatarLetter.visibility = View.VISIBLE
     }
 
-    private fun addRow(
-        parent: LinearLayout,
-        iconRes: Int,
-        iconBgRes: Int,
-        titleRes: Int,
-        subtitleRes: Int
-    ): View {
-        val row = LayoutInflater.from(parent.context).inflate(R.layout.item_settings_row, parent, false)
-        row.findViewById<ImageView>(R.id.row_icon).setImageResource(iconRes)
-        row.findViewById<View>(R.id.row_icon_bg).setBackgroundResource(iconBgRes)
-        row.findViewById<TextView>(R.id.row_title).setText(titleRes)
-        row.findViewById<TextView>(R.id.row_subtitle).setText(subtitleRes)
-        parent.addView(row)
-        return row
+    private fun toCircularBitmap(src: Bitmap): Bitmap {
+        val size = minOf(src.width, src.height)
+        val xOff = (src.width - size) / 2
+        val yOff = (src.height - size) / 2
+        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = -0x1 }
+        val rect = Rect(0, 0, size, size)
+        val rectF = RectF(rect)
+        canvas.drawARGB(0, 0, 0, 0)
+        canvas.drawOval(rectF, paint)
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(src, Rect(xOff, yOff, xOff + size, yOff + size), rect, paint)
+        return output
     }
 }

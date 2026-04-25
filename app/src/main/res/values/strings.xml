@@ -237,4 +237,93 @@
     <string name="chat_header_verified">Verified</string>
     <string name="chat_header_unverified">Unverified</string>
     <string name="chat_header_key_mismatch">Key mismatch</string>
+
+    <!-- Profile + Settings rebuild — WhatsApp-style hierarchy -->
+    <string name="profile_back">Back</string>
+    <string name="profile_show_qr">Show my QR</string>
+    <string name="profile_search">Search</string>
+    <string name="profile_anonymous">Anonymous</string>
+    <string name="profile_status_placeholder">What\'s happening?</string>
+    <string name="profile_status_hint">Add a short status</string>
+    <string name="profile_avatar_cd">Profile photo</string>
+    <string name="profile_edit_name_cd">Edit display name</string>
+    <string name="profile_change_photo_cd">Change profile photo</string>
+    <string name="profile_edit_name_title">Display name</string>
+    <string name="profile_edit_status_title">Status</string>
+    <string name="profile_name_hint">Display name</string>
+    <string name="profile_no_picker">No image picker available on this device</string>
+    <string name="profile_photo_save_failed">Could not save the selected photo</string>
+
+    <string name="dialog_save">Save</string>
+    <string name="dialog_clear">Clear</string>
+
+    <!-- Section list rows (icon + title + subtitle) -->
+    <string name="settings_section_account">Account</string>
+    <string name="settings_section_account_sub">Identity, fingerprint, sign out</string>
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_section_privacy_sub">Blocked contacts, disappearing messages</string>
+    <string name="settings_section_lists">Lists</string>
+    <string name="settings_section_lists_sub">Manage groups (coming soon)</string>
+    <string name="settings_section_chats">Chats</string>
+    <string name="settings_section_chats_sub">Theme, wallpaper, chat history</string>
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_section_notifications_sub">Message sound, vibration, Disaster Mode</string>
+    <string name="settings_section_storage">Storage and data</string>
+    <string name="settings_section_storage_sub">Stats, cache</string>
+    <string name="settings_section_accessibility">Accessibility</string>
+    <string name="settings_section_accessibility_sub">High contrast</string>
+    <string name="settings_section_language">App language</string>
+    <string name="settings_section_language_sub">Display language</string>
+    <string name="settings_section_help">Help and feedback</string>
+    <string name="settings_section_help_sub">Version, contact developer</string>
+    <string name="settings_section_invite">Invite a friend</string>
+    <string name="settings_invite_message">Try TharMesh — an offline mesh messenger that works without internet.</string>
+    <string name="settings_coming_soon">Coming soon</string>
+
+    <!-- Account section content -->
+    <string name="settings_account_user_id">User ID</string>
+    <string name="settings_account_fingerprint">Identity fingerprint</string>
+    <string name="settings_account_fingerprint_missing">No identity generated yet</string>
+    <string name="settings_account_provider">Sign-in provider</string>
+    <string name="settings_account_sign_out">Sign out</string>
+    <string name="settings_account_sign_out_sub">Clear local profile and return to login</string>
+    <string name="settings_account_sign_out_confirm">Sign out and clear your local profile?</string>
+
+    <!-- Privacy section content -->
+    <string name="settings_privacy_blocked">Blocked contacts</string>
+    <string name="settings_privacy_blocked_sub_placeholder">No blocked contacts</string>
+    <string name="settings_privacy_disappearing">Disappearing messages</string>
+
+    <!-- Chats section content -->
+    <string name="settings_chats_theme">Theme</string>
+    <string name="settings_chats_wallpaper">Wallpaper</string>
+    <string name="settings_chats_history">Chat history</string>
+
+    <!-- Notifications section content -->
+    <string name="settings_notif_sound">Message sound</string>
+    <string name="settings_notif_vibrate">Vibration</string>
+
+    <!-- Storage section content -->
+    <string name="settings_storage_messages">Messages</string>
+    <string name="settings_storage_cache">Cache size</string>
+    <string name="settings_storage_loading">Loading…</string>
+    <plurals name="settings_storage_messages_count">
+        <item quantity="one">%d message</item>
+        <item quantity="other">%d messages</item>
+    </plurals>
+
+    <!-- Accessibility section content -->
+    <string name="settings_accessibility_contrast">Force dark theme (high contrast)</string>
+    <string name="settings_accessibility_contrast_sub">Override System theme with the TharMesh dark UI</string>
+
+    <!-- Language section content -->
+    <string name="settings_language_current">Current: %1$s</string>
+    <string name="settings_language_more">More languages</string>
+
+    <!-- Help section content -->
+    <string name="settings_help_version">Version</string>
+    <string name="settings_help_contact">Contact developer</string>
+    <string name="settings_help_contact_sub">Send an email to the maintainer</string>
+    <string name="settings_help_contact_subject">TharMesh feedback</string>
+    <string name="settings_help_no_mail_client">No email app installed</string>
 </resources>

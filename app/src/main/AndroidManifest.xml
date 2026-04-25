@@ -51,6 +51,8 @@
         <activity android:name="com.tharmesh.ui.chat.ChatActivity" />
         <activity android:name="com.tharmesh.ui.chats.ChatsActivity" />
         <activity android:name="com.tharmesh.ui.diagnostics.DiagnosticsActivity" />
+        <activity android:name="com.tharmesh.ui.profile.ProfileActivity" />
+        <activity android:name="com.tharmesh.ui.settings.SettingsSectionActivity" />
         <activity android:name="com.tharmesh.ui.main.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
