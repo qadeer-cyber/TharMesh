@@ -193,4 +193,56 @@ class DiagnosticsCollectorTest {
         assertEquals(1L, counters.getLong("ttlExpiredDrops"))
         assertEquals(1L, counters.getLong("stuckSendingRecovered"))
     }
+
+    @Test
+    fun `recordRelaySent rolls up totals and per-peer breakdown`() {
+        val c = DiagnosticsCollector(recentCapacity = 16, now = { 2_000_000L })
+        c.recordRelaySent("alice", "b1", bytes = 100)
+        c.recordRelaySent("alice", "b2", bytes = 50)
+        c.recordRelaySent("bob",   "b1", bytes = 200)
+        // Zero / negative are ignored so counters can't go backwards.
+        c.recordRelaySent("alice", "b3", bytes = 0)
+        c.recordRelaySent("bob",   "b4", bytes = -5)
+
+        val s = c.snapshot()
+        assertEquals(350L, s.relayedBytesTotal)
+        assertEquals(3L, s.relayForwards)
+
+        val byPeer = c.relayedBytesByPeer()
+        // Sorted descending by bytes.
+        assertEquals(listOf("bob" to 200L, "alice" to 150L), byPeer)
+        val forwards = c.relayForwardsByPeer()
+        assertEquals(2L, forwards["alice"])
+        assertEquals(1L, forwards["bob"])
+    }
+
+    @Test
+    fun `exportJson surfaces per-peer relay breakdown`() {
+        val c = DiagnosticsCollector(recentCapacity = 16, now = { 3_000_000L })
+        c.recordRelaySent("alice", "b1", bytes = 64)
+        c.recordRelaySent("bob",   "b2", bytes = 128)
+
+        val json = JSONObject(c.exportJson())
+        val counters = json.getJSONObject("counters")
+        assertEquals(192L, counters.getLong("relayedBytesTotal"))
+        assertEquals(2L, counters.getLong("relayForwards"))
+
+        val perPeer = json.getJSONObject("relayedByPeer")
+        assertEquals(64L, perPeer.getJSONObject("alice").getLong("bytes"))
+        assertEquals(1L,  perPeer.getJSONObject("alice").getLong("forwards"))
+        assertEquals(128L, perPeer.getJSONObject("bob").getLong("bytes"))
+        assertEquals(1L,   perPeer.getJSONObject("bob").getLong("forwards"))
+    }
+
+    @Test
+    fun `reset clears per-peer relay bookkeeping`() {
+        val c = DiagnosticsCollector(recentCapacity = 16)
+        c.recordRelaySent("alice", "b1", bytes = 100)
+        c.recordRelaySent("bob",   "b2", bytes = 200)
+        c.reset()
+        assertEquals(0L, c.relayedBytesTotal.get())
+        assertEquals(0L, c.relayForwards.get())
+        assertTrue(c.relayedBytesByPeer().isEmpty())
+        assertTrue(c.relayForwardsByPeer().isEmpty())
+    }
 }

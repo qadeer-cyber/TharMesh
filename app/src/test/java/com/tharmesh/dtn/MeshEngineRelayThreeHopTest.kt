@@ -68,6 +68,57 @@ class MeshEngineRelayThreeHopTest {
     }
 
     @Test
+    fun onRelaySent_firesForForwardedBundle_withPostDecrementFrameSize() {
+        val tA = BridgedTransport()
+        val tB = BridgedTransport()
+        val tC = BridgedTransport()
+        data class Relay(val peerId: String, val bundleId: String, val bytes: Int)
+        val bRelays: MutableList<Relay> = CopyOnWriteArrayList()
+        val aRelays: MutableList<Relay> = CopyOnWriteArrayList()
+        val cRelays: MutableList<Relay> = CopyOnWriteArrayList()
+        val a = MeshEngine("A", tA,
+            onRelaySent = { p, b, bytes -> aRelays.add(Relay(p, b, bytes)) })
+        val b = MeshEngine("B", tB,
+            onRelaySent = { p, bid, bytes -> bRelays.add(Relay(p, bid, bytes)) })
+        val c = MeshEngine("C", tC,
+            onRelaySent = { p, bid, bytes -> cRelays.add(Relay(p, bid, bytes)) })
+        a.start(); b.start(); c.start()
+        tA.link(tB)
+        tB.link(tC)
+
+        a.queueText(
+            destId = "C",
+            payloadCiphertext = "relay-bytes-test",
+            ttlMs = 60_000L,
+            hops = 4,
+            bundleIdHint = "bid-bytes"
+        )
+
+        // B is the only relay: it must emit exactly one onRelaySent for the
+        // forward to C.
+        assertEquals("B must emit exactly one onRelaySent: $bRelays", 1, bRelays.size)
+        val relay = bRelays[0]
+        assertEquals("C", relay.peerId)
+        assertEquals("bid-bytes", relay.bundleId)
+        assertTrue("forwarded frame must have non-trivial size", relay.bytes > 0)
+
+        // Neither A (originator) nor C (final dest) relayed this bundle.
+        assertTrue("A must not emit onRelaySent — it originated", aRelays.isEmpty())
+        assertTrue("C must not emit onRelaySent — it is the destination", cRelays.isEmpty())
+
+        // Reported byte count must line up with what actually went on the
+        // wire from B's transport to C: the forwarded frame is the one
+        // large-payload send, not the small ACK/probe frames that also
+        // cross B→C.
+        val bSendsToC = tB.sends.filter { it.to == "C" }
+        assertTrue(
+            "B must have a tB.sends entry to C matching relay.bytes=${relay.bytes}: " +
+                bSendsToC.map { it.bytes.size },
+            bSendsToC.any { it.bytes.size == relay.bytes }
+        )
+    }
+
+    @Test
     fun threeHop_aViaBReachesC() {
         val tA = BridgedTransport()
         val tB = BridgedTransport()

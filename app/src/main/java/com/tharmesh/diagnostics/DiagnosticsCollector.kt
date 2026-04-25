@@ -48,6 +48,22 @@ class DiagnosticsCollector(
     val stuckSendingRecovered = AtomicLong(0)
     val retrySuppressedNoPeers = AtomicLong(0)
 
+    // Cumulative bytes relayed through this device on behalf of every peer
+    // we've forwarded to. The per-peer breakdown lives in [relayedBytesByPeer];
+    // this is the rollup used by the Diagnostics Summary chip.
+    val relayedBytesTotal = AtomicLong(0)
+    val relayForwards = AtomicLong(0)
+
+    // Per-peer relayed-bytes + relayed-frame accounting. Both maps are
+    // synchronised on [relayedByPeerLock]; reads copy into a plain HashMap so
+    // the UI can iterate without holding the lock. Keys are destination
+    // peerIds (i.e. the neighbour that actually received the bytes) rather
+    // than origin srcIds, because fairness is a function of who we spend
+    // radio time on, not who wrote the bundle.
+    private val relayedByPeerLock = Any()
+    private val relayedBytesByPeer: MutableMap<String, Long> = HashMap()
+    private val relayForwardsByPeer: MutableMap<String, Long> = HashMap()
+
     private val createdAt: Long = now()
     @Volatile private var lastEventAt: Long = 0L
 
@@ -138,7 +154,9 @@ class DiagnosticsCollector(
         val sendPaced: Long,
         val ttlExpiredDrops: Long,
         val stuckSendingRecovered: Long,
-        val retrySuppressedNoPeers: Long
+        val retrySuppressedNoPeers: Long,
+        val relayedBytesTotal: Long,
+        val relayForwards: Long
     )
 
     fun snapshot(): Snapshot {
@@ -163,7 +181,9 @@ class DiagnosticsCollector(
             sendPaced = sendPaced.get(),
             ttlExpiredDrops = ttlExpiredDrops.get(),
             stuckSendingRecovered = stuckSendingRecovered.get(),
-            retrySuppressedNoPeers = retrySuppressedNoPeers.get()
+            retrySuppressedNoPeers = retrySuppressedNoPeers.get(),
+            relayedBytesTotal = relayedBytesTotal.get(),
+            relayForwards = relayForwards.get()
         )
     }
 
@@ -191,6 +211,18 @@ class DiagnosticsCollector(
             .put("ttlExpiredDrops", s.ttlExpiredDrops)
             .put("stuckSendingRecovered", s.stuckSendingRecovered)
             .put("retrySuppressedNoPeers", s.retrySuppressedNoPeers)
+            .put("relayedBytesTotal", s.relayedBytesTotal)
+            .put("relayForwards", s.relayForwards)
+        val perPeer = JSONObject()
+        val frameCounts = relayForwardsByPeer()
+        for ((peerId, bytes) in relayedBytesByPeer()) {
+            perPeer.put(
+                peerId,
+                JSONObject()
+                    .put("bytes", bytes)
+                    .put("forwards", frameCounts[peerId] ?: 0L)
+            )
+        }
         val events = JSONArray()
         for (e in recentEvents()) {
             events.put(
@@ -204,6 +236,7 @@ class DiagnosticsCollector(
             .put("stage", "5.2")
             .put("generatedAt", s.lastEventAt.let { if (it == 0L) now() else it })
             .put("counters", counters)
+            .put("relayedByPeer", perPeer)
             .put("recentEvents", events)
             .toString(2)
     }
@@ -256,6 +289,37 @@ class DiagnosticsCollector(
         record("RetrySuppressedNoPeers", bundleId)
     }
 
+    /**
+     * Called from [com.tharmesh.dtn.MeshEngine.forwardBundle] after a relay
+     * forward was accepted by the transport. Increments both the rollup
+     * totals and the per-peer breakdown. Negative / zero byte counts are
+     * silently ignored so the counters never go backwards.
+     */
+    fun recordRelaySent(peerId: String, bundleId: String, bytes: Int) {
+        if (bytes <= 0) return
+        relayedBytesTotal.addAndGet(bytes.toLong())
+        relayForwards.incrementAndGet()
+        synchronized(relayedByPeerLock) {
+            relayedBytesByPeer[peerId] = (relayedBytesByPeer[peerId] ?: 0L) + bytes.toLong()
+            relayForwardsByPeer[peerId] = (relayForwardsByPeer[peerId] ?: 0L) + 1L
+        }
+        lastEventAt = now()
+        record("RelaySent", "$bundleId to=$peerId bytes=$bytes")
+    }
+
+    /** Ordered snapshot (largest first) of relayed bytes per peer. */
+    fun relayedBytesByPeer(): List<Pair<String, Long>> =
+        synchronized(relayedByPeerLock) {
+            relayedBytesByPeer.entries
+                .map { it.key to it.value }
+                .sortedByDescending { it.second }
+        }
+
+    /** Per-peer relayed-forward counts keyed by peerId. */
+    fun relayForwardsByPeer(): Map<String, Long> =
+        synchronized(relayedByPeerLock) { HashMap(relayForwardsByPeer) }
+
+
     /** Reset counters + recent events. Used by the "Clear" UI action. */
     fun reset() {
         peersFound.set(0); peersConnected.set(0); peersDisconnected.set(0)
@@ -265,6 +329,11 @@ class DiagnosticsCollector(
         sendRejected.set(0); sendPaced.set(0)
         ttlExpiredDrops.set(0); stuckSendingRecovered.set(0)
         retrySuppressedNoPeers.set(0)
+        relayedBytesTotal.set(0); relayForwards.set(0)
+        synchronized(relayedByPeerLock) {
+            relayedBytesByPeer.clear()
+            relayForwardsByPeer.clear()
+        }
         synchronized(recentLock) { recent.clear() }
         lastEventAt = 0L
     }

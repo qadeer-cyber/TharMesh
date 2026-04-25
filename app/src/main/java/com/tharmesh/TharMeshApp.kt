@@ -167,7 +167,10 @@ class TharMeshApp : Application() {
             pacer = pacer,
             onSendPaced = { peerId -> diag.recordSendPaced(peerId) },
             onSendRejected = { peerId, bundleId -> diag.recordSendRejected(peerId, bundleId) },
-            onTtlExpiredDrop = { bundleId -> diag.recordTtlExpiredDrop(bundleId) }
+            onTtlExpiredDrop = { bundleId -> diag.recordTtlExpiredDrop(bundleId) },
+            onRelaySent = { peerId, bundleId, bytes ->
+                diag.recordRelaySent(peerId, bundleId, bytes)
+            }
         )
         val repo = MessageRepository(
             db = database,
