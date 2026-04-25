@@ -111,7 +111,7 @@ class MessagesFragment : Fragment() {
         }
 
         view.findViewById<FrameLayout>(R.id.btn_top_profile).setOnClickListener {
-            startActivity(Intent(ctx, com.tharmesh.ui.contacts.MyQrActivity::class.java))
+            startActivity(Intent(ctx, com.tharmesh.ui.profile.ProfileActivity::class.java))
         }
     }
 

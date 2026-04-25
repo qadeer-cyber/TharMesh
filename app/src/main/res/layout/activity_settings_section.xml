@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Generic host for a single settings section. The activity inflates the
+    section-specific sub-layout into [section_content]. The toolbar is the
+    same across all sections so the user always knows how to go back.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/tmBg"
+    android:orientation="vertical">
+
+    <!-- Top bar: back arrow + section title -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageView
+            android:id="@+id/section_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/profile_back"
+            android:padding="10dp"
+            android:rotation="180"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/tmTextPrimary" />
+
+        <TextView
+            android:id="@+id/section_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textColor="?attr/tmTextPrimary"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:text="@string/settings_section_account" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/section_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="8dp"
+            android:paddingBottom="32dp" />
+    </ScrollView>
+</LinearLayout>

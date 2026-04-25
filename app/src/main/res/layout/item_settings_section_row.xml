@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    WhatsApp-style flat settings row. No card background — picks up the
+    parent's tmBg in both light + dark, so light = clean white list,
+    dark = TharMesh premium surface. Thin divider drawn by a sibling View
+    in the host container, not on the row itself, to keep the ripple full-
+    bleed.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="64dp"
+    android:orientation="horizontal"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <ImageView
+        android:id="@+id/row_icon"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:src="@drawable/ic_user"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        app:tint="?attr/tmTextPrimary" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/row_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/tmTextPrimary"
+            android:textSize="17sp"
+            android:text="Account" />
+
+        <TextView
+            android:id="@+id/row_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="?attr/tmTextSecondary"
+            android:textSize="13sp"
+            android:text="Security notifications, change number"
+            android:visibility="visible" />
+    </LinearLayout>
+
+    <Switch
+        android:id="@+id/row_switch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:clickable="false"
+        android:focusable="false" />
+</LinearLayout>

@@ -52,6 +52,33 @@ object UserPrefs {
      */
     private const val KEY_DISASTER_MODE = "disaster_mode"
 
+    /**
+     * Profile rebuild — WhatsApp-style status / tagline shown under the
+     * display name on the Profile screen. Free-form text, capped at 140
+     * chars at the UI layer. Empty default — user explicitly opts in by
+     * editing the field.
+     */
+    private const val KEY_STATUS = "profile_status"
+
+    /**
+     * Profile rebuild — local URI of the user's avatar image. The picker
+     * copies the chosen image into the app's internal files dir so we own
+     * a stable file:// path independent of the original picker URI's
+     * permission grant. Empty / null means "use the letter-mark placeholder".
+     */
+    private const val KEY_AVATAR_LOCAL = "profile_avatar_local"
+
+    /**
+     * Profile rebuild — message-sound + vibration toggles surfaced in the
+     * Notifications settings section. Both default to ON to match the
+     * pre-existing (always-on) behaviour. Disaster Mode's vibrate + ring
+     * is independently gated and is NOT silenced by these toggles — the
+     * user explicitly opted into the disaster alert by enabling the
+     * mode, so we honour that intent over the global toggles.
+     */
+    private const val KEY_NOTIF_SOUND = "notif_sound"
+    private const val KEY_NOTIF_VIBRATE = "notif_vibrate"
+
     const val PROVIDER_ANONYMOUS = "anonymous"
     const val PROVIDER_GOOGLE = "google"
 
@@ -187,5 +214,53 @@ object UserPrefs {
     fun setDisasterModeEnabled(context: Context, enabled: Boolean) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_DISASTER_MODE, enabled).apply()
+    }
+
+    @JvmStatic
+    fun getStatus(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_STATUS, "") ?: ""
+    }
+
+    @JvmStatic
+    fun setStatus(context: Context, status: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_STATUS, status.take(140)).apply()
+    }
+
+    @JvmStatic
+    fun getAvatarLocalPath(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_AVATAR_LOCAL, null)?.takeIf { it.isNotBlank() }
+    }
+
+    @JvmStatic
+    fun setAvatarLocalPath(context: Context, path: String?) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_AVATAR_LOCAL, path).apply()
+    }
+
+    @JvmStatic
+    fun isNotificationSoundEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_NOTIF_SOUND, true)
+    }
+
+    @JvmStatic
+    fun setNotificationSoundEnabled(context: Context, enabled: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_NOTIF_SOUND, enabled).apply()
+    }
+
+    @JvmStatic
+    fun isNotificationVibrateEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_NOTIF_VIBRATE, true)
+    }
+
+    @JvmStatic
+    fun setNotificationVibrateEnabled(context: Context, enabled: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_NOTIF_VIBRATE, enabled).apply()
     }
 }

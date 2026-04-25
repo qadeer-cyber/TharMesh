@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    WhatsApp-style profile + settings landing screen. Reached by tapping the
+    top-right avatar on the Chats screen. Shows the editable profile header
+    on top (avatar / display name / status) followed by the same WhatsApp-
+    style section list as [SettingsFragment]. Theme attributes drive every
+    color so light = WhatsApp-clean, dark = TharMesh premium.
+-->
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/tmBg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Top bar: back arrow + QR + search -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="4dp"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:id="@+id/profile_back"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/profile_back"
+                android:padding="10dp"
+                android:src="@drawable/ic_chevron_right"
+                android:rotation="180"
+                app:tint="?attr/tmTextPrimary"
+                xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:id="@+id/profile_qr"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/profile_show_qr"
+                android:padding="9dp"
+                android:src="@drawable/ic_shield"
+                app:tint="?attr/tmTextPrimary"
+                xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+            <ImageView
+                android:id="@+id/profile_search"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/profile_search"
+                android:padding="9dp"
+                android:src="@drawable/ic_search"
+                app:tint="?attr/tmTextPrimary"
+                xmlns:app="http://schemas.android.com/apk/res-auto" />
+        </LinearLayout>
+
+        <!-- Profile header — avatar + status bubble + name -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <!-- Status / "What's happening?" bubble. Tapping it opens the
+                     edit-status dialog. Reuses bg_card so it picks up the
+                     theme's surface color in light + dark. -->
+                <TextView
+                    android:id="@+id/profile_status_bubble"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_card_elevated"
+                    android:elevation="2dp"
+                    android:maxWidth="280dp"
+                    android:minHeight="36dp"
+                    android:gravity="center"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    android:text="@string/profile_status_placeholder"
+                    android:textColor="?attr/tmTextSecondary"
+                    android:textSize="14sp" />
+
+                <!-- Avatar — large, centred, circular. Letter-mark fallback
+                     when no avatar URI is set; otherwise we set its
+                     background to a CircleDrawable wrapping the bitmap. -->
+                <FrameLayout
+                    android:id="@+id/profile_avatar_frame"
+                    android:layout_width="180dp"
+                    android:layout_height="180dp"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:id="@+id/profile_avatar_letter"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_avatar"
+                        android:gravity="center"
+                        android:textColor="@android:color/white"
+                        android:textSize="64sp"
+                        android:textStyle="bold"
+                        android:text="A" />
+
+                    <ImageView
+                        android:id="@+id/profile_avatar_image"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone"
+                        android:contentDescription="@string/profile_avatar_cd" />
+                </FrameLayout>
+
+                <!-- Edit name + photo affordances row — pencil + green plus -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/profile_edit_name"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/profile_edit_name_cd"
+                        android:padding="6dp"
+                        android:src="@drawable/ic_edit_pencil"
+                        app:tint="?attr/tmTextPrimary"
+                        xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+                    <FrameLayout
+                        android:id="@+id/profile_change_photo"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/bg_round_icon_green"
+                        android:foreground="?attr/selectableItemBackground">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:contentDescription="@string/profile_change_photo_cd"
+                            android:padding="6dp"
+                            android:src="@drawable/ic_plus"
+                            app:tint="@android:color/white"
+                            xmlns:app="http://schemas.android.com/apk/res-auto" />
+                    </FrameLayout>
+                </LinearLayout>
+
+                <!-- Display name — large, centered, tappable to edit -->
+                <TextView
+                    android:id="@+id/profile_display_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="?attr/tmTextPrimary"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:text="Anonymous" />
+
+                <TextView
+                    android:id="@+id/profile_user_id"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="?attr/tmTextSecondary"
+                    android:textSize="13sp"
+                    android:text="user-…" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:background="?attr/tmStrokeSoft" />
+
+        <!-- Settings header label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="6dp"
+            android:text="@string/settings_title"
+            android:textColor="?attr/tmTextSecondary"
+            android:textSize="13sp" />
+
+        <!-- Settings rows host. Populated programmatically so the same builder
+             is shared with [SettingsFragment]. -->
+        <LinearLayout
+            android:id="@+id/profile_settings_rows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="24dp" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

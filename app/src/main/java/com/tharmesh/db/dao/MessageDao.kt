@@ -13,6 +13,9 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(messageEntity: MessageEntity): Long
 
+    @Query("SELECT COUNT(*) FROM messages")
+    fun count(): Int
+
     @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
     fun getById(id: Long): MessageEntity?
 
