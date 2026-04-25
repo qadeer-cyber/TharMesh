@@ -90,6 +90,57 @@ class MeshEngineSendCorrelationTest {
     }
 
     @Test
+    fun bundleSending_emittedSynchronouslyOnTransportAccept_beforeBundleSent() {
+        val transport = FakeTransport()
+        val engine = MeshEngine(localUserId = "me", transport = transport)
+        val events = mutableListOf<MeshEvent>()
+        engine.setEventListener { events.add(it) }
+
+        val bundle = engine.queueText(
+            destId = "peer",
+            payloadCiphertext = "hi",
+            ttlMs = 60_000L,
+            hops = 4
+        )
+
+        // BundleSending fires synchronously after transport.send() returns true.
+        val sending = events.filterIsInstance<MeshEvent.BundleSending>().single()
+        assertEquals(bundle.bundleId, sending.bundleId)
+        assertTrue("BundleSent must not precede PayloadSent",
+            events.none { it is MeshEvent.BundleSent })
+
+        val sendId = transport.sends[0].sendId
+        transport.fire(TransportEvent.PayloadSent(peerId = "peer", sendId = sendId, bytesCount = 32))
+
+        // Order: BundleSending first, then BundleSent.
+        val sendingIdx = events.indexOfFirst { it is MeshEvent.BundleSending }
+        val sentIdx = events.indexOfFirst { it is MeshEvent.BundleSent }
+        assertTrue("BundleSending fires before BundleSent", sendingIdx < sentIdx)
+    }
+
+    @Test
+    fun bundleSending_notEmittedWhenTransportRejects() {
+        val transport = FakeTransport().also { it.acceptSends = false }
+        val engine = MeshEngine(localUserId = "me", transport = transport)
+        val events = mutableListOf<MeshEvent>()
+        engine.setEventListener { events.add(it) }
+
+        engine.queueText(
+            destId = "peer",
+            payloadCiphertext = "hi",
+            ttlMs = 60_000L,
+            hops = 4
+        )
+
+        // Transport returned false → message stays QUEUED; no SENDING / SENT emitted.
+        // The retry loop will try again later.
+        assertTrue("Rejected send must not emit BundleSending",
+            events.none { it is MeshEvent.BundleSending })
+        assertTrue("Rejected send must not emit BundleSent",
+            events.none { it is MeshEvent.BundleSent })
+    }
+
+    @Test
     fun nonBundleSend_withSendIdZero_neverEmitsBundleSent() {
         val transport = FakeTransport()
         val engine = MeshEngine(localUserId = "me", transport = transport)

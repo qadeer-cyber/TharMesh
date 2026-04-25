@@ -72,16 +72,18 @@ interface MessageDao {
          WHERE bundleId = :bundleId
            AND (CASE :status
                   WHEN 'QUEUED' THEN 0
-                  WHEN 'SENT' THEN 1
-                  WHEN 'DELIVERED' THEN 2
-                  WHEN 'READ' THEN 3
+                  WHEN 'SENDING' THEN 1
+                  WHEN 'SENT' THEN 2
+                  WHEN 'DELIVERED' THEN 3
+                  WHEN 'READ' THEN 4
                   ELSE -1
                 END)
              > (CASE status
                   WHEN 'QUEUED' THEN 0
-                  WHEN 'SENT' THEN 1
-                  WHEN 'DELIVERED' THEN 2
-                  WHEN 'READ' THEN 3
+                  WHEN 'SENDING' THEN 1
+                  WHEN 'SENT' THEN 2
+                  WHEN 'DELIVERED' THEN 3
+                  WHEN 'READ' THEN 4
                   ELSE -1
                 END)
         """
@@ -117,12 +119,15 @@ interface MessageDao {
     /**
      * Outbound messages that have NOT yet been DELIVERED/READ — the store-and-forward
      * retry loop re-broadcasts these every tick in case a peer came back online.
+     * SENDING is included because a device that crashes between [Transport.send]
+     * accepting the payload and Nearby firing PayloadSent would otherwise wedge the
+     * row; on next launch the retry sweep re-broadcasts and advances it forward.
      */
     @Query(
         """
         SELECT * FROM messages
          WHERE fromUserId = :myUserId
-           AND (status = 'QUEUED' OR status = 'SENT' OR status = 'FAILED')
+           AND (status = 'QUEUED' OR status = 'SENDING' OR status = 'SENT' OR status = 'FAILED')
            AND bundleId IS NOT NULL
          ORDER BY timestamp ASC
          LIMIT 50
@@ -131,17 +136,17 @@ interface MessageDao {
     fun pendingOutbound(myUserId: String): List<MessageEntity>
 
     /**
-     * Flip a QUEUED row to FAILED on a transport-layer send error. Skips rows that are
-     * already past QUEUED (SENT/DELIVERED/READ) so a late Error on a retry doesn't
-     * regress a successfully-delivered message. Returns rows affected.
+     * Flip a QUEUED-or-SENDING row to FAILED on a transport-layer send error. Skips
+     * rows that are already past SENDING (SENT/DELIVERED/READ) so a late Error on a
+     * retry doesn't regress a successfully-delivered message. Returns rows affected.
      */
     @Query(
         """
         UPDATE messages
            SET status = 'FAILED'
          WHERE bundleId = :bundleId
-           AND status = 'QUEUED'
+           AND (status = 'QUEUED' OR status = 'SENDING')
         """
     )
-    fun markFailedIfStillQueued(bundleId: String): Int
+    fun markFailedIfStillInFlight(bundleId: String): Int
 }

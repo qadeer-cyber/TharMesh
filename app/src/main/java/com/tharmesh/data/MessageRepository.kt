@@ -227,6 +227,11 @@ class MessageRepository(
 
     private fun onMeshEvent(event: MeshEvent) {
         when (event) {
+            is MeshEvent.BundleSending -> scope.launch(Dispatchers.IO) {
+                // Transport accepted the bundle; bytes are queued inside Nearby but
+                // PayloadSent has not yet fired. Authoritative "in flight" state.
+                advanceByBundleId(event.bundleId, MessageStatus.SENDING)
+            }
             is MeshEvent.BundleSent -> scope.launch(Dispatchers.IO) {
                 messagesSent++
                 advanceByBundleId(event.bundleId, MessageStatus.SENT)
@@ -243,9 +248,10 @@ class MessageRepository(
                 handleIncomingBundle(event.bundle)
             }
             is MeshEvent.BundleFailed -> scope.launch(Dispatchers.IO) {
-                // Only flip QUEUED rows — a late Error on a retry must not regress
-                // a message that already advanced to SENT/DELIVERED/READ.
-                val updated = db.messageDao().markFailedIfStillQueued(event.bundleId)
+                // Only flip rows that are still in-flight (QUEUED or SENDING). A late
+                // Error arriving after the message already advanced to SENT/DELIVERED/READ
+                // must not regress it — the retry loop promoted it forward correctly.
+                val updated = db.messageDao().markFailedIfStillInFlight(event.bundleId)
                 if (updated > 0) {
                     val msg = db.messageDao().getByBundleId(event.bundleId) ?: return@launch
                     db.conversationDao().setLastMessage(

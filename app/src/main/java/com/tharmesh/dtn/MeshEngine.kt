@@ -175,11 +175,15 @@ class MeshEngine(
         val accepted = transport.send(bundle.destId, encodeFrame(frame), sendId)
         if (!accepted) {
             // Defensive: if the transport returned false AND didn't fire Error synchronously
-            // for some reason, release the correlation so we don't leak.
+            // for some reason, release the correlation so we don't leak. Message stays
+            // QUEUED; the retry loop will try again when a peer connects.
             synchronized(pendingLock) { pendingBundleSends.remove(sendId) }
+            return
         }
-        // NB: BundleSent is NOT emitted here. The repository only hears about it when
-        // TransportEvent.PayloadSent fires back with our sendId (see onTransportEvent).
+        // Transport accepted the bundle — repository advances QUEUED → SENDING. Actual
+        // "bytes on wire" confirmation still comes later via TransportEvent.PayloadSent,
+        // at which point BundleSent (→ status=SENT) is emitted in onTransportEvent.
+        eventListener?.invoke(MeshEvent.BundleSending(bundle.bundleId))
     }
 
     private fun onTransportEvent(event: TransportEvent) {
@@ -379,6 +383,14 @@ class MeshEngine(
 }
 
 sealed class MeshEvent {
+    /**
+     * The transport accepted the bundle for send (endpoint known, bytes queued in
+     * Nearby's send buffer) but PayloadSent has not yet fired. Emitted exactly once
+     * per successful Transport.send() call — the repository advances the message to
+     * SENDING. This is the first authoritative "in flight" signal; [BundleSent]
+     * below is the confirmation that bytes actually left the radio.
+     */
+    data class BundleSending(val bundleId: String) : MeshEvent()
     data class BundleSent(val bundleId: String) : MeshEvent()
     data class BundleAcked(val bundleId: String, val ackedByUserId: String) : MeshEvent()
     data class BundleRead(val bundleId: String, val readByUserId: String) : MeshEvent()

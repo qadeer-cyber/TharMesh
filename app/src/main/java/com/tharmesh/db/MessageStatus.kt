@@ -2,6 +2,15 @@ package com.tharmesh.db
 
 object MessageStatus {
     const val QUEUED = "QUEUED"
+    /**
+     * Transport.send(...) was accepted (endpoint known, bytes queued in Nearby's send
+     * buffer) but the PayloadSent callback has not yet fired. This is the authoritative
+     * "in flight" state between QUEUED and SENT — we used to collapse it into QUEUED,
+     * but then there was no way to tell "not yet handed to transport" from "handed to
+     * transport, awaiting confirmation" for a stuck retry. Rendered in the UI exactly
+     * like QUEUED (no tick yet) to keep the layout unchanged.
+     */
+    const val SENDING = "SENDING"
     const val SENT = "SENT"
     const val DELIVERED = "DELIVERED"
     const val READ = "READ"
@@ -9,9 +18,10 @@ object MessageStatus {
 
     fun rank(status: String): Int = when (status) {
         QUEUED -> 0
-        SENT -> 1
-        DELIVERED -> 2
-        READ -> 3
+        SENDING -> 1
+        SENT -> 2
+        DELIVERED -> 3
+        READ -> 4
         FAILED -> -1
         else -> -1
     }

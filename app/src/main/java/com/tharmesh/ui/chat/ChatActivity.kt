@@ -133,7 +133,12 @@ class ChatActivity : AppCompatActivity() {
     private fun updateTopStatus(msgs: List<MessageEntity>) {
         val lastMine = msgs.lastOrNull { it.fromUserId == myUserId }
         topStatus.text = when (lastMine?.status) {
-            MessageStatus.QUEUED -> getString(R.string.chat_header_offline) + " · ⏳"
+            // SENDING renders the same as QUEUED intentionally — the UI contract is
+            // "no tick until bytes are on the wire". SENDING is an internal correctness
+            // state (transport accepted, PayloadSent pending) that users don't need to
+            // see separately. Keeping both branches here preserves the exhaustive when.
+            MessageStatus.QUEUED,
+            MessageStatus.SENDING -> getString(R.string.chat_header_offline) + " · ⏳"
             MessageStatus.SENT -> "✓ sent"
             MessageStatus.DELIVERED -> "✓✓ delivered"
             MessageStatus.READ -> "✓✓ read"
@@ -216,7 +221,8 @@ class ChatActivity : AppCompatActivity() {
         }
 
         private fun statusGlyph(status: String): String = when (status) {
-            MessageStatus.QUEUED -> "⏳"
+            MessageStatus.QUEUED,
+            MessageStatus.SENDING -> "⏳"
             MessageStatus.SENT -> "✓"
             MessageStatus.DELIVERED -> "✓✓"
             MessageStatus.READ -> "✓✓"
