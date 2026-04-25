@@ -61,6 +61,8 @@ class ContactsFragment : Fragment() {
     private var lastContacts: List<ContactEntity> = emptyList()
     private var lastNearby: Set<String> = emptySet()
     private var lastVerified: Set<String> = emptySet()
+    private var lastTrustStates: Map<String, PeerTrustStore.TrustState> = emptyMap()
+    private var lastFingerprints: Map<String, String?> = emptyMap()
     private var query: String = ""
     private var activeFilter: Filter = Filter.ALL
 
@@ -115,28 +117,55 @@ class ContactsFragment : Fragment() {
             }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val verifiedFlow = repository.observeContacts() // proxy; verified is per-bind
+            // Combine the two flows on the default dispatcher (no DAO reads),
+            // then hop to IO once per emission to pre-compute the trust
+            // shield + short-fingerprint snapshots so the adapter can render
+            // each row from a Map lookup on the main thread. The Room DAO
+            // (PeerIdentityDao.findByUserId) is NOT main-thread-safe — see
+            // AppDatabase.kt where allowMainThreadQueries() is intentionally
+            // not set — so every trustState / storedKey call must happen
+            // here, before the adapter binds.
             combine(
                 repository.observeContacts(),
-                TharMeshApp.get().directory.nodes,
-                verifiedFlow
-            ) { contacts, nodes, _ ->
-                Triple(
-                    contacts,
-                    nodes.filter { it.online }.map { it.userId }.toSet(),
-                    // Verified set is a one-shot DAO read — cheap, and the
-                    // contacts flow re-emits whenever Room writes happen so
-                    // a fresh markVerified call refreshes within the same
-                    // coroutine cycle as the upsert that preceded it.
-                    fetchVerified()
-                )
-            }.collectLatest { (contacts, online, verified) ->
+                TharMeshApp.get().directory.nodes
+            ) { contacts, nodes ->
+                contacts to nodes.filter { it.online }.map { it.userId }.toSet()
+            }.collectLatest { (contacts, online) ->
+                val snapshot = withContext(Dispatchers.IO) { computeSnapshot(contacts) }
                 lastContacts = contacts
                 lastNearby = online
-                lastVerified = verified
+                lastVerified = snapshot.verified
+                lastTrustStates = snapshot.trustStates
+                lastFingerprints = snapshot.fingerprints
                 applyFilter()
             }
         }
+    }
+
+    private data class Snapshot(
+        val verified: Set<String>,
+        val trustStates: Map<String, PeerTrustStore.TrustState>,
+        val fingerprints: Map<String, String?>
+    )
+
+    /**
+     * IO-bound snapshot of the trust + fingerprint columns for every contact
+     * in the current emission. Called from a [Dispatchers.IO] context so the
+     * underlying [com.tharmesh.identity.PeerTrustStore] DAO calls
+     * (findByUserId, getVerifiedUserIds) never touch the main thread.
+     */
+    private fun computeSnapshot(contacts: List<ContactEntity>): Snapshot {
+        val app = TharMeshApp.get()
+        val store = app.peerTrustStore
+        val verified = app.database.peerIdentityDao().getVerifiedUserIds().toSet()
+        val trustStates = HashMap<String, PeerTrustStore.TrustState>(contacts.size)
+        val fingerprints = HashMap<String, String?>(contacts.size)
+        for (c in contacts) {
+            trustStates[c.userId] = store.trustState(c.userId)
+            val full = store.storedKey(c.userId)?.let { com.tharmesh.identity.CryptoIdentity.fingerprintOf(it) }
+            fingerprints[c.userId] = full?.let(Companion::shortFingerprint)
+        }
+        return Snapshot(verified, trustStates, fingerprints)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -202,23 +231,13 @@ class ContactsFragment : Fragment() {
         startActivity(intent)
     }
 
-    private suspend fun fetchVerified(): Set<String> = withContext(Dispatchers.IO) {
-        TharMeshApp.get().database.peerIdentityDao().getVerifiedUserIds().toSet()
-    }
-
     private fun applyFilter() {
         val filtered = filterContacts(lastContacts, query, activeFilter, lastNearby, lastVerified)
         adapter.submit(
             items = filtered,
             online = lastNearby,
-            trustStateOf = { TharMeshApp.get().peerTrustStore.trustState(it) },
-            shortFingerprintOf = { userId ->
-                val full = TharMeshApp.get().peerTrustStore.let { store ->
-                    val key = store.storedKey(userId) ?: return@let null
-                    com.tharmesh.identity.CryptoIdentity.fingerprintOf(key)
-                }
-                full?.let(Companion::shortFingerprint)
-            }
+            trustStates = lastTrustStates,
+            fingerprints = lastFingerprints
         )
         empty.visibility = if (filtered.isEmpty()) View.VISIBLE else View.GONE
     }
@@ -274,20 +293,20 @@ class ContactsFragment : Fragment() {
 
         private val items: MutableList<ContactEntity> = mutableListOf()
         private var online: Set<String> = emptySet()
-        private var trustStateOf: (String) -> PeerTrustStore.TrustState = { PeerTrustStore.TrustState.Unknown }
-        private var shortFingerprintOf: (String) -> String? = { null }
+        private var trustStates: Map<String, PeerTrustStore.TrustState> = emptyMap()
+        private var fingerprints: Map<String, String?> = emptyMap()
 
         fun submit(
             items: List<ContactEntity>,
             online: Set<String>,
-            trustStateOf: (String) -> PeerTrustStore.TrustState,
-            shortFingerprintOf: (String) -> String?
+            trustStates: Map<String, PeerTrustStore.TrustState>,
+            fingerprints: Map<String, String?>
         ) {
             this.items.clear()
             this.items.addAll(items)
             this.online = online
-            this.trustStateOf = trustStateOf
-            this.shortFingerprintOf = shortFingerprintOf
+            this.trustStates = trustStates
+            this.fingerprints = fingerprints
             notifyDataSetChanged()
         }
 
@@ -303,7 +322,7 @@ class ContactsFragment : Fragment() {
             holder.avatar.text = c.displayName.take(1).uppercase()
             holder.dot.visibility = if (c.userId in online) View.VISIBLE else View.GONE
 
-            val fp = shortFingerprintOf(c.userId)
+            val fp = fingerprints[c.userId]
             if (fp != null) {
                 holder.fingerprint.visibility = View.VISIBLE
                 holder.fingerprint.text = fp
@@ -311,7 +330,7 @@ class ContactsFragment : Fragment() {
                 holder.fingerprint.visibility = View.GONE
             }
 
-            ShieldRenderer.bind(holder.shield, trustStateOf(c.userId))
+            ShieldRenderer.bind(holder.shield, trustStates[c.userId] ?: PeerTrustStore.TrustState.Unknown)
             holder.itemView.setOnClickListener { onClick(c) }
             holder.itemView.setOnLongClickListener { onLongPress(c); true }
         }
