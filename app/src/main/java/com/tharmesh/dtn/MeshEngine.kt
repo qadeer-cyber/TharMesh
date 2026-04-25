@@ -5,6 +5,7 @@ import com.tharmesh.identity.PeerTrustStore
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.TransportEvent
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -108,6 +109,26 @@ class MeshEngine(
     private val peersLock = Any()
     private val connectedPeers: MutableSet<String> = HashSet()
 
+    /**
+     * Per-instance retired flag. PR #14 follow-up (PR #15 review):
+     * `TharMeshApp.ensureMeshStarted()` launches a deferred coroutine that
+     * checks `isStartCurrent(capturedEngine)` BEFORE calling [start], but the
+     * check and the call are not atomic — `stopMesh()` can interleave on the
+     * main thread between them. Without this flag, the coroutine would
+     * resurrect a transport that `stopMesh` had just torn down, leaving the
+     * old engine advertising the old identity with no reference to clean it
+     * up later (the post-flight gate intentionally avoids calling
+     * `capturedEngine.stop()` because it would tear down the singleton
+     * `Nearby.getConnectionsClient(applicationContext)` shared by every
+     * transport in the process).
+     *
+     * With this flag: `stop()` flips it before tearing down the transport,
+     * and `start()` returns immediately if it was set. A new
+     * `MeshEngine` for a different identity has its own flag, so this never
+     * blocks legitimate restarts.
+     */
+    private val closed = AtomicBoolean(false)
+
     init {
         transport.setListener { event: TransportEvent ->
             onTransportEvent(event)
@@ -115,6 +136,12 @@ class MeshEngine(
     }
 
     fun start() {
+        // PR #14 follow-up: refuse to restart an engine that has already been
+        // retired. See [closed] kdoc for the race this closes.
+        if (closed.get()) {
+            MeshLog.startAfterStopIgnored(localUserId)
+            return
+        }
         // Rehydrate the in-memory cache from the persistent store BEFORE the transport
         // comes up. Two invariants matter:
         //  1. An incoming INV sync frame after start() must reflect bundles we already
@@ -141,6 +168,11 @@ class MeshEngine(
     }
 
     fun stop() {
+        // PR #14 follow-up: flip the retired flag BEFORE tearing down the
+        // transport. A concurrent ensureMeshStarted coroutine that races past
+        // its pre-flight gate and calls start() on this instance will see the
+        // flag and bail before re-touching the transport.
+        closed.set(true)
         transport.stop()
         // The transport's stop() tears down endpoints but does not fire PeerDisconnected
         // events — manually clear the peer-connection set so a subsequent start() does

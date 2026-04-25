@@ -83,4 +83,10 @@ internal object MeshLog {
     fun peerKeyMismatch(userId: String, storedFp: String, presentedFp: String) {
         Log.w(TAG, "peer_key_mismatch userId=$userId stored_fp=$storedFp presented_fp=$presentedFp")
     }
+
+    // --- PR #14 follow-up: lifecycle ---------------------------------------
+
+    fun startAfterStopIgnored(localUserId: String) {
+        Log.w(TAG, "start_after_stop_ignored userId=$localUserId reason=engine_retired")
+    }
 }
