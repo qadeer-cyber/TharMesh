@@ -406,4 +406,44 @@ class MessageRepositoryStuckSendingRecoveryTest {
         )
         assertEquals(listOf("p1"), cleared)
     }
+
+    @Test
+    fun persistenceHooks_fireAfterStateChanges() {
+        val policy = newPolicy()
+        val persisted = mutableListOf<String>()
+        val forgotten = mutableListOf<String>()
+
+        // Success path: onStatePersisted fires AFTER recordAttempt,
+        // onStateForgotten does not fire.
+        runRetryTickStandalone(
+            nowMs = 0L,
+            pending = listOf(row(40, "p1", MessageStatus.QUEUED)),
+            retryPolicy = policy,
+            onRetryAttempt = { },
+            onStuckSendingRecovered = { },
+            retryBundle = { true },
+            onStatePersisted = { persisted.add(it) },
+            onStateForgotten = { forgotten.add(it) }
+        )
+        assertEquals(listOf("p1"), persisted)
+        assertTrue("onStateForgotten must NOT fire on the success path", forgotten.isEmpty())
+        // State exists in the policy at the moment the hook fires — verify
+        // that contract by checking the current policy snapshot now.
+        assertEquals(1, policy.currentState("p1")?.attemptCount)
+
+        // TTL-expiry path: onStateForgotten fires AFTER onTtlExpired,
+        // onStatePersisted does not fire.
+        runRetryTickStandalone(
+            nowMs = 100_000L,
+            pending = listOf(row(40, "p1", MessageStatus.QUEUED)),
+            retryPolicy = policy,
+            onRetryAttempt = { },
+            onStuckSendingRecovered = { },
+            retryBundle = { false },
+            onStatePersisted = { persisted.add(it) },
+            onStateForgotten = { forgotten.add(it) }
+        )
+        assertEquals(listOf("p1"), forgotten)
+        assertEquals("no extra persist on TTL tick", 1, persisted.size)
+    }
 }

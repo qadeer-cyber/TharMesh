@@ -16,11 +16,13 @@ import com.tharmesh.db.dao.ContactDao
 import com.tharmesh.db.dao.ConversationDao
 import com.tharmesh.db.dao.MessageDao
 import com.tharmesh.db.dao.PeerIdentityDao
+import com.tharmesh.db.dao.RetryStateDao
 import com.tharmesh.db.entity.BundleEntity
 import com.tharmesh.db.entity.ContactEntity
 import com.tharmesh.db.entity.ConversationEntity
 import com.tharmesh.db.entity.MessageEntity
 import com.tharmesh.db.entity.PeerIdentityEntity
+import com.tharmesh.db.entity.RetryStateEntity
 
 @Database(
     entities = [
@@ -28,9 +30,10 @@ import com.tharmesh.db.entity.PeerIdentityEntity
         BundleEntity::class,
         ConversationEntity::class,
         ContactEntity::class,
-        PeerIdentityEntity::class
+        PeerIdentityEntity::class,
+        RetryStateEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -40,6 +43,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
     abstract fun contactDao(): ContactDao
     abstract fun peerIdentityDao(): PeerIdentityDao
+    abstract fun retryStateDao(): RetryStateDao
 
     companion object {
         @Volatile
@@ -64,6 +68,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Additive migration from schema v5 → v6. Creates the `retry_state`
+         * table that mirrors [com.tharmesh.dtn.RetryPolicy]'s per-bundle
+         * backoff state + the [com.tharmesh.data.MessageRepository]
+         * priority flag so the SOS retry curve and the priority bit
+         * survive a forced process kill. Existing rows in other tables
+         * are untouched.
+         */
+        @JvmField
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `retry_state` (" +
+                        "`bundleId` TEXT NOT NULL, " +
+                        "`attemptCount` INTEGER NOT NULL, " +
+                        "`nextRetryAt` INTEGER NOT NULL, " +
+                        "`priority` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`bundleId`))"
+                )
+            }
+        }
+
         @JvmStatic
         fun getInstance(context: Context): AppDatabase {
             val existing = instance
@@ -80,7 +106,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tharmesh.db"
                 )
-                    .addMigrations(MIGRATION_4_5)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigration()
                     .build()
                 instance = created
