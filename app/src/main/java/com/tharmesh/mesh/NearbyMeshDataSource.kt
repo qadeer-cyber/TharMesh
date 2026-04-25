@@ -63,6 +63,15 @@ class NearbyMeshDataSource(
         publish()
     }
 
+    /**
+     * Unregister the peer listener from the engine. Call when the data source is about
+     * to be discarded (e.g. in [com.tharmesh.TharMeshApp.stopMesh]) so we do not leak
+     * callbacks to a dead `_nodes` flow across sign-out / sign-in cycles.
+     */
+    fun close() {
+        engine.removePeerListener(listener)
+    }
+
     private fun onPeerEvent(event: MeshEvent) {
         synchronized(lock) {
             when (event) {

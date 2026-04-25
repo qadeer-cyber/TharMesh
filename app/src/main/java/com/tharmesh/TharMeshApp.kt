@@ -99,6 +99,14 @@ class TharMeshApp : Application() {
         if (!NearbyPermissions.allGranted(this)) return
         val engine = meshEngine ?: return
         val repo = repository
+        // After stopMesh(), realSource was closed + nulled and the directory swapped
+        // to EmptyMeshDataSource. Re-wire a fresh NearbyMeshDataSource so peer events
+        // flow back into the Devices tab on sign-out → sign-in cycles.
+        if (realSource == null) {
+            val source = NearbyMeshDataSource(engine)
+            directory.setSource(source)
+            realSource = source
+        }
         engine.start()
         repo.startStoreAndForwardLoop()
         // Data source flips to SCANNING until the first peer arrives; makes the Devices
@@ -112,9 +120,12 @@ class TharMeshApp : Application() {
         if (!started) return
         repository.stopStoreAndForwardLoop()
         meshEngine?.stop()
-        // Swap back to an empty source so any residual peer list is dropped — otherwise
-        // a user signing out and a different user signing back in would briefly see
-        // stale peers. Directory reference stays stable.
+        // Close the old data source (unregister its engine peer listener) and swap back
+        // to an empty source so any residual peer list is dropped — otherwise a user
+        // signing out and a different user signing back in would briefly see stale peers.
+        // Directory reference stays stable. ensureMeshStarted() will recreate a fresh
+        // NearbyMeshDataSource on the next start.
+        realSource?.close()
         directory.setSource(EmptyMeshDataSource())
         realSource = null
         started = false

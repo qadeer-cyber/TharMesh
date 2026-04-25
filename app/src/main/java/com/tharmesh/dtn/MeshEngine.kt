@@ -66,6 +66,13 @@ class MeshEngine(
 
     fun stop() {
         transport.stop()
+        // The transport's stop() tears down endpoints but does not fire PeerDisconnected
+        // events — manually clear the peer-connection set so a subsequent start() does
+        // not try to send to stale peers that would immediately fail and flip messages
+        // to FAILED. receivedFrom is tied to the same session's transport identity, so
+        // clear it too.
+        synchronized(peersLock) { connectedPeers.clear() }
+        synchronized(cacheLock) { receivedFrom.clear() }
     }
 
     fun setEventListener(listener: (MeshEvent) -> Unit) {
