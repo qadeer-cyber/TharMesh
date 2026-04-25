@@ -50,6 +50,20 @@ class NearbyConnectionsTransport(
     private val userIdToEndpoint: MutableMap<String, String> = ConcurrentHashMap()
 
     /**
+     * userIds for which we have already dispatched a [TransportEvent.PeerFound]
+     * during the lifetime of this transport. Nearby calls
+     * [EndpointDiscoveryCallback.onEndpointFound] only on the *discovering*
+     * side; the *advertising* side jumps straight to
+     * [ConnectionLifecycleCallback.onConnectionInitiated], which means
+     * downstream consumers (and the diagnostics counters) never see a
+     * PeerFound event for advertise-only roles. We dispatch a synthetic
+     * PeerFound on connection initiation when we have not yet recorded one
+     * for that userId, so both sides see the same lifecycle.
+     */
+    private val peerFoundDispatched: MutableSet<String> =
+        java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /**
      * Background dispatch thread for every [TransportEvent] we hand to the
      * listener. Nearby Connections delivers all of its callbacks (
      * [PayloadCallback.onPayloadReceived], [ConnectionLifecycleCallback]
@@ -96,6 +110,7 @@ class NearbyConnectionsTransport(
         client.stopDiscovery()
         endpointToUserId.clear()
         userIdToEndpoint.clear()
+        peerFoundDispatched.clear()
         // Drain in-flight callbacks then quit. quitSafely lets queued events
         // fire (so the engine sees a clean PeerDisconnected sequence on
         // teardown) before the looper exits.
@@ -166,7 +181,9 @@ class NearbyConnectionsTransport(
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             val remoteUserId = info.endpointName
-            dispatch(TransportEvent.PeerFound(remoteUserId, remoteUserId))
+            if (peerFoundDispatched.add(remoteUserId)) {
+                dispatch(TransportEvent.PeerFound(remoteUserId, remoteUserId))
+            }
             // Auto-request connection.
             client.requestConnection(localPeerId, endpointId, connectionLifecycleCallback)
                 .addOnFailureListener { e ->
@@ -178,6 +195,7 @@ class NearbyConnectionsTransport(
             val userId = endpointToUserId.remove(endpointId)
             if (userId != null) {
                 userIdToEndpoint.remove(userId, endpointId)
+                peerFoundDispatched.remove(userId)
                 dispatch(TransportEvent.PeerDisconnected(userId))
             }
         }
@@ -188,6 +206,11 @@ class NearbyConnectionsTransport(
             val remoteUserId = info.endpointName
             endpointToUserId[endpointId] = remoteUserId
             userIdToEndpoint[remoteUserId] = endpointId
+            // Advertise-only side never gets onEndpointFound; emit a
+            // synthetic PeerFound so listeners see a consistent lifecycle.
+            if (peerFoundDispatched.add(remoteUserId)) {
+                dispatch(TransportEvent.PeerFound(remoteUserId, remoteUserId))
+            }
             // Auto-accept. In a real deployment we'd verify info.authenticationDigits
             // against a QR / out-of-band channel; MVP auto-accepts everyone in range.
             client.acceptConnection(endpointId, payloadCallback)
@@ -212,6 +235,7 @@ class NearbyConnectionsTransport(
             val userId = endpointToUserId.remove(endpointId)
             if (userId != null) {
                 userIdToEndpoint.remove(userId, endpointId)
+                peerFoundDispatched.remove(userId)
                 dispatch(TransportEvent.PeerDisconnected(userId))
             }
         }
