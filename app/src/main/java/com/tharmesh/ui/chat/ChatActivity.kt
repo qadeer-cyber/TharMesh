@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -51,6 +52,7 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var titleView: TextView
     private lateinit var topStatus: TextView
     private lateinit var chatAvatar: TextView
+    private lateinit var trustShield: ImageView
     private lateinit var replyBar: View
     private lateinit var replyBarAuthor: TextView
     private lateinit var replyBarPreview: TextView
@@ -77,6 +79,7 @@ class ChatActivity : AppCompatActivity() {
         titleView = findViewById(R.id.text_chat_title)
         topStatus = findViewById(R.id.text_top_status)
         chatAvatar = findViewById(R.id.text_chat_avatar)
+        trustShield = findViewById(R.id.icon_chat_shield)
         recycler = findViewById(R.id.recycler_messages)
         input = findViewById(R.id.edit_message)
         sendButton = findViewById(R.id.button_send)
@@ -129,7 +132,41 @@ class ChatActivity : AppCompatActivity() {
         super.onResume()
         if (toUserId.isNotEmpty()) {
             lifecycleScope.launch { repository.markChatRead(toUserId) }
+            // Stage 6.2 — refresh the shield in case the trust state was just
+            // updated (e.g. user came back from ContactsActivity after a QR
+            // verification).
+            refreshTrustShield()
         }
+    }
+
+    private fun refreshTrustShield() {
+        if (toUserId.isEmpty()) return
+        lifecycleScope.launch {
+            val state = withContext(Dispatchers.IO) {
+                TharMeshApp.get().peerTrustStore.trustState(toUserId)
+            }
+            com.tharmesh.ui.contacts.ShieldRenderer.bind(trustShield, state)
+            // Always keep the shield visible in the chat header, even for an
+            // Unknown peer (no row yet) — render it as the muted outline so
+            // users learn there's a trust story per chat.
+            if (trustShield.visibility == View.GONE) {
+                trustShield.visibility = View.VISIBLE
+                trustShield.setImageResource(R.drawable.ic_shield_outline)
+                trustShield.contentDescription = getString(R.string.cd_shield_tofu)
+                androidx.core.widget.ImageViewCompat.setImageTintList(
+                    trustShield,
+                    android.content.res.ColorStateList.valueOf(
+                        resolveAttrColor(android.R.attr.textColorSecondary)
+                    )
+                )
+            }
+        }
+    }
+
+    private fun resolveAttrColor(attr: Int): Int {
+        val tv = android.util.TypedValue()
+        theme.resolveAttribute(attr, tv, true)
+        return tv.data
     }
 
     private fun start() {

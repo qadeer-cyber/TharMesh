@@ -12,10 +12,20 @@ import androidx.appcompat.app.AppCompatActivity
 import com.tharmesh.identity.InviteCode
 import com.tharmesh.identity.QrCodec
 
+/**
+ * Scan / paste a peer's QR or invite code. Returns the resolved peer userId
+ * via [RESULT_CODE]. Stage 6.2 also returns the scanned public key via
+ * [RESULT_PUB_KEY] (only present when the input parsed as a [QrCodec]
+ * payload, since [InviteCode] does not carry a key); callers use that to
+ * out-of-band-verify the peer's TOFU pin via
+ * [com.tharmesh.identity.PeerTrustStore.markVerified].
+ */
 class ScanQrActivity : AppCompatActivity() {
 
     companion object {
         const val RESULT_CODE = "result_code"
+        const val RESULT_PUB_KEY = "result_pub_key"
+        const val RESULT_DISPLAY_NAME = "result_display_name"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,14 +57,18 @@ class ScanQrActivity : AppCompatActivity() {
 
             val qr = QrCodec.decode(raw)
             val invite = InviteCode.parse(raw)
-            val resolved = when {
+            val resolvedUserId = when {
                 qr != null && qr.userId.isNotBlank() -> qr.userId
                 invite != null -> invite.userId
                 else -> raw
             }
+            val resolvedPubKey = qr?.publicKeyBase64?.takeIf { it.isNotBlank() }
+            val resolvedName = qr?.name?.takeIf { it.isNotBlank() }
 
             val data = Intent()
-            data.putExtra(RESULT_CODE, resolved)
+            data.putExtra(RESULT_CODE, resolvedUserId)
+            if (resolvedPubKey != null) data.putExtra(RESULT_PUB_KEY, resolvedPubKey)
+            if (resolvedName != null) data.putExtra(RESULT_DISPLAY_NAME, resolvedName)
             setResult(Activity.RESULT_OK, data)
             finish()
         }
