@@ -242,7 +242,7 @@ The screen also includes:
 - **Battery cost.** Continuous Nearby advertising and discovery is non-trivial — expect a measurable battery hit when the mesh is left running for hours. Power-aware duty cycling is on the roadmap.
 - **SOS priority is in-memory.** The "SOS curve" applies for as long as the app process is alive. After a forced restart, SOS bundles revert to the default retry curve until manually re-fired. A persisted-priority schema bump is planned.
 - **Field-test toggles take effect on next sign-in.** They are not hot-swappable while the engine is running.
-- **No CI yet.** All verification is local (`./gradlew testDebugUnitTest`, currently 129 tests) plus the on-device field-test checklist above.
+- **CI runs `assembleDebug` + `testDebugUnitTest` on every PR** (GitHub Actions, `.github/workflows/android.yml`). On-device field tests are still manual — the CI job covers unit tests only, not instrumented or multi-radio scenarios.
 - **No file or media transfer.** TharMesh today is a small-text-payload messaging substrate.
 
 ---
@@ -257,7 +257,6 @@ The following items are tracked but not yet implemented. They are listed in roug
 - Broadcast channels (1-to-many) with TTL-bounded fan-out.
 - Battery-aware duty cycling for the Nearby radio.
 - iOS client investigation (likely via a different transport — Nearby is Android-only).
-- GitHub Actions CI for `assembleDebug` and `testDebugUnitTest` on every PR.
 - Per-peer relayed-bytes accounting for fairness and incentive policies.
 
 ---
