@@ -564,7 +564,12 @@ class MeshEngine(
             // buffer (the very scenario PerPeerSendPacer was added to prevent).
             // Skip-and-let-originator-retry is fine: dropped GET responses are
             // covered by the next origination retry tick.
-            if (pacer != null && !pacer.acquireSlot(peerId, nowMs)) {
+            //
+            // Priority bundles (SOS) bypass the pacer here for the same reason
+            // they bypass it in [broadcastBundle]: the contract on [queueText]
+            // promises full-rate fanout for SOS, including via the INV/GET
+            // serving path when a peer connects late and pulls cached bundles.
+            if (!bundle.priority && pacer != null && !pacer.acquireSlot(peerId, nowMs)) {
                 onSendPaced(peerId)
                 continue
             }

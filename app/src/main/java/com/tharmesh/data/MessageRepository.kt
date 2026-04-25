@@ -62,7 +62,8 @@ class MessageRepository(
      * Stage 5.3 — set of bundleIds that should be retried using the aggressive
      * [RetryConfig.SOS] curve instead of the [retryConfig] default. Populated
      * by [broadcastSos] and cleared in [onMeshEvent] when the bundle reaches
-     * a truly terminal state — DELIVERED or READ. FAILED is intentionally
+     * a truly terminal state — DELIVERED or READ — and in the retry tick when
+     * the bundle's TTL expires (see [runRetryTick]). FAILED is intentionally
      * NOT a clear point: FAILED rows are included in the store-and-forward
      * [pendingOutbound] sweep AND are eligible for manual [retryFailedMessage]
      * retries, so the bundle should keep the SOS curve until it is actually
@@ -72,6 +73,10 @@ class MessageRepository(
 
     private fun isPriority(bundleId: String): Boolean =
         synchronized(priorityBundleIds) { bundleId in priorityBundleIds }
+
+    private fun clearPriority(bundleId: String) {
+        synchronized(priorityBundleIds) { priorityBundleIds.remove(bundleId) }
+    }
 
     /**
      * Stage 5.2 — coalesce rapid `PeerConnected` triggers for the same peer into
@@ -497,7 +502,11 @@ class MessageRepository(
             retryBundle = { bid -> mesh.retryBundle(bid) },
             // Stage 5.3 — SOS bundles use the aggressive curve; non-priority
             // bundles fall through to the policy's default config.
-            configFor = { bid -> if (isPriority(bid)) RetryConfig.SOS else null }
+            configFor = { bid -> if (isPriority(bid)) RetryConfig.SOS else null },
+            // Stage 5.3 — drop SOS priority tracking on TTL expiry too, not
+            // just on DELIVERED / READ. Without this the priority set leaks
+            // one UUID per SOS target whose TTL eventually elapses.
+            onTtlClear = { bid -> clearPriority(bid) }
         )
     }
 
@@ -623,7 +632,15 @@ internal fun runRetryTickStandalone(
      * while normal bundles continue on the standard 5s→10s→…→60s curve.
      * Default: always return null (single-curve behaviour, identical to Stage 5.2).
      */
-    configFor: (String) -> RetryConfig? = { null }
+    configFor: (String) -> RetryConfig? = { null },
+    /**
+     * Stage 5.3 — invoked when [retryBundle] returns false (the no-op path,
+     * most commonly TTL expiry). Lets the caller drop any per-bundle bookkeeping
+     * keyed off the bundleId — e.g. SOS priority tracking — that would
+     * otherwise leak alongside the now-released [retryPolicy] state. Default:
+     * no-op so non-priority callers see Stage 5.2 behaviour unchanged.
+     */
+    onTtlClear: (String) -> Unit = { }
 ) {
     for (msg in pending) {
         val bid = msg.bundleId ?: continue
@@ -638,6 +655,7 @@ internal fun runRetryTickStandalone(
             // avoid unbounded growth in the policy map; do NOT increment retry
             // counters, since no retry actually happened.
             retryPolicy.onTtlExpired(bid)
+            onTtlClear(bid)
             continue
         }
         if (wasStuckSending) {
