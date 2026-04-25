@@ -76,11 +76,14 @@
         <item name="android:minHeight">48dp</item>
     </style>
 
-    <!-- Stage 6.1 — WhatsApp-style filter chips on the Chats home (All /
-         Unread / Nearby / Trusted). bg_chip_filter resolves to a themed
-         pill that picks accent on selected, surface on unselected. -->
-    <style name="TmChip.Filter" parent="Widget.AppCompat.Button.Borderless">
+    <!-- WhatsApp-style filter chips on the Chats home (All / Unread / Nearby
+         / Trusted). bg_chip_filter is a themed pill drawable; the parent is
+         deliberately empty so the AppCompat Button parent doesn't apply its
+         backgroundTint from colorAccent (which was painting every chip
+         saturated WhatsApp green regardless of activated state). -->
+    <style name="TmChip.Filter" parent="">
         <item name="android:background">@drawable/bg_chip_filter</item>
+        <item name="android:backgroundTint">@android:color/transparent</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">13sp</item>
         <item name="android:minWidth">0dp</item>
@@ -90,6 +93,7 @@
         <item name="android:paddingTop">8dp</item>
         <item name="android:paddingBottom">8dp</item>
         <item name="android:layout_marginEnd">8dp</item>
-        <item name="android:textColor">?attr/tmTextPrimary</item>
+        <item name="android:textColor">@color/chip_filter_text</item>
+        <item name="android:gravity">center</item>
     </style>
 </resources>
