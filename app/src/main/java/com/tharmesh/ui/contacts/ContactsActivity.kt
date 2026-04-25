@@ -9,6 +9,8 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import android.widget.ImageView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -18,6 +20,7 @@ import tharmesh.app.R
 import com.tharmesh.TharMeshApp
 import com.tharmesh.data.MessageRepository
 import com.tharmesh.db.entity.ContactEntity
+import com.tharmesh.identity.PeerTrustStore
 import com.tharmesh.ui.chat.ChatActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -39,12 +42,15 @@ class ContactsActivity : AppCompatActivity() {
         val recycler: RecyclerView = findViewById(R.id.recycler_contacts)
         val empty: TextView = findViewById(R.id.text_empty)
         recycler.layoutManager = LinearLayoutManager(this)
-        adapter = ContactAdapter { contact ->
-            val next = Intent(this, ChatActivity::class.java)
-            next.putExtra(ChatActivity.EXTRA_TO_USER_ID, contact.userId)
-            next.putExtra(ChatActivity.EXTRA_TITLE, contact.displayName)
-            startActivity(next)
-        }
+        adapter = ContactAdapter(
+            onClick = { contact ->
+                val next = Intent(this, ChatActivity::class.java)
+                next.putExtra(ChatActivity.EXTRA_TO_USER_ID, contact.userId)
+                next.putExtra(ChatActivity.EXTRA_TITLE, contact.displayName)
+                startActivity(next)
+            },
+            trustStateOf = { userId -> TharMeshApp.get().peerTrustStore.trustState(userId) }
+        )
         recycler.adapter = adapter
 
         findViewById<Button>(R.id.btn_my_qr).setOnClickListener {
@@ -88,8 +94,37 @@ class ContactsActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_SCAN_QR && resultCode == Activity.RESULT_OK) {
             val code = data?.getStringExtra(ScanQrActivity.RESULT_CODE).orEmpty().trim()
-            if (code.isNotEmpty()) {
-                addContact(code, code)
+            if (code.isEmpty()) return
+            val displayName = data?.getStringExtra(ScanQrActivity.RESULT_DISPLAY_NAME)
+                ?.takeIf { it.isNotBlank() }
+                ?: code
+            val pubKey = data?.getStringExtra(ScanQrActivity.RESULT_PUB_KEY)?.takeIf { it.isNotBlank() }
+            addContact(code, displayName)
+            if (pubKey != null) {
+                // Stage 6.2 — out-of-band verify the peer's TOFU pin against the
+                // QR-encoded public key. If the QR's key differs from a key we
+                // already pinned for this userId, the call returns Mismatch and
+                // does NOT overwrite the pin.
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val store = TharMeshApp.get().peerTrustStore
+                    val result = store.markVerified(code, pubKey)
+                    withContext(Dispatchers.Main) {
+                        val msg = when (result) {
+                            is PeerTrustStore.VerifyResult.Verified ->
+                                getString(R.string.trust_verified_toast, displayName)
+                            is PeerTrustStore.VerifyResult.AlreadyVerified ->
+                                getString(R.string.trust_already_verified_toast, displayName)
+                            is PeerTrustStore.VerifyResult.Mismatch ->
+                                getString(
+                                    R.string.trust_mismatch_toast,
+                                    result.storedFingerprint,
+                                    result.scannedFingerprint
+                                )
+                        }
+                        Toast.makeText(this@ContactsActivity, msg, Toast.LENGTH_LONG).show()
+                        adapter.notifyDataSetChanged()
+                    }
+                }
             }
         }
     }
@@ -99,7 +134,8 @@ class ContactsActivity : AppCompatActivity() {
     }
 
     private class ContactAdapter(
-        private val onClick: (ContactEntity) -> Unit
+        private val onClick: (ContactEntity) -> Unit,
+        private val trustStateOf: (String) -> PeerTrustStore.TrustState
     ) : RecyclerView.Adapter<ContactAdapter.VH>() {
         private val items: MutableList<ContactEntity> = mutableListOf()
 
@@ -120,6 +156,8 @@ class ContactsActivity : AppCompatActivity() {
             holder.userId.text = contact.userId
             holder.avatar.text = contact.displayName.take(1).uppercase()
             holder.itemView.setOnClickListener { onClick(contact) }
+            // Stage 6.2 — shield reflects the trust state of the pinned key.
+            ShieldRenderer.bind(holder.shield, trustStateOf(contact.userId))
         }
 
         override fun getItemCount(): Int = items.size
@@ -128,6 +166,7 @@ class ContactsActivity : AppCompatActivity() {
             val avatar: TextView = itemView.findViewById(R.id.text_avatar)
             val name: TextView = itemView.findViewById(R.id.text_name)
             val userId: TextView = itemView.findViewById(R.id.text_userid)
+            val shield: ImageView = itemView.findViewById(R.id.icon_trust_shield)
         }
     }
 }

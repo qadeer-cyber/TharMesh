@@ -213,4 +213,15 @@
     <string name="cd_logo">TharMesh logo</string>
     <string name="cd_profile">Profile</string>
     <string name="cd_search">Search</string>
+
+    <!-- Stage 6.2 — Trusted Contacts + QR Verification -->
+    <string name="cd_shield_verified">Verified contact</string>
+    <string name="cd_shield_tofu">Pinned but not verified</string>
+    <string name="cd_shield_mismatch">Key mismatch — re-scan QR</string>
+    <string name="trust_verified_toast">Verified %1$s via QR</string>
+    <string name="trust_already_verified_toast">%1$s is already verified</string>
+    <string name="trust_mismatch_toast">QR key does not match the pinned key.\nPinned: %1$s\nScanned: %2$s</string>
+    <string name="chat_header_verified">Verified</string>
+    <string name="chat_header_unverified">Unverified</string>
+    <string name="chat_header_key_mismatch">Key mismatch</string>
 </resources>

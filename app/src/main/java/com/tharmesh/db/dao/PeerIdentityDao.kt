@@ -12,6 +12,12 @@ import com.tharmesh.db.entity.PeerIdentityEntity
  * subsequent inserts with a different key are silently dropped, and the receive
  * path compares the incoming key against [findByUserId] to decide whether to
  * reject the bundle.
+ *
+ * Stage 6.2 — added [markVerified] / [isVerified] / [getVerifiedUserIds] to
+ * support QR-based out-of-band verification. Verification *never* mutates the
+ * pinned [PeerIdentityEntity.publicKeyBase64]; it only flips the
+ * [PeerIdentityEntity.verified] flag (and stamps [verifiedAtMs]) on a row that
+ * already binds the same key.
  */
 @Dao
 interface PeerIdentityDao {
@@ -26,10 +32,30 @@ interface PeerIdentityDao {
     fun count(): Int
 
     /**
-     * Stage 6.1 — userIds for every TOFU-bound peer. Used by the Chats home's
-     * "Trusted" filter chip. Stage 6.2 will refine this to peers explicitly
-     * marked verified=true via QR scan; for now any peer whose identity has
-     * been seen and pinned counts as trusted.
+     * Stage 6.2 — marks an existing row verified. Callers MUST first confirm
+     * the stored [PeerIdentityEntity.publicKeyBase64] equals the user-presented
+     * (e.g. QR-scanned) key before invoking this; the DAO does not re-check.
+     * Returns the number of rows updated (0 if no row exists for [userId]).
+     */
+    @Query("UPDATE peer_identity SET verified = 1, verifiedAtMs = :ts WHERE userId = :userId")
+    fun setVerified(userId: String, ts: Long): Int
+
+    /** Stage 6.2 — true iff the peer row exists AND `verified = 1`. */
+    @Query("SELECT COUNT(*) FROM peer_identity WHERE userId = :userId AND verified = 1")
+    fun isVerified(userId: String): Int
+
+    /**
+     * Stage 6.2 — userIds of every peer with `verified = 1`. Used by the Chats
+     * home's "Trusted" filter chip; replaces the broader Stage 6.1 fallback
+     * that surfaced any TOFU-bound peer.
+     */
+    @Query("SELECT userId FROM peer_identity WHERE verified = 1")
+    fun getVerifiedUserIds(): List<String>
+
+    /**
+     * Stage 6.1 — userIds for every TOFU-bound peer. Kept around for
+     * back-compat / debug introspection; the Trusted chip now uses
+     * [getVerifiedUserIds] instead.
      */
     @Query("SELECT userId FROM peer_identity")
     fun getAllUserIds(): List<String>

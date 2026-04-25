@@ -11,6 +11,7 @@ import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.dtn.MeshLog
 import com.tharmesh.dtn.PerPeerSendPacer
 import com.tharmesh.dtn.RetryConfig
+import com.tharmesh.identity.PeerTrustStore
 import com.tharmesh.identity.RoomPeerTrustStore
 import com.tharmesh.mesh.EmptyMeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
@@ -40,6 +41,18 @@ class TharMeshApp : Application() {
 
     lateinit var repository: MessageRepository
         private set
+
+    /**
+     * Stage 6.2 — process-wide [com.tharmesh.identity.PeerTrustStore]. Cheap
+     * stateless wrapper over [AppDatabase.peerIdentityDao]; exposed here so
+     * UI code (Contacts, Chat shield) can call [com.tharmesh.identity.PeerTrustStore.markVerified]
+     * / [com.tharmesh.identity.PeerTrustStore.trustState] without rebuilding
+     * the wrapper at every call site, and so the same instance is shared
+     * with [com.tharmesh.dtn.MeshEngine] inside [ensureMeshReady].
+     */
+    val peerTrustStore: PeerTrustStore by lazy {
+        RoomPeerTrustStore(database.peerIdentityDao())
+    }
 
     /**
      * Process-wide directory. Created once in [onCreate]; its underlying data source is
@@ -130,7 +143,7 @@ class TharMeshApp : Application() {
             transport = t,
             bundleStore = RoomBundleStore(database.bundleDao()),
             identity = identity,
-            peerTrustStore = RoomPeerTrustStore(database.peerIdentityDao()),
+            peerTrustStore = peerTrustStore,
             pacer = pacer,
             onSendPaced = { peerId -> diag.recordSendPaced(peerId) },
             onSendRejected = { peerId, bundleId -> diag.recordSendRejected(peerId, bundleId) },

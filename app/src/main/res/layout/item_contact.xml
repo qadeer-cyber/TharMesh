@@ -39,4 +39,11 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <ImageView
+        android:id="@+id/icon_trust_shield"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="8dp"
+        android:visibility="gone" />
+
 </LinearLayout>

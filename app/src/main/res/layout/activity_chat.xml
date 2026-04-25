@@ -54,9 +54,11 @@
         </LinearLayout>
 
         <ImageView
+            android:id="@+id/icon_chat_shield"
             android:layout_width="22dp"
             android:layout_height="22dp"
-            android:src="@drawable/ic_shield" />
+            android:src="@drawable/ic_shield_outline"
+            android:contentDescription="@string/cd_shield_tofu" />
     </LinearLayout>
 
     <!-- E2EE banner -->

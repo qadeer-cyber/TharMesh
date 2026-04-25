@@ -45,9 +45,10 @@ import java.util.Date
  *
  * Filtering is driven by the live [ConversationEntity] flow combined with
  * snapshots of [com.tharmesh.mesh.NearbyDirectory.nodes] (Nearby chip) and
- * [com.tharmesh.db.dao.PeerIdentityDao.getAllUserIds] (Trusted chip). No
- * synthetic rows — if a filter has no matching real data the empty state
- * renders.
+ * [com.tharmesh.db.dao.PeerIdentityDao.getVerifiedUserIds] (Trusted chip;
+ * Stage 6.2 refined this from any TOFU-bound peer to peers explicitly
+ * verified=true via QR scan). No synthetic rows — if a filter has no matching
+ * real data the empty state renders.
  */
 class MessagesFragment : Fragment() {
 
@@ -199,7 +200,7 @@ class MessagesFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val trustedIds: Set<String> = if (activeFilter == Filter.TRUSTED) {
                 withContext(Dispatchers.IO) {
-                    TharMeshApp.get().database.peerIdentityDao().getAllUserIds().toSet()
+                    TharMeshApp.get().database.peerIdentityDao().getVerifiedUserIds().toSet()
                 }
             } else {
                 emptySet()

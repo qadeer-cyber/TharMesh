@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.tharmesh.db.dao.BundleDao
 import com.tharmesh.db.dao.ContactDao
 import com.tharmesh.db.dao.ConversationDao
@@ -23,7 +25,7 @@ import com.tharmesh.db.entity.PeerIdentityEntity
         ContactEntity::class,
         PeerIdentityEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,6 +39,25 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var instance: AppDatabase? = null
+
+        /**
+         * Stage 6.2 — additive migration from schema v4 → v5. Adds
+         * `peer_identity.verified` (NOT NULL DEFAULT 0) and
+         * `peer_identity.verifiedAtMs` (nullable). Preserves every existing
+         * TOFU-pinned key so users do not have to re-bind peers after the
+         * upgrade — the whole point of pinning is that it survives restarts.
+         */
+        @JvmField
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE peer_identity ADD COLUMN verified INTEGER NOT NULL DEFAULT 0"
+                )
+                database.execSQL(
+                    "ALTER TABLE peer_identity ADD COLUMN verifiedAtMs INTEGER"
+                )
+            }
+        }
 
         @JvmStatic
         fun getInstance(context: Context): AppDatabase {
@@ -54,6 +75,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tharmesh.db"
                 )
+                    .addMigrations(MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .build()
                 instance = created
