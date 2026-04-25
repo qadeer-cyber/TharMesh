@@ -265,6 +265,14 @@ class MessageRepository(
             bundleIdHint = bundleId,
             priority = effectivePriority
         )
+        // Seed an ack-grace window so the store-and-forward retry loop, which
+        // ticks every RetryConfig.tickIntervalMs (1 s by default), does not
+        // re-broadcast within ~1 s of the first send — the peer needs at
+        // least one base-delay window to ACK before we hammer the wire again.
+        // Diagnostic from real two-device test showed BundleSent at t and a
+        // RetryAttempt at t+580 ms because no policy state had been seeded.
+        val cfg = if (effectivePriority) RetryConfig.SOS else null
+        retryPolicy.markOriginated(bundleId, ts, cfg)
         return SendResult(messageId, bundleId)
     }
 

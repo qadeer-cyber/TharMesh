@@ -120,6 +120,35 @@ class RetryPolicy(
         return jittered.toLong().coerceAtLeast(0L)
     }
 
+    /**
+     * Originating side handed the bundle to the transport. Schedules an
+     * "ack-grace" window equal to one [config] base-delay before the retry
+     * loop is allowed to re-broadcast — without this, the retry tick (which
+     * runs every [RetryConfig.tickIntervalMs]) would re-issue the bundle
+     * within ~1 s of the first send, well before the peer has had time to
+     * ACK. Does NOT increment [attemptsTotal] (this is origination, not a
+     * retry).
+     *
+     * No-op if the bundle is already tracked (e.g. a re-origination of the
+     * same id from the syncWithPeer path) — once recordAttempt has produced
+     * a curve, it owns the schedule.
+     */
+    @JvmOverloads
+    fun markOriginated(
+        bundleId: String,
+        nowMs: Long,
+        configOverride: RetryConfig? = null
+    ) = synchronized(lock) {
+        if (state.containsKey(bundleId)) return@synchronized
+        // attemptCount=0 means "originated, no retries yet". The first call
+        // to recordAttempt will increment to 1 and use base*growth^0=base.
+        val cfg = configOverride ?: config
+        val jitter = cfg.jitterFraction
+        val factor = if (jitter == 0.0) 1.0 else 1.0 + ((rand() * 2.0 - 1.0) * jitter)
+        val grace = max(0.0, cfg.baseDelayMs.toDouble() * factor).toLong().coerceAtLeast(0L)
+        state[bundleId] = BundleState(attemptCount = 0, nextRetryAt = nowMs + grace)
+    }
+
     /** Bundle was delivered / read — drop its retry state. */
     fun onDelivered(bundleId: String) = synchronized(lock) {
         state.remove(bundleId)

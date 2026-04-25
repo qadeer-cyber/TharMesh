@@ -171,6 +171,78 @@ class RetryPolicyTest {
         assertEquals(s.nextRetryAt + 2_000L, s2.nextRetryAt)
     }
 
+    // ---------- markOriginated — origination ack-grace window ----------
+
+    @Test
+    fun markOriginated_seedsAckGraceEqualToBaseDelay() {
+        val p = policyNoJitter()
+        val t0 = 1_000L
+        p.markOriginated("b1", t0)
+        val s = p.currentState("b1")!!
+        // attemptCount stays 0 (origination is not a retry).
+        assertEquals(0, s.attemptCount)
+        // nextRetryAt = t0 + base (5000) since jitter=0.
+        assertEquals(t0 + 5_000L, s.nextRetryAt)
+        // Inside the grace window: the retry tick must NOT fire.
+        assertFalse(p.shouldAttempt("b1", t0 + 580L))
+        assertFalse(p.shouldAttempt("b1", t0 + 4_999L))
+        // After the grace window: eligible.
+        assertTrue(p.shouldAttempt("b1", t0 + 5_000L))
+    }
+
+    @Test
+    fun markOriginated_doesNotIncrementAttemptsTotal() {
+        val p = policyNoJitter()
+        p.markOriginated("b1", 0L)
+        p.markOriginated("b2", 0L)
+        // Origination is bookkeeping, not a retry — attemptsTotal stays at 0.
+        assertEquals(0L, p.attemptsTotal())
+    }
+
+    @Test
+    fun markOriginated_isNoOpIfAlreadyTracked() {
+        val p = policyNoJitter()
+        p.recordAttempt("b1", 0L) // already at attempt=1, next=5000
+        val before = p.currentState("b1")!!
+        p.markOriginated("b1", 100_000L) // would otherwise reseed to 105000
+        val after = p.currentState("b1")!!
+        assertEquals(before, after)
+    }
+
+    @Test
+    fun markOriginated_withSOSCurve_seedsOneSecondGrace() {
+        val p = policyNoJitter()
+        val t0 = 0L
+        p.markOriginated("sos1", t0, RetryConfig.SOS)
+        val s = p.currentState("sos1")!!
+        assertEquals(0, s.attemptCount)
+        // SOS base = 1000ms.
+        assertEquals(t0 + 1_000L, s.nextRetryAt)
+        // Within 1s: not eligible. After: eligible.
+        assertFalse(p.shouldAttempt("sos1", 999L))
+        assertTrue(p.shouldAttempt("sos1", 1_000L))
+    }
+
+    @Test
+    fun markOriginated_thenAcked_thenReoriginated_resetsCleanly() {
+        // Codifies the contract that an Acked bundle is not retried — onDelivered
+        // clears state, and a subsequent (hypothetical) re-origination of the same
+        // id seeds fresh grace rather than inheriting stale backoff.
+        val p = policyNoJitter()
+        p.markOriginated("b1", 0L)
+        // Several retries happen…
+        p.recordAttempt("b1", 5_000L)
+        p.recordAttempt("b1", 15_000L)
+        // …then peer ACKs.
+        p.onDelivered("b1")
+        assertNull(p.currentState("b1"))
+        // Re-origination of the same id seeds a fresh grace window.
+        p.markOriginated("b1", 100_000L)
+        val s = p.currentState("b1")!!
+        assertEquals(0, s.attemptCount)
+        assertEquals(105_000L, s.nextRetryAt)
+    }
+
     @Test
     fun sosCurveCapsAt8s() {
         val p = RetryPolicy(config = RetryConfig.DEFAULT, rand = { 0.5 })
