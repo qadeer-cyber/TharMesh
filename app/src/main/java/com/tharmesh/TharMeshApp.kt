@@ -5,6 +5,7 @@ import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
 import com.tharmesh.db.RoomBundleStore
+import com.tharmesh.diagnostics.DiagnosticsCollector
 import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.dtn.MeshLog
 import com.tharmesh.identity.RoomPeerTrustStore
@@ -52,6 +53,14 @@ class TharMeshApp : Application() {
 
     private var realSource: NearbyMeshDataSource? = null
     @Volatile private var meshReady: Boolean = false
+
+    /**
+     * Process-singleton diagnostics collector. Created lazily so it exists
+     * even before the mesh engine is wired, and stays alive across sign-out
+     * cycles so field testers don't lose their counters when they log back in.
+     */
+    val diagnostics: DiagnosticsCollector = DiagnosticsCollector()
+    private var diagnosticsListener: ((com.tharmesh.dtn.MeshEvent) -> Unit)? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -109,6 +118,13 @@ class TharMeshApp : Application() {
         )
         val source = NearbyMeshDataSource(engine)
         directory.setSource(source)
+        // Stage 5.1 — mirror every MeshEvent into the diagnostics collector.
+        // The listener is registered exactly once per engine; stopMesh clears
+        // the engine reference, and the next ensureMeshReady builds a new
+        // engine where this wiring runs again.
+        val listener: (com.tharmesh.dtn.MeshEvent) -> Unit = { ev -> diagnostics.onEvent(ev) }
+        engine.addEventListener(listener)
+        diagnosticsListener = listener
         transport = t
         meshEngine = engine
         repository = repo
@@ -158,6 +174,8 @@ class TharMeshApp : Application() {
     fun stopMesh() {
         if (meshReady) {
             if (started) repository.stopStoreAndForwardLoop()
+            diagnosticsListener?.let { meshEngine?.removeEventListener(it) }
+            diagnosticsListener = null
             meshEngine?.stop()
         }
         // Close the old data source (unregister its engine peer listener) and swap back

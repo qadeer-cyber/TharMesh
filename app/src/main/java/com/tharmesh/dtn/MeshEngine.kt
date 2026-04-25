@@ -68,6 +68,17 @@ class MeshEngine(
     @Volatile private var peerListeners: List<(MeshEvent) -> Unit> = emptyList()
     private val peerListenersLock = Any()
 
+    // Stage 5.1 — additive passive listeners. Used by DiagnosticsCollector (and
+    // other non-authoritative observers) to mirror every MeshEvent without
+    // displacing the repository's single [eventListener] or duplicating peer
+    // events the data source already gets via [peerListeners]. A passive
+    // listener receives EXACTLY the same event stream that reaches
+    // [eventListener] (bundle events + PeerConnected) PLUS the peer-found /
+    // peer-disconnected events the data source gets — i.e. one unified stream
+    // with no duplicates. Copy-on-write so the fire path is lock-free.
+    @Volatile private var passiveListeners: List<(MeshEvent) -> Unit> = emptyList()
+    private val passiveListenersLock = Any()
+
     // sendId → bundleId, for correlating PayloadSent / Error callbacks back to the BUNDLE
     // they acknowledge. Non-BUNDLE sends (INV/GET/ACK/READ) do not populate this map —
     // their PayloadSent events are ignored for BundleSent purposes.
@@ -156,6 +167,45 @@ class MeshEngine(
                 // Listener failures must not break the mesh engine.
             }
         }
+    }
+
+    /**
+     * Subscribe to EVERY [MeshEvent] the engine emits — bundle events and peer
+     * events — exactly once per emission. Stage 5.1 introduces this for
+     * diagnostics / field-test observers. Additive, thread-safe, lock-free fire
+     * path. Never wire authoritative pipeline logic through this API; use
+     * [setEventListener] for single-owner concerns (the message repository).
+     */
+    fun addEventListener(listener: (MeshEvent) -> Unit) {
+        synchronized(passiveListenersLock) {
+            passiveListeners = passiveListeners + listener
+        }
+    }
+
+    fun removeEventListener(listener: (MeshEvent) -> Unit) {
+        synchronized(passiveListenersLock) {
+            passiveListeners = passiveListeners - listener
+        }
+    }
+
+    private fun firePassive(event: MeshEvent) {
+        val snapshot = passiveListeners
+        for (l in snapshot) {
+            try {
+                l(event)
+            } catch (_: Throwable) {
+                // Observers must not be able to break the mesh engine.
+            }
+        }
+    }
+
+    /**
+     * Unified emit for events that go through the repository's single
+     * [eventListener]. Passive observers (diagnostics) see the same event.
+     */
+    private fun emit(event: MeshEvent) {
+        eventListener?.invoke(event)
+        firePassive(event)
     }
 
     /**
@@ -306,7 +356,7 @@ class MeshEngine(
             // Repository advances QUEUED → SENDING. Actual "bytes on wire" confirmation
             // still comes later per-peer via TransportEvent.PayloadSent, at which point
             // BundleSent (→ status=SENT) is emitted in onTransportEvent.
-            eventListener?.invoke(MeshEvent.BundleSending(bundle.bundleId))
+            emit(MeshEvent.BundleSending(bundle.bundleId))
         }
     }
 
@@ -390,7 +440,7 @@ class MeshEngine(
             is TransportEvent.PayloadSent -> {
                 val bundleId = synchronized(pendingLock) { pendingBundleSends.remove(event.sendId) }
                 if (bundleId != null) {
-                    eventListener?.invoke(MeshEvent.BundleSent(bundleId))
+                    emit(MeshEvent.BundleSent(bundleId))
                 }
                 // sendId == 0 or non-BUNDLE send → ignore; non-bundle frames don't surface as
                 // message-level BundleSent events.
@@ -402,19 +452,23 @@ class MeshEngine(
                 syncWithPeer(event.peerId)
                 val e = MeshEvent.PeerConnected(event.peerId)
                 firePeerEvent(e)
-                eventListener?.invoke(e)
+                emit(e)
             }
             is TransportEvent.PeerFound -> {
-                firePeerEvent(MeshEvent.PeerFound(event.peerId, event.displayName))
+                val e = MeshEvent.PeerFound(event.peerId, event.displayName)
+                firePeerEvent(e)
+                firePassive(e)
             }
             is TransportEvent.PeerDisconnected -> {
                 synchronized(peersLock) { connectedPeers.remove(event.peerId) }
-                firePeerEvent(MeshEvent.PeerDisconnected(event.peerId))
+                val e = MeshEvent.PeerDisconnected(event.peerId)
+                firePeerEvent(e)
+                firePassive(e)
             }
             is TransportEvent.Error -> {
                 val bundleId = synchronized(pendingLock) { pendingBundleSends.remove(event.sendId) }
                 if (bundleId != null) {
-                    eventListener?.invoke(MeshEvent.BundleFailed(bundleId, event.reason))
+                    emit(MeshEvent.BundleFailed(bundleId, event.reason))
                 }
             }
         }
@@ -565,7 +619,7 @@ class MeshEngine(
         if (deliveredSnapshot != null) {
             // Addressed to us: deliver (once) + ACK (every time, so a resend retires).
             if (!alreadyDelivered) {
-                eventListener?.invoke(MeshEvent.BundleDelivered(deliveredSnapshot!!))
+                emit(MeshEvent.BundleDelivered(deliveredSnapshot!!))
                 MeshLog.delivered(bundle.bundleId)
             } else {
                 MeshLog.droppedDuplicate(bundle.bundleId, peerId)
@@ -602,7 +656,7 @@ class MeshEngine(
             // Mirror the DELIVERED_FINAL status to disk so a restart does not treat the
             // bundle as still-pending and try to re-send.
             persistStatus(bundleId, "DELIVERED_FINAL")
-            eventListener?.invoke(MeshEvent.BundleAcked(bundleId, ackedBy))
+            emit(MeshEvent.BundleAcked(bundleId, ackedBy))
             MeshLog.acked(bundleId, ackedBy)
         }
     }
@@ -612,7 +666,7 @@ class MeshEngine(
             val existing = cache[bundleId] ?: return@synchronized false
             existing.srcId == localUserId
         }
-        if (fireEvent) eventListener?.invoke(MeshEvent.BundleRead(bundleId, readBy))
+        if (fireEvent) emit(MeshEvent.BundleRead(bundleId, readBy))
     }
 
     /**
