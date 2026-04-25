@@ -1,35 +1,78 @@
-TharMesh Proprietary License Agreement
-Copyright © 2026 TharMesh. All Rights Reserved.
+TharMesh Proprietary License
 
-1. Ownership
-TharMesh and all associated software, binaries, designs, and trademarks
-are the exclusive property of the author.
+Copyright (c) 2026 Abdul Qadeer (Qadeer Cyber). All rights reserved.
 
-2. Grant of Use
-Permission is granted to download and use the official APK solely for
-personal, non-commercial use.
+This software and its source code are proprietary and confidential.
 
-3. Restrictions
-You may NOT:
+This is NOT open source. Use is strictly prohibited without prior written
+permission from the copyright owner.
 
-- Copy, redistribute, mirror, or re-upload the APK.
-- Modify, adapt, translate, or create derivative works.
-- Reverse engineer, decompile, or attempt to extract source code.
-- Sell, sublicense, or commercially exploit the software.
-- Use the name "TharMesh" or its branding without permission.
+1. RESTRICTED RIGHTS
 
-4. Distribution
-Only official releases published by the repository owner are authorized.
-Any third-party distribution is strictly prohibited.
+   No permission is granted to copy, modify, merge, publish, distribute,
+   sublicense, sell, host, deploy, reverse engineer, rebrand, or use this
+   software or any substantial portion of it for commercial or
+   non-commercial purposes without prior written permission from the
+   copyright owner.
 
-5. Termination
-Violation of these terms automatically terminates your rights to use
-the software.
+   Viewing or accessing this repository does not grant any license or
+   usage rights.
 
-6. Liability
-The software is provided "AS IS" without warranties of any kind.
+   Any unauthorized use, reproduction, redistribution, or derivative
+   work is strictly prohibited.
 
-7. Legal Enforcement
-Unauthorized distribution or modification may result in legal action.
+2. NO PUBLIC HOSTING
 
-Contact: official TharMesh channels for permissions.
+   You may not host this software, in source or compiled form, on any
+   public or private server. You may not deploy it as a service, expose
+   it through any application programming interface, or otherwise make
+   it available to any third party over a network. This includes, but
+   is not limited to, software-as-a-service offerings, cloud hosting,
+   container registries, mirror repositories, and self-hosted relays.
+
+3. NO BENCHMARK OR COMPETITIVE USE
+
+   You may not use this software, in whole or in part, to build, train,
+   or evaluate any competing product or service. You may not benchmark,
+   reverse engineer, decompile, or analyse the software for the purpose
+   of replicating its functionality or for any other competitive
+   purpose.
+
+4. CONTRIBUTIONS
+
+   Contributions, forks, or modifications are not accepted unless
+   explicitly approved in writing by the copyright owner. Submitting
+   any change without prior written approval is a violation of this
+   license.
+
+5. TERMINATION
+
+   Any violation of the terms of this license — including but not
+   limited to the restrictions in sections 1 through 4 — immediately
+   and automatically terminates all rights granted to you under this
+   license. Upon termination you must cease all use of the software,
+   destroy all copies in your possession or control, and confirm such
+   destruction in writing if requested by the copyright owner.
+
+6. WARRANTY DISCLAIMER
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT OWNER BE LIABLE FOR
+   ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+   CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
+   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. GOVERNING LAW
+
+   This license is governed by the laws of Pakistan, without regard to
+   its conflict-of-laws principles. Any dispute arising under or in
+   connection with this license is subject to the exclusive
+   jurisdiction of the competent courts of Pakistan.
+
+—
+
+TharMesh™ is a trademark of Abdul Qadeer (Qadeer Cyber).
+
+SPDX-License-Identifier: LicenseRef-TharMesh-Proprietary
