@@ -48,6 +48,7 @@ class TharMeshApp : Application() {
     @Volatile private var started: Boolean = false
 
     private var realSource: NearbyMeshDataSource? = null
+    @Volatile private var meshReady: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -55,16 +56,31 @@ class TharMeshApp : Application() {
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         database = AppDatabase.getInstance(this)
         // Pre-login placeholder. The directory holds its own StateFlows; setSource()
-        // will swap in NearbyMeshDataSource inside ensureMeshStarted() without changing
+        // will swap in NearbyMeshDataSource inside ensureMeshReady() without changing
         // the directory reference any Fragment is holding.
         directory = NearbyDirectory(appScope, EmptyMeshDataSource())
-        // Eagerly construct the mesh/repository graph — even before runtime permissions
-        // are granted, Activities/Fragments may call TharMeshApp.get().repository in
-        // onViewCreated (Messages, Chats, Chat, Contacts). The transport itself is NOT
-        // started here — start()/advertise/discover is deferred to ensureMeshStarted()
-        // which is permission-gated. Construction is perm-safe: NearbyConnectionsTransport's
-        // constructor only stores the Context; MeshEngine's constructor only sets a listener.
-        val profile = UserPrefs.ensureProfile(this)
+        // Try to construct the mesh/repository graph eagerly for returning users. If
+        // no profile exists yet (fresh install / signed out), this is a no-op — the
+        // LoginActivity will call ensureMeshStarted() after sign-in, which wires the
+        // graph at that point. DO NOT call UserPrefs.ensureProfile() here — it would
+        // silently flip KEY_AUTHENTICATED=true and auto-login the user without ever
+        // showing LoginActivity.
+        ensureMeshReady()
+    }
+
+    /**
+     * Construct [MeshEngine] + [MessageRepository] + [NearbyMeshDataSource] if a user
+     * profile is persisted. No-op if no profile exists yet (fresh install / signed out)
+     * — the caller (e.g. [com.tharmesh.ui.auth.LoginActivity]) must call this (or
+     * [ensureMeshStarted]) after [UserPrefs.saveProfile] completes.
+     *
+     * The transport is NOT started here. [ensureMeshStarted] handles that, gated on
+     * runtime permissions. Construction is perm-safe.
+     */
+    @Synchronized
+    fun ensureMeshReady() {
+        if (meshReady) return
+        val profile = UserPrefs.readProfile(this) ?: return
         val t: Transport = NearbyConnectionsTransport(this)
         val engine = MeshEngine(profile.userId, t)
         val repo = MessageRepository(
@@ -79,6 +95,7 @@ class TharMeshApp : Application() {
         meshEngine = engine
         repository = repo
         realSource = source
+        meshReady = true
     }
 
     /**
@@ -90,11 +107,15 @@ class TharMeshApp : Application() {
      * Permission-gated: Nearby's startAdvertising / startDiscovery silently fail without
      * BLUETOOTH_* / ACCESS_FINE_LOCATION, so we refuse to flip `started = true` until the
      * user grants. [com.tharmesh.ui.main.MainActivity.onRequestPermissionsResult] re-calls
-     * us once the permission dialog resolves. The repository graph was constructed eagerly
-     * in [onCreate] so UI screens can read the DB even before this runs.
+     * us once the permission dialog resolves.
+     *
+     * Also ensures the mesh graph is constructed (via [ensureMeshReady]) if it wasn't
+     * already — covers the fresh-install sign-in flow where the profile did not exist
+     * at [onCreate] time.
      */
     @Synchronized
     fun ensureMeshStarted() {
+        ensureMeshReady()
         if (started) return
         if (!NearbyPermissions.allGranted(this)) return
         val engine = meshEngine ?: return
@@ -117,17 +138,23 @@ class TharMeshApp : Application() {
 
     @Synchronized
     fun stopMesh() {
-        if (!started) return
-        repository.stopStoreAndForwardLoop()
-        meshEngine?.stop()
+        if (meshReady) {
+            if (started) repository.stopStoreAndForwardLoop()
+            meshEngine?.stop()
+        }
         // Close the old data source (unregister its engine peer listener) and swap back
         // to an empty source so any residual peer list is dropped — otherwise a user
         // signing out and a different user signing back in would briefly see stale peers.
-        // Directory reference stays stable. ensureMeshStarted() will recreate a fresh
-        // NearbyMeshDataSource on the next start.
+        // Directory reference stays stable.
         realSource?.close()
         directory.setSource(EmptyMeshDataSource())
         realSource = null
+        // Reset both flags so a subsequent sign-in (possibly with a different userId)
+        // constructs a fresh engine + repository bound to the new identity.
+        // repository is a lateinit var — we leave the existing reference in place until
+        // ensureMeshReady() reassigns it; callers gated by UserPrefs.hasProfile() will
+        // have been redirected to LoginActivity before they attempt to read it.
+        meshReady = false
         started = false
     }
 
