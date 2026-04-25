@@ -162,6 +162,13 @@ class MainActivity : AppCompatActivity() {
             // so calling it again now actually wires the transport.
             TharMeshApp.get().ensureMeshStarted()
         }
+        // The runtime permission dialog does not pause this Activity, so the
+        // hosted MessagesFragment's onResume won't fire and the mesh-status
+        // warning dot would stay stuck on a stale value. Nudge it directly.
+        val current = supportFragmentManager.findFragmentById(R.id.fragment_container)
+        if (current is MessagesFragment) {
+            current.refreshMeshWarningDot()
+        }
     }
 
     companion object {

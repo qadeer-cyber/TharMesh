@@ -169,9 +169,12 @@ class MessagesFragment : Fragment() {
     /**
      * Refresh the warning dot on the mesh status icon based on the live
      * permission/runtime state. Replaces the old full-width banner; same
-     * signal, less chrome.
+     * signal, less chrome. Public so MainActivity can trigger an update
+     * straight after onRequestPermissionsResult — the runtime permission
+     * dialog does not pause us, so onResume + StateFlow alone are not
+     * enough to clear a stale "not ready" state.
      */
-    private fun refreshMeshWarningDot() {
+    fun refreshMeshWarningDot() {
         val view = view ?: return
         val dot = view.findViewById<View>(R.id.top_mesh_warning_dot)
         val ready = PermissionMonitor.snapshot(requireContext()) is PermissionStatus.Ready
