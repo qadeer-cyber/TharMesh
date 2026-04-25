@@ -1,6 +1,8 @@
 package com.tharmesh.transport.nearby
 
 import android.content.Context
+import android.os.Handler
+import android.os.HandlerThread
 import android.util.Log
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
@@ -47,12 +49,43 @@ class NearbyConnectionsTransport(
     /** userId → endpointId, for send(peerId=userId). */
     private val userIdToEndpoint: MutableMap<String, String> = ConcurrentHashMap()
 
+    /**
+     * Background dispatch thread for every [TransportEvent] we hand to the
+     * listener. Nearby Connections delivers all of its callbacks (
+     * [PayloadCallback.onPayloadReceived], [ConnectionLifecycleCallback]
+     * methods, [EndpointDiscoveryCallback] methods, and the Tasks returned by
+     * `sendPayload` / `startAdvertising` / `startDiscovery`) on the
+     * application's **main thread**. The engine's transport listener routes
+     * incoming `BUNDLE` and `ACK` frames into Room via
+     * `BundleStore.upsert` / `BundleStore.updateStatus`, which Room rejects on
+     * the main thread with `IllegalStateException("Cannot access database on
+     * the main thread …")`. Field-test repro: phone A sends first message,
+     * phone B's app crashes inside `MeshEngine.handleBundle` →
+     * `bundleStore?.upsert(bundle)` on its way to caching the freshly
+     * received bundle.
+     *
+     * A single dedicated [HandlerThread] preserves event ordering (the
+     * engine's cache logic relies on first-arrival semantics — concurrent
+     * delivery would race the cache check) while keeping every Room write
+     * off the main thread.
+     *
+     * Lifecycle: lazily created in [start] and torn down in [stop] so a
+     * sign-out → sign-in cycle does not leak a thread per cycle.
+     */
+    private var callbackThread: HandlerThread? = null
+    private var callbackHandler: Handler? = null
+
     override fun setListener(listener: (TransportEvent) -> Unit) {
         this.listener = listener
     }
 
     override fun start(localPeerId: String) {
         this.localPeerId = localPeerId
+        if (callbackThread == null) {
+            val t = HandlerThread("NearbyTransport-callbacks").apply { start() }
+            callbackThread = t
+            callbackHandler = Handler(t.looper)
+        }
         startAdvertising()
         startDiscovery()
     }
@@ -63,24 +96,53 @@ class NearbyConnectionsTransport(
         client.stopDiscovery()
         endpointToUserId.clear()
         userIdToEndpoint.clear()
+        // Drain in-flight callbacks then quit. quitSafely lets queued events
+        // fire (so the engine sees a clean PeerDisconnected sequence on
+        // teardown) before the looper exits.
+        callbackThread?.quitSafely()
+        callbackThread = null
+        callbackHandler = null
     }
 
     override fun send(peerId: String, payload: ByteArray, sendId: Long): Boolean {
         val endpointId = userIdToEndpoint[peerId]
         if (endpointId == null) {
-            // No endpoint: report failure synchronously. Caller must not assume the
-            // synchronous `false` return on its own — the Error event carries sendId.
-            listener?.invoke(TransportEvent.Error(peerId, sendId, "No Nearby endpoint for userId"))
+            // No endpoint: report failure via the dispatch thread. Caller must
+            // not assume the synchronous `false` return on its own — the
+            // Error event carries sendId. Dispatch (rather than synchronous
+            // invoke) so the listener never sees an event on the main thread.
+            dispatch(TransportEvent.Error(peerId, sendId, "No Nearby endpoint for userId"))
             return false
         }
         client.sendPayload(endpointId, Payload.fromBytes(payload))
             .addOnSuccessListener {
-                listener?.invoke(TransportEvent.PayloadSent(peerId, sendId, payload.size))
+                dispatch(TransportEvent.PayloadSent(peerId, sendId, payload.size))
             }
             .addOnFailureListener { e ->
-                listener?.invoke(TransportEvent.Error(peerId, sendId, "sendPayload failed: ${e.message}"))
+                dispatch(TransportEvent.Error(peerId, sendId, "sendPayload failed: ${e.message}"))
             }
         return true
+    }
+
+    /**
+     * Hand [event] to the registered listener on the background
+     * [callbackThread]. Defensive [Throwable] catch so a buggy listener
+     * (e.g. an uncaught NPE in a future feature) doesn't kill the dispatch
+     * thread and silently freeze the entire transport.
+     */
+    private fun dispatch(event: TransportEvent) {
+        val handler = callbackHandler
+        if (handler == null) {
+            // Late callback after stop(). Drop — engine is being torn down.
+            return
+        }
+        handler.post {
+            try {
+                listener?.invoke(event)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Listener threw on event ${event::class.simpleName}", t)
+            }
+        }
     }
 
     private fun startAdvertising() {
@@ -88,7 +150,7 @@ class NearbyConnectionsTransport(
         client.startAdvertising(localPeerId, serviceId, connectionLifecycleCallback, options)
             .addOnFailureListener { e ->
                 Log.w(TAG, "startAdvertising failed", e)
-                listener?.invoke(TransportEvent.Error(null, 0L, "startAdvertising: ${e.message}"))
+                dispatch(TransportEvent.Error(null, 0L, "startAdvertising: ${e.message}"))
             }
     }
 
@@ -97,14 +159,14 @@ class NearbyConnectionsTransport(
         client.startDiscovery(serviceId, endpointDiscoveryCallback, options)
             .addOnFailureListener { e ->
                 Log.w(TAG, "startDiscovery failed", e)
-                listener?.invoke(TransportEvent.Error(null, 0L, "startDiscovery: ${e.message}"))
+                dispatch(TransportEvent.Error(null, 0L, "startDiscovery: ${e.message}"))
             }
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             val remoteUserId = info.endpointName
-            listener?.invoke(TransportEvent.PeerFound(remoteUserId, remoteUserId))
+            dispatch(TransportEvent.PeerFound(remoteUserId, remoteUserId))
             // Auto-request connection.
             client.requestConnection(localPeerId, endpointId, connectionLifecycleCallback)
                 .addOnFailureListener { e ->
@@ -116,7 +178,7 @@ class NearbyConnectionsTransport(
             val userId = endpointToUserId.remove(endpointId)
             if (userId != null) {
                 userIdToEndpoint.remove(userId, endpointId)
-                listener?.invoke(TransportEvent.PeerDisconnected(userId))
+                dispatch(TransportEvent.PeerDisconnected(userId))
             }
         }
     }
@@ -134,13 +196,13 @@ class NearbyConnectionsTransport(
         override fun onConnectionResult(endpointId: String, resolution: ConnectionResolution) {
             if (resolution.status.isSuccess) {
                 val userId = endpointToUserId[endpointId] ?: return
-                listener?.invoke(TransportEvent.PeerConnected(userId))
+                dispatch(TransportEvent.PeerConnected(userId))
             } else {
                 val userId = endpointToUserId.remove(endpointId)
                 if (userId != null) {
                     userIdToEndpoint.remove(userId, endpointId)
                 }
-                listener?.invoke(
+                dispatch(
                     TransportEvent.Error(userId, 0L, "connection failed: ${resolution.status.statusMessage}")
                 )
             }
@@ -150,7 +212,7 @@ class NearbyConnectionsTransport(
             val userId = endpointToUserId.remove(endpointId)
             if (userId != null) {
                 userIdToEndpoint.remove(userId, endpointId)
-                listener?.invoke(TransportEvent.PeerDisconnected(userId))
+                dispatch(TransportEvent.PeerDisconnected(userId))
             }
         }
     }
@@ -159,7 +221,7 @@ class NearbyConnectionsTransport(
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             val userId = endpointToUserId[endpointId] ?: return
             val bytes = payload.asBytes() ?: return
-            listener?.invoke(TransportEvent.PayloadReceived(userId, bytes))
+            dispatch(TransportEvent.PayloadReceived(userId, bytes))
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
