@@ -1,0 +1,330 @@
+package com.tharmesh.ui.contacts
+
+import android.app.Activity
+import android.content.Intent
+import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.chip.ChipGroup
+import com.tharmesh.TharMeshApp
+import com.tharmesh.data.MessageRepository
+import com.tharmesh.db.entity.ContactEntity
+import com.tharmesh.identity.PeerTrustStore
+import com.tharmesh.mesh.MeshNode
+import com.tharmesh.ui.chat.ChatActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import tharmesh.app.R
+
+/**
+ * PR B — WhatsApp-style Contacts tab. Replaces the Devices bottom-nav slot.
+ *
+ * Each row renders the saved [ContactEntity] plus three live signals:
+ *   - online dot derived from [com.tharmesh.mesh.NearbyDirectory.nodes] (true
+ *     iff a directly-reachable [MeshNode] currently advertises the same
+ *     userId; multi-hop reachable peers render as offline)
+ *   - short fingerprint from the TOFU pin in `peer_identity` (first 4 + last
+ *     4 hex chars of [com.tharmesh.identity.CryptoIdentity.fingerprintOf];
+ *     hidden when the peer has not been seen on the mesh yet)
+ *   - trust shield via [ShieldRenderer] (Verified / TofuOnly / Mismatch)
+ *
+ * Filtering: a single `combine` over contacts + nearby nodes + verified
+ * userIds repaints the list whenever any of the three sources change. The
+ * filter chip + search box state lives in this Fragment and is re-applied
+ * locally on every emit.
+ */
+class ContactsFragment : Fragment() {
+
+    enum class Filter { ALL, ONLINE, VERIFIED, UNVERIFIED }
+
+    private lateinit var repository: MessageRepository
+    private lateinit var adapter: ContactsAdapter
+    private lateinit var empty: View
+    private lateinit var search: EditText
+
+    private var lastContacts: List<ContactEntity> = emptyList()
+    private var lastNearby: Set<String> = emptySet()
+    private var lastVerified: Set<String> = emptySet()
+    private var query: String = ""
+    private var activeFilter: Filter = Filter.ALL
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View = inflater.inflate(R.layout.fragment_contacts, container, false)
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        repository = TharMeshApp.get().repository
+
+        val recycler: RecyclerView = view.findViewById(R.id.recycler_contacts)
+        empty = view.findViewById(R.id.empty_contacts)
+        search = view.findViewById(R.id.edit_search_contacts)
+        recycler.layoutManager = LinearLayoutManager(requireContext())
+        adapter = ContactsAdapter(
+            onClick = { c -> openChat(c) },
+            onLongPress = { c -> openProfile(c) }
+        )
+        recycler.adapter = adapter
+
+        view.findViewById<Button>(R.id.btn_my_qr).setOnClickListener {
+            startActivity(Intent(requireContext(), MyQrActivity::class.java))
+        }
+        view.findViewById<Button>(R.id.btn_scan_qr).setOnClickListener {
+            startActivityForResult(Intent(requireContext(), ScanQrActivity::class.java), REQUEST_SCAN_QR)
+        }
+        view.findViewById<Button>(R.id.btn_add_invite).setOnClickListener {
+            promptManualAdd()
+        }
+
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                query = s?.toString().orEmpty().trim()
+                applyFilter()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        view.findViewById<ChipGroup>(R.id.contacts_filter_chips)
+            .setOnCheckedChangeListener { _, checkedId ->
+                activeFilter = when (checkedId) {
+                    R.id.chip_online -> Filter.ONLINE
+                    R.id.chip_verified -> Filter.VERIFIED
+                    R.id.chip_unverified -> Filter.UNVERIFIED
+                    else -> Filter.ALL
+                }
+                applyFilter()
+            }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val verifiedFlow = repository.observeContacts() // proxy; verified is per-bind
+            combine(
+                repository.observeContacts(),
+                TharMeshApp.get().directory.nodes,
+                verifiedFlow
+            ) { contacts, nodes, _ ->
+                Triple(
+                    contacts,
+                    nodes.filter { it.online }.map { it.userId }.toSet(),
+                    // Verified set is a one-shot DAO read — cheap, and the
+                    // contacts flow re-emits whenever Room writes happen so
+                    // a fresh markVerified call refreshes within the same
+                    // coroutine cycle as the upsert that preceded it.
+                    fetchVerified()
+                )
+            }.collectLatest { (contacts, online, verified) ->
+                lastContacts = contacts
+                lastNearby = online
+                lastVerified = verified
+                applyFilter()
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_SCAN_QR || resultCode != Activity.RESULT_OK) return
+        val code = data?.getStringExtra(ScanQrActivity.RESULT_CODE).orEmpty().trim()
+        if (code.isEmpty()) return
+        val displayName = data?.getStringExtra(ScanQrActivity.RESULT_DISPLAY_NAME)
+            ?.takeIf { it.isNotBlank() }
+            ?: code
+        val pubKey = data?.getStringExtra(ScanQrActivity.RESULT_PUB_KEY)?.takeIf { it.isNotBlank() }
+        viewLifecycleOwner.lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.addContact(code, displayName)
+                if (pubKey != null) {
+                    val res = TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
+                    withContext(Dispatchers.Main) { surfaceVerifyResult(displayName, res) }
+                }
+            }
+        }
+    }
+
+    private fun surfaceVerifyResult(displayName: String, res: PeerTrustStore.VerifyResult) {
+        val msg = when (res) {
+            is PeerTrustStore.VerifyResult.Verified ->
+                getString(R.string.trust_verified_toast, displayName)
+            is PeerTrustStore.VerifyResult.AlreadyVerified ->
+                getString(R.string.trust_already_verified_toast, displayName)
+            is PeerTrustStore.VerifyResult.Mismatch ->
+                getString(R.string.trust_mismatch_toast, res.storedFingerprint, res.scannedFingerprint)
+        }
+        Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
+    }
+
+    private fun promptManualAdd() {
+        val ctx = requireContext()
+        val input = EditText(ctx)
+        input.hint = getString(R.string.new_chat_recipient_hint)
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.contacts_add_by_invite)
+            .setView(input)
+            .setPositiveButton(R.string.dialog_start) { _, _ ->
+                val userId = input.text?.toString()?.trim().orEmpty()
+                if (userId.isEmpty()) return@setPositiveButton
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    repository.addContact(userId)
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun openChat(c: ContactEntity) {
+        val intent = Intent(requireContext(), ChatActivity::class.java)
+        intent.putExtra(ChatActivity.EXTRA_TO_USER_ID, c.userId)
+        intent.putExtra(ChatActivity.EXTRA_TITLE, c.displayName)
+        startActivity(intent)
+    }
+
+    private fun openProfile(c: ContactEntity) {
+        val intent = Intent(requireContext(), ContactProfileActivity::class.java)
+        intent.putExtra(ContactProfileActivity.EXTRA_USER_ID, c.userId)
+        startActivity(intent)
+    }
+
+    private suspend fun fetchVerified(): Set<String> = withContext(Dispatchers.IO) {
+        TharMeshApp.get().database.peerIdentityDao().getVerifiedUserIds().toSet()
+    }
+
+    private fun applyFilter() {
+        val filtered = filterContacts(lastContacts, query, activeFilter, lastNearby, lastVerified)
+        adapter.submit(
+            items = filtered,
+            online = lastNearby,
+            trustStateOf = { TharMeshApp.get().peerTrustStore.trustState(it) },
+            shortFingerprintOf = { userId ->
+                val full = TharMeshApp.get().peerTrustStore.let { store ->
+                    val key = store.storedKey(userId) ?: return@let null
+                    com.tharmesh.identity.CryptoIdentity.fingerprintOf(key)
+                }
+                full?.let(Companion::shortFingerprint)
+            }
+        )
+        empty.visibility = if (filtered.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    companion object {
+        private const val REQUEST_SCAN_QR = 7012
+
+        /**
+         * Pure filter applied on every emit. Extracted from [applyFilter] so
+         * it can be unit-tested without inflating the fragment.
+         *
+         * `query` matches case-insensitively against `displayName` OR `userId`.
+         * `filter` narrows the result by mesh-online state ([online]) or by
+         * QR-verified state ([verified]). Both [online] and [verified] are
+         * sets of contact userIds, populated once per emit by the caller.
+         */
+        @JvmStatic
+        fun filterContacts(
+            contacts: List<ContactEntity>,
+            query: String,
+            filter: Filter,
+            online: Set<String>,
+            verified: Set<String>
+        ): List<ContactEntity> {
+            val q = query.trim().lowercase()
+            return contacts.filter { c ->
+                val matchesQ = q.isEmpty() ||
+                    c.displayName.lowercase().contains(q) ||
+                    c.userId.lowercase().contains(q)
+                val matchesFilter = when (filter) {
+                    Filter.ALL -> true
+                    Filter.ONLINE -> c.userId in online
+                    Filter.VERIFIED -> c.userId in verified
+                    Filter.UNVERIFIED -> c.userId !in verified
+                }
+                matchesQ && matchesFilter
+            }
+        }
+
+        /** First 4 + last 4 hex chars of a SHA-256 fingerprint, e.g. `1A2B…3C4D`. */
+        @JvmStatic
+        fun shortFingerprint(full: String): String {
+            val hex = full.replace(":", "")
+            if (hex.length < 8) return full
+            return hex.take(4) + "…" + hex.takeLast(4)
+        }
+    }
+
+    private class ContactsAdapter(
+        private val onClick: (ContactEntity) -> Unit,
+        private val onLongPress: (ContactEntity) -> Unit
+    ) : RecyclerView.Adapter<ContactsAdapter.VH>() {
+
+        private val items: MutableList<ContactEntity> = mutableListOf()
+        private var online: Set<String> = emptySet()
+        private var trustStateOf: (String) -> PeerTrustStore.TrustState = { PeerTrustStore.TrustState.Unknown }
+        private var shortFingerprintOf: (String) -> String? = { null }
+
+        fun submit(
+            items: List<ContactEntity>,
+            online: Set<String>,
+            trustStateOf: (String) -> PeerTrustStore.TrustState,
+            shortFingerprintOf: (String) -> String?
+        ) {
+            this.items.clear()
+            this.items.addAll(items)
+            this.online = online
+            this.trustStateOf = trustStateOf
+            this.shortFingerprintOf = shortFingerprintOf
+            notifyDataSetChanged()
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_contact, parent, false)
+            return VH(v)
+        }
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val c = items[position]
+            holder.name.text = c.displayName
+            holder.userId.text = c.userId
+            holder.avatar.text = c.displayName.take(1).uppercase()
+            holder.dot.visibility = if (c.userId in online) View.VISIBLE else View.GONE
+
+            val fp = shortFingerprintOf(c.userId)
+            if (fp != null) {
+                holder.fingerprint.visibility = View.VISIBLE
+                holder.fingerprint.text = fp
+            } else {
+                holder.fingerprint.visibility = View.GONE
+            }
+
+            ShieldRenderer.bind(holder.shield, trustStateOf(c.userId))
+            holder.itemView.setOnClickListener { onClick(c) }
+            holder.itemView.setOnLongClickListener { onLongPress(c); true }
+        }
+
+        override fun getItemCount(): Int = items.size
+
+        class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val avatar: TextView = itemView.findViewById(R.id.text_avatar)
+            val name: TextView = itemView.findViewById(R.id.text_name)
+            val userId: TextView = itemView.findViewById(R.id.text_userid)
+            val fingerprint: TextView = itemView.findViewById(R.id.text_fingerprint)
+            val shield: ImageView = itemView.findViewById(R.id.icon_trust_shield)
+            val dot: View = itemView.findViewById(R.id.dot_online)
+        }
+    }
+}

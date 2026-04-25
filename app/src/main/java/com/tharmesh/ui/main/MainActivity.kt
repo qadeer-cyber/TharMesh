@@ -24,8 +24,8 @@ import com.tharmesh.disaster.DisasterModeController
 import kotlinx.coroutines.flow.combine
 import com.tharmesh.permissions.NearbyPermissions
 import com.tharmesh.ui.auth.LoginActivity
+import com.tharmesh.ui.contacts.ContactsFragment
 import com.tharmesh.ui.dashboard.DashboardFragment
-import com.tharmesh.ui.devices.DevicesFragment
 import com.tharmesh.ui.messages.MessagesFragment
 import com.tharmesh.ui.settings.SettingsFragment
 import com.tharmesh.ui.status.StatusFragment
@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         nav.setOnNavigationItemSelectedListener { item ->
             val frag: Fragment = when (item.itemId) {
                 R.id.nav_chats -> MessagesFragment()
-                R.id.nav_devices -> DevicesFragment()
+                R.id.nav_contacts -> ContactsFragment()
                 R.id.nav_alerts -> StatusFragment()
                 R.id.nav_relay -> DashboardFragment()
                 R.id.nav_settings -> SettingsFragment()
