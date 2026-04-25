@@ -110,7 +110,25 @@ class DiagnosticsActivity : AppCompatActivity() {
             append("send paced       ").append(s.sendPaced).append('\n')
             append("ttl expired drops").append(' ').append(s.ttlExpiredDrops).append('\n')
             append("stuck SENDING rec").append(' ').append(s.stuckSendingRecovered).append('\n')
-            append("retry supp (offline) ").append(s.retrySuppressedNoPeers)
+            append("retry supp (offline) ").append(s.retrySuppressedNoPeers).append('\n')
+            append("relay forwards   ").append(s.relayForwards)
+                .append("  (").append(formatBytes(s.relayedBytesTotal)).append(")\n")
+            val perPeer = collector.relayedBytesByPeer()
+            if (perPeer.isEmpty()) {
+                append("relayed by peer  —")
+            } else {
+                append("relayed by peer")
+                val forwards = collector.relayForwardsByPeer()
+                for ((peerId, bytes) in perPeer) {
+                    append("\n  ")
+                        .append(truncatePeerId(peerId))
+                        .append(' ')
+                        .append(formatBytes(bytes))
+                        .append(" / ")
+                        .append(forwards[peerId] ?: 0L)
+                        .append(" fwd")
+                }
+            }
         }
         val events = collector.recentEvents()
         recent.text = if (events.isEmpty()) {
@@ -148,4 +166,15 @@ class DiagnosticsActivity : AppCompatActivity() {
         val sec = s % 60
         return String.format(Locale.US, "%02d:%02d:%02d", h, m, sec)
     }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024L) return "$bytes B"
+        val kb = bytes.toDouble() / 1024.0
+        if (kb < 1024.0) return String.format(Locale.US, "%.1f KB", kb)
+        val mb = kb / 1024.0
+        return String.format(Locale.US, "%.1f MB", mb)
+    }
+
+    private fun truncatePeerId(peerId: String): String =
+        if (peerId.length <= 12) peerId else peerId.substring(0, 12) + "…"
 }

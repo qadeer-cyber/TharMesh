@@ -63,7 +63,18 @@ class MeshEngine(
     /** Diagnostic hook: [transport.send] returned false (transport rejected the bytes). */
     private val onSendRejected: (peerId: String, bundleId: String) -> Unit = { _, _ -> },
     /** Diagnostic hook: a bundle was dropped because its TTL had elapsed. */
-    private val onTtlExpiredDrop: (bundleId: String) -> Unit = { _ -> }
+    private val onTtlExpiredDrop: (bundleId: String) -> Unit = { _ -> },
+    /**
+     * Diagnostic hook: a relay forward of [bundleId] to [peerId] accepted
+     * [payloadBytes] bytes on the wire. Fires exactly once per
+     * transport.send() that returned true inside [forwardBundle]; does NOT
+     * fire for originator broadcasts, retransmits, or paced-out attempts.
+     * Used by the diagnostics layer to surface per-peer relayed-bytes
+     * fairness counters without threading the collector itself through the
+     * engine. Default: no-op.
+     */
+    private val onRelaySent: (peerId: String, bundleId: String, payloadBytes: Int) -> Unit =
+        { _, _, _ -> }
 ) {
     private val allowLegacyUnsigned: Boolean = allowLegacyUnsigned ?: (identity == null)
 
@@ -568,6 +579,11 @@ class MeshEngine(
                 onSendRejected(peer, bundle.bundleId)
                 continue
             }
+            // Fairness accounting for the relay path only. We meter the full
+            // on-wire frame (post-CBOR encoding) rather than the inner
+            // bundle body because that's what the peer actually paid radio
+            // time for.
+            onRelaySent(peer, bundle.bundleId, payloadBytes.size)
             MeshLog.forwarded(bundle.bundleId, peer, nextHops)
         }
     }
