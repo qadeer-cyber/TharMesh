@@ -75,7 +75,13 @@ class DiagnosticsActivity : AppCompatActivity() {
             append("bundles DELIVERED").append(' ').append(s.bundlesDelivered).append('\n')
             append("bundles ACKED    ").append(s.bundlesAcked).append('\n')
             append("bundles READ     ").append(s.bundlesRead).append('\n')
-            append("bundles FAILED   ").append(s.bundlesFailed)
+            append("bundles FAILED   ").append(s.bundlesFailed).append('\n')
+            append("retry attempts   ").append(s.retryAttempts).append('\n')
+            append("peer churn supp. ").append(s.peerChurnEvents).append('\n')
+            append("send rejected    ").append(s.sendRejected).append('\n')
+            append("send paced       ").append(s.sendPaced).append('\n')
+            append("ttl expired drops").append(' ').append(s.ttlExpiredDrops).append('\n')
+            append("stuck SENDING rec").append(' ').append(s.stuckSendingRecovered)
         }
         val events = collector.recentEvents()
         recent.text = if (events.isEmpty()) {

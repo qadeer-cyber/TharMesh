@@ -109,7 +109,7 @@ class DiagnosticsCollectorTest {
         c.onEvent(MeshEvent.BundleSent("b1"))
 
         val json = JSONObject(c.exportJson())
-        assertEquals("5.1", json.getString("stage"))
+        assertEquals("5.2", json.getString("stage"))
         val counters = json.getJSONObject("counters")
         assertEquals(1L, counters.getLong("bundlesSending"))
         assertEquals(1L, counters.getLong("bundlesSent"))
@@ -126,5 +126,71 @@ class DiagnosticsCollectorTest {
         t = 10_500L
         val s = c.snapshot()
         assertEquals(500L, s.uptimeMs)
+    }
+
+    @Test
+    fun `stage 5_2 record hooks each increment exactly one counter`() {
+        val c = DiagnosticsCollector(recentCapacity = 32)
+        c.recordRetryAttempt("b1")
+        c.recordPeerChurnSuppressed("p1")
+        c.recordSendRejected("p1", "b1")
+        c.recordSendPaced("p1")
+        c.recordTtlExpiredDrop("b2")
+        c.recordStuckSendingRecovered("b3")
+        val s = c.snapshot()
+        assertEquals(1L, s.retryAttempts)
+        assertEquals(1L, s.peerChurnEvents)
+        assertEquals(1L, s.sendRejected)
+        assertEquals(1L, s.sendPaced)
+        assertEquals(1L, s.ttlExpiredDrops)
+        assertEquals(1L, s.stuckSendingRecovered)
+        // All hooks also append a recent-event entry so field testers can
+        // correlate them in the rolling tail view.
+        val kinds = c.recentEvents().map { it.kind }
+        assertEquals(
+            listOf(
+                "RetryAttempt", "PeerChurnSuppressed", "SendRejected",
+                "SendPaced", "TtlExpired", "StuckSendingRecovered"
+            ),
+            kinds
+        )
+    }
+
+    @Test
+    fun `stage 5_2 reset clears the new counters`() {
+        val c = DiagnosticsCollector(recentCapacity = 16)
+        c.recordRetryAttempt("b1")
+        c.recordPeerChurnSuppressed("p1")
+        c.recordSendRejected("p1", "b1")
+        c.recordSendPaced("p1")
+        c.recordTtlExpiredDrop("b1")
+        c.recordStuckSendingRecovered("b1")
+        c.reset()
+        val s = c.snapshot()
+        assertEquals(0L, s.retryAttempts)
+        assertEquals(0L, s.peerChurnEvents)
+        assertEquals(0L, s.sendRejected)
+        assertEquals(0L, s.sendPaced)
+        assertEquals(0L, s.ttlExpiredDrops)
+        assertEquals(0L, s.stuckSendingRecovered)
+    }
+
+    @Test
+    fun `exportJson exposes stage 5_2 counters`() {
+        val c = DiagnosticsCollector(recentCapacity = 16, now = { 1_000_000L })
+        c.recordRetryAttempt("b1")
+        c.recordPeerChurnSuppressed("p1")
+        c.recordSendPaced("p1")
+        c.recordTtlExpiredDrop("b2")
+        c.recordStuckSendingRecovered("b3")
+        c.recordSendRejected("p1", "b1")
+        val json = JSONObject(c.exportJson())
+        val counters = json.getJSONObject("counters")
+        assertEquals(1L, counters.getLong("retryAttempts"))
+        assertEquals(1L, counters.getLong("peerChurnEvents"))
+        assertEquals(1L, counters.getLong("sendRejected"))
+        assertEquals(1L, counters.getLong("sendPaced"))
+        assertEquals(1L, counters.getLong("ttlExpiredDrops"))
+        assertEquals(1L, counters.getLong("stuckSendingRecovered"))
     }
 }

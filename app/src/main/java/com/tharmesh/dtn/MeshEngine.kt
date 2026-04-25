@@ -42,7 +42,22 @@ class MeshEngine(
      * (production: reject anything that isn't signed). Pass an explicit boolean to
      * override either way.
      */
-    allowLegacyUnsigned: Boolean? = null
+    allowLegacyUnsigned: Boolean? = null,
+    /**
+     * Stage 5.2 — optional per-peer send-rate pacer. When supplied, every
+     * outbound `transport.send()` call in [broadcastBundle] / [forwardBundle] /
+     * [handleGet] checks for an available slot first; deferred sends call
+     * [onSendPaced] and skip the peer for this iteration (the retry loop will
+     * re-issue origination sends; relay forwards are dropped — the originator
+     * retries).
+     */
+    private val pacer: PerPeerSendPacer? = null,
+    /** Diagnostic hook: a send was deferred by [pacer]. */
+    private val onSendPaced: (peerId: String) -> Unit = { _ -> },
+    /** Diagnostic hook: [transport.send] returned false (transport rejected the bytes). */
+    private val onSendRejected: (peerId: String, bundleId: String) -> Unit = { _, _ -> },
+    /** Diagnostic hook: a bundle was dropped because its TTL had elapsed. */
+    private val onTtlExpiredDrop: (bundleId: String) -> Unit = { _ -> }
 ) {
     private val allowLegacyUnsigned: Boolean = allowLegacyUnsigned ?: (identity == null)
 
@@ -281,7 +296,14 @@ class MeshEngine(
         val bundle = synchronized(cacheLock) { cache[bundleId] } ?: return
         if (bundle.srcId != localUserId) return
         if (bundle.status == "DELIVERED_FINAL") return
-        if (bundle.ttlUntil < now()) return
+        if (bundle.ttlUntil < now()) {
+            // Stage 5.2: surface TTL-expired drops on the retry path so the
+            // diagnostics collector counts them. broadcastBundle has its own
+            // TTL guard for the origination path; retryBundle's early return
+            // means broadcastBundle never sees this expired bundle.
+            onTtlExpiredDrop(bundleId)
+            return
+        }
         broadcastBundle(bundle)
     }
 
@@ -324,6 +346,7 @@ class MeshEngine(
         val nowMs = now()
         if (bundle.ttlUntil < nowMs) {
             MeshLog.droppedTtl(bundle.bundleId, fromPeer = "self")
+            onTtlExpiredDrop(bundle.bundleId)
             return
         }
         val peers = snapshotConnectedPeers()
@@ -339,6 +362,13 @@ class MeshEngine(
             // per (bundleId, peer) pair). Origination / retry from the local user is
             // not bounded by the memo — the store-and-forward retry loop must be free
             // to re-broadcast after a PeerDisconnected + PeerConnected bounce.
+            //
+            // Stage 5.2: per-peer send pacing. If the pacer rejects, defer this peer
+            // (the next retry tick re-issues the broadcast and the gap will have elapsed).
+            if (pacer != null && !pacer.acquireSlot(peer, nowMs)) {
+                onSendPaced(peer)
+                continue
+            }
             val sendId = sendIdSeq.getAndIncrement()
             // Track the correlation BEFORE calling send — a synchronous failure path inside
             // send (e.g. LoopbackTransport "Peer not connected") will fire Error(sendId)
@@ -347,6 +377,7 @@ class MeshEngine(
             val accepted = transport.send(peer, payloadBytes, sendId)
             if (!accepted) {
                 synchronized(pendingLock) { pendingBundleSends.remove(sendId) }
+                onSendRejected(peer, bundle.bundleId)
                 continue
             }
             MeshLog.sending(bundle.bundleId, peer)
@@ -371,6 +402,7 @@ class MeshEngine(
         val nowMs = now()
         if (bundle.ttlUntil < nowMs) {
             MeshLog.droppedTtl(bundle.bundleId, fromPeer = fromPeerId)
+            onTtlExpiredDrop(bundle.bundleId)
             return
         }
         // Spec: "IF hopsLeft <= 0 → DO NOT forward". A bundle with current hopsLeft > 0
@@ -412,9 +444,20 @@ class MeshEngine(
             // used for the hop/ttl guard — and the pre-decrement value is what we
             // actually validated above.
             if (!router.shouldForward(bundle, peer, nowMs)) continue
+            // Stage 5.2: per-peer pacing applies to relays too — if the pacer
+            // rejects, drop this forward (the originator's retry will eventually
+            // re-broadcast and the relay path will fire on the next forward).
+            if (pacer != null && !pacer.acquireSlot(peer, nowMs)) {
+                onSendPaced(peer)
+                continue
+            }
             // Relay forwards are not correlated with a local outbound message row —
             // use sendId=0 so PayloadSent doesn't try to advance a non-existent row.
-            transport.send(peer, payloadBytes, sendId = 0L)
+            val accepted = transport.send(peer, payloadBytes, sendId = 0L)
+            if (!accepted) {
+                onSendRejected(peer, bundle.bundleId)
+                continue
+            }
             MeshLog.forwarded(bundle.bundleId, peer, nextHops)
         }
     }
