@@ -36,6 +36,16 @@ class DiagnosticsCollector(
     val bundlesAcked = AtomicLong(0)
     val bundlesRead = AtomicLong(0)
     val bundlesFailed = AtomicLong(0)
+    // Stage 5.2 — reliability + hardening counters. None are surfaced as
+    // MeshEvents; the wiring layer (TharMeshApp) bumps these directly via
+    // the `record*` methods below as RetryPolicy / PeerChurnDebouncer /
+    // PerPeerSendPacer fire their respective hooks.
+    val retryAttempts = AtomicLong(0)
+    val peerChurnEvents = AtomicLong(0)
+    val sendRejected = AtomicLong(0)
+    val sendPaced = AtomicLong(0)
+    val ttlExpiredDrops = AtomicLong(0)
+    val stuckSendingRecovered = AtomicLong(0)
 
     private val createdAt: Long = now()
     @Volatile private var lastEventAt: Long = 0L
@@ -120,7 +130,13 @@ class DiagnosticsCollector(
         val bundlesDelivered: Long,
         val bundlesAcked: Long,
         val bundlesRead: Long,
-        val bundlesFailed: Long
+        val bundlesFailed: Long,
+        val retryAttempts: Long,
+        val peerChurnEvents: Long,
+        val sendRejected: Long,
+        val sendPaced: Long,
+        val ttlExpiredDrops: Long,
+        val stuckSendingRecovered: Long
     )
 
     fun snapshot(): Snapshot {
@@ -138,7 +154,13 @@ class DiagnosticsCollector(
             bundlesDelivered = bundlesDelivered.get(),
             bundlesAcked = bundlesAcked.get(),
             bundlesRead = bundlesRead.get(),
-            bundlesFailed = bundlesFailed.get()
+            bundlesFailed = bundlesFailed.get(),
+            retryAttempts = retryAttempts.get(),
+            peerChurnEvents = peerChurnEvents.get(),
+            sendRejected = sendRejected.get(),
+            sendPaced = sendPaced.get(),
+            ttlExpiredDrops = ttlExpiredDrops.get(),
+            stuckSendingRecovered = stuckSendingRecovered.get()
         )
     }
 
@@ -159,6 +181,12 @@ class DiagnosticsCollector(
             .put("bundlesAcked", s.bundlesAcked)
             .put("bundlesRead", s.bundlesRead)
             .put("bundlesFailed", s.bundlesFailed)
+            .put("retryAttempts", s.retryAttempts)
+            .put("peerChurnEvents", s.peerChurnEvents)
+            .put("sendRejected", s.sendRejected)
+            .put("sendPaced", s.sendPaced)
+            .put("ttlExpiredDrops", s.ttlExpiredDrops)
+            .put("stuckSendingRecovered", s.stuckSendingRecovered)
         val events = JSONArray()
         for (e in recentEvents()) {
             events.put(
@@ -169,11 +197,53 @@ class DiagnosticsCollector(
             )
         }
         return JSONObject()
-            .put("stage", "5.1")
+            .put("stage", "5.2")
             .put("generatedAt", s.lastEventAt.let { if (it == 0L) now() else it })
             .put("counters", counters)
             .put("recentEvents", events)
             .toString(2)
+    }
+
+    // --- Stage 5.2 counter hooks. Called from the wiring layer (TharMeshApp
+    // / MessageRepository / MeshEngine) as the reliability components fire
+    // their respective events. None of these have a corresponding MeshEvent;
+    // they are diagnostic-only side channels. recordRetryAttempt also writes
+    // into the recent-events tail so field testers can correlate retries with
+    // bundle lifecycle entries.
+    fun recordRetryAttempt(bundleId: String) {
+        retryAttempts.incrementAndGet()
+        lastEventAt = now()
+        record("RetryAttempt", bundleId)
+    }
+
+    fun recordPeerChurnSuppressed(peerId: String) {
+        peerChurnEvents.incrementAndGet()
+        lastEventAt = now()
+        record("PeerChurnSuppressed", peerId)
+    }
+
+    fun recordSendRejected(peerId: String, bundleId: String) {
+        sendRejected.incrementAndGet()
+        lastEventAt = now()
+        record("SendRejected", "$bundleId to=$peerId")
+    }
+
+    fun recordSendPaced(peerId: String) {
+        sendPaced.incrementAndGet()
+        lastEventAt = now()
+        record("SendPaced", peerId)
+    }
+
+    fun recordTtlExpiredDrop(bundleId: String) {
+        ttlExpiredDrops.incrementAndGet()
+        lastEventAt = now()
+        record("TtlExpired", bundleId)
+    }
+
+    fun recordStuckSendingRecovered(bundleId: String) {
+        stuckSendingRecovered.incrementAndGet()
+        lastEventAt = now()
+        record("StuckSendingRecovered", bundleId)
     }
 
     /** Reset counters + recent events. Used by the "Clear" UI action. */
@@ -181,6 +251,9 @@ class DiagnosticsCollector(
         peersFound.set(0); peersConnected.set(0); peersDisconnected.set(0)
         bundlesSending.set(0); bundlesSent.set(0); bundlesDelivered.set(0)
         bundlesAcked.set(0); bundlesRead.set(0); bundlesFailed.set(0)
+        retryAttempts.set(0); peerChurnEvents.set(0)
+        sendRejected.set(0); sendPaced.set(0)
+        ttlExpiredDrops.set(0); stuckSendingRecovered.set(0)
         synchronized(recentLock) { recent.clear() }
         lastEventAt = 0L
     }

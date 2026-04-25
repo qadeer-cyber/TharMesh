@@ -8,6 +8,8 @@ import com.tharmesh.db.RoomBundleStore
 import com.tharmesh.diagnostics.DiagnosticsCollector
 import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.dtn.MeshLog
+import com.tharmesh.dtn.PerPeerSendPacer
+import com.tharmesh.dtn.RetryConfig
 import com.tharmesh.identity.RoomPeerTrustStore
 import com.tharmesh.mesh.EmptyMeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
@@ -103,18 +105,33 @@ class TharMeshApp : Application() {
         // Wire the persistent bundle cache so the engine survives process death:
         // start() will restore non-expired bundles, every cachePut / status update
         // mirrors to disk, and the repository tick calls sweepExpiredPersistent().
+        // Stage 5.2 — per-peer send pacer + diagnostics hooks. The pacer
+        // enforces a 40 ms minimum gap between sends to the same peer (defaults
+        // from [RetryConfig.DEFAULT.perPeerSendGapMs]); the hooks bump the
+        // diagnostics counters as the engine fires the corresponding events.
+        val retryConfig = RetryConfig.DEFAULT
+        val pacer = PerPeerSendPacer(retryConfig.perPeerSendGapMs)
+        val diag = diagnostics
         val engine = MeshEngine(
             localUserId = profile.userId,
             transport = t,
             bundleStore = RoomBundleStore(database.bundleDao()),
             identity = identity,
-            peerTrustStore = RoomPeerTrustStore(database.peerIdentityDao())
+            peerTrustStore = RoomPeerTrustStore(database.peerIdentityDao()),
+            pacer = pacer,
+            onSendPaced = { peerId -> diag.recordSendPaced(peerId) },
+            onSendRejected = { peerId, bundleId -> diag.recordSendRejected(peerId, bundleId) },
+            onTtlExpiredDrop = { bundleId -> diag.recordTtlExpiredDrop(bundleId) }
         )
         val repo = MessageRepository(
             db = database,
             mesh = engine,
             myUserId = { profile.userId },
-            scope = appScope
+            scope = appScope,
+            retryConfig = retryConfig,
+            onRetryAttempt = { bundleId -> diag.recordRetryAttempt(bundleId) },
+            onStuckSendingRecovered = { bundleId -> diag.recordStuckSendingRecovered(bundleId) },
+            onPeerChurnSuppressed = { peerId -> diag.recordPeerChurnSuppressed(peerId) }
         )
         val source = NearbyMeshDataSource(engine)
         directory.setSource(source)

@@ -8,6 +8,9 @@ import com.tharmesh.db.entity.MessageEntity
 import com.tharmesh.dtn.MeshBundle
 import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.dtn.MeshEvent
+import com.tharmesh.dtn.PeerChurnDebouncer
+import com.tharmesh.dtn.RetryConfig
+import com.tharmesh.dtn.RetryPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,8 +41,44 @@ class MessageRepository(
     private val mesh: MeshEngine,
     private val myUserId: () -> String,
     private val scope: CoroutineScope,
-    private val now: () -> Long = { System.currentTimeMillis() }
+    private val now: () -> Long = { System.currentTimeMillis() },
+    /** Stage 5.2 — retry timing knobs. Tests inject a tight schedule. */
+    private val retryConfig: RetryConfig = RetryConfig.DEFAULT,
+    /**
+     * Stage 5.2 — per-bundle backoff state. Defaults to a fresh policy seeded
+     * from [retryConfig]. Tests pass a custom one (e.g. with a deterministic
+     * jitter source) to lock in expected next-retry timings.
+     */
+    private val retryPolicy: RetryPolicy = RetryPolicy(retryConfig),
+    /** Diagnostic hook: the retry loop re-broadcast a bundle. */
+    private val onRetryAttempt: (bundleId: String) -> Unit = { _ -> },
+    /** Diagnostic hook: a bundle row was found in SENDING state and re-issued. */
+    private val onStuckSendingRecovered: (bundleId: String) -> Unit = { _ -> },
+    /** Diagnostic hook: a peer reconnect was suppressed by the churn debouncer. */
+    private val onPeerChurnSuppressed: (peerId: String) -> Unit = { _ -> }
 ) {
+
+    /**
+     * Stage 5.2 — coalesce rapid `PeerConnected` triggers for the same peer into
+     * a single trailing flush. Driven by the retry-loop tick (see
+     * [startStoreAndForwardLoop]).
+     */
+    private val churnDebouncer = PeerChurnDebouncer(
+        windowMs = retryConfig.churnDebounceMs,
+        action = { peerId ->
+            // Off-thread to avoid holding the retry-loop's IO dispatcher slot for the
+            // duration of a flush; flushPendingForLocalUser hits the DB.
+            scope.launch(Dispatchers.IO) {
+                flushPendingForLocalUser()
+                mesh.syncWithPeer(peerId)
+                // Stage 5.2: a NEW peer reconnect resets every tracked bundle's
+                // attempt counter back to 0. The topology may have improved
+                // (this peer might be the missing relay) so backoff on stale
+                // state is no longer informative.
+                retryPolicy.onPeerConnectedBypass(now())
+            }
+        }
+    )
 
     init {
         mesh.setEventListener { event -> onMeshEvent(event) }
@@ -239,9 +278,12 @@ class MessageRepository(
             is MeshEvent.BundleAcked -> scope.launch(Dispatchers.IO) {
                 messagesDelivered++
                 advanceByBundleId(event.bundleId, MessageStatus.DELIVERED)
+                // Stage 5.2: drop retry state — the bundle is delivered.
+                retryPolicy.onDelivered(event.bundleId)
             }
             is MeshEvent.BundleRead -> scope.launch(Dispatchers.IO) {
                 advanceByBundleId(event.bundleId, MessageStatus.READ)
+                retryPolicy.onDelivered(event.bundleId)
             }
             is MeshEvent.BundleDelivered -> {
                 messagesRelayed++
@@ -265,11 +307,16 @@ class MessageRepository(
                     }
                 }
             }
-            is MeshEvent.PeerConnected -> scope.launch(Dispatchers.IO) {
-                // Event-driven flush: the timer-based retry loop is a safety net; firing
-                // an immediate retry here means a QUEUED message gets a fresh send attempt
-                // the moment a peer actually becomes reachable.
-                flushPendingForLocalUser()
+            is MeshEvent.PeerConnected -> {
+                // Stage 5.2: coalesce rapid reconnects for the same peer into a
+                // single trailing flush. The debouncer's action runs on the IO
+                // dispatcher inside the retry-loop tick — see startStoreAndForwardLoop.
+                val peerId = event.peerId
+                val before = churnDebouncer.suppressedTotal()
+                churnDebouncer.onPeerConnected(peerId, now())
+                if (churnDebouncer.suppressedTotal() > before) {
+                    onPeerChurnSuppressed(peerId)
+                }
             }
             is MeshEvent.PeerFound,
             is MeshEvent.PeerDisconnected -> {
@@ -304,19 +351,30 @@ class MessageRepository(
     }
 
     /**
-     * Start a coroutine that every [STORE_AND_FORWARD_INTERVAL_MS] walks the set of
-     * still-undelivered outbound messages and hands them back to the mesh engine for
-     * another broadcast attempt. The engine itself also opportunistically syncs with any
-     * newly-connected peer via INV/GET, so this loop mostly catches the case where the
-     * app was offline when the message was composed.
+     * Start a coroutine that ticks every [RetryConfig.tickIntervalMs] and, for
+     * each still-undelivered outbound message, asks [retryPolicy] whether the
+     * per-bundle backoff window has elapsed. If yes, hands the bundle back to
+     * the mesh engine for another broadcast attempt and records the attempt
+     * (advancing the per-bundle nextRetryAt). Also drives [churnDebouncer]'s
+     * trailing fire and the persistent-bundle TTL sweep.
+     *
+     * Stage 5.2: replaces the flat 15s sweep with a per-bundle exponential
+     * backoff. There is no max-attempt cap — retries stop only on delivery /
+     * read or TTL expiry (the engine drops expired bundles from the cache, so
+     * `mesh.retryBundle()` becomes a no-op for them).
      */
     fun startStoreAndForwardLoop() {
         if (retryJob?.isActive == true) return
         retryJob = scope.launch(Dispatchers.IO) {
             while (true) {
-                delay(STORE_AND_FORWARD_INTERVAL_MS)
+                delay(retryConfig.tickIntervalMs)
                 try {
-                    flushPendingForLocalUser()
+                    val nowMs = now()
+                    // Fire any peer-churn settled actions first — these may queue
+                    // an immediate flush via flushPendingForLocalUser, which the
+                    // per-bundle policy below will then pick up.
+                    churnDebouncer.processDue(nowMs)
+                    runRetryTick(nowMs, db.messageDao().pendingOutbound(myUserId()))
                     // Opportunistic expired-bundle cleanup — keeps the persistent
                     // bundle table from growing unboundedly when the app stays up
                     // for long periods. Cheap: single DELETE-WHERE on an indexed
@@ -329,9 +387,29 @@ class MessageRepository(
         }
     }
 
+    /**
+     * Single retry-tick body — visible for tests so the policy can be exercised
+     * without spinning up the coroutine loop or a real Room DAO. Production
+     * passes `db.messageDao().pendingOutbound(myUserId())` for [pending]; tests
+     * inject a deterministic list (incl. SENDING-state rows) to exercise the
+     * stuck-recovery path.
+     */
+    internal fun runRetryTick(nowMs: Long, pending: List<MessageEntity>) {
+        runRetryTickStandalone(
+            nowMs = nowMs,
+            pending = pending,
+            retryPolicy = retryPolicy,
+            onRetryAttempt = onRetryAttempt,
+            onStuckSendingRecovered = onStuckSendingRecovered,
+            retryBundle = { bid -> mesh.retryBundle(bid) }
+        )
+    }
+
     fun stopStoreAndForwardLoop() {
         retryJob?.cancel()
         retryJob = null
+        retryPolicy.reset()
+        churnDebouncer.reset()
     }
 
     /**
@@ -390,7 +468,77 @@ class MessageRepository(
     companion object {
         const val DEFAULT_TTL_MS: Long = 24L * 60L * 60L * 1000L
         const val DEFAULT_HOPS: Int = 8
-        /** How often the retry loop walks undelivered outbound messages. */
+        /**
+         * Pre-Stage-5.2 retry-loop tick interval. Kept as a public constant for any
+         * external caller that still references it; the live tick rate is now driven
+         * by [RetryConfig.tickIntervalMs] (default 1000 ms).
+         */
+        @Deprecated("Stage 5.2 — retry tick is now driven by RetryConfig.tickIntervalMs.")
         const val STORE_AND_FORWARD_INTERVAL_MS: Long = 15_000L
+    }
+}
+
+/**
+ * Stage 5.2 — retry-tick body extracted for direct unit testing. Lives at the
+ * file level (not on [MessageRepository]) so tests don't need to instantiate a
+ * RoomDatabase to exercise the per-bundle backoff + stuck-SENDING recovery
+ * logic. Walks every pending outbound row, consults the retry policy, surfaces
+ * stuck rows, and re-broadcasts via the supplied [retryBundle] lambda.
+ *
+ * Production callers go through [MessageRepository.runRetryTick] which wires
+ * [retryBundle] to [com.tharmesh.dtn.MeshEngine.retryBundle].
+ *
+ * Contract for [retryBundle]:
+ *  - Returns `true` if a re-broadcast was actually attempted.
+ *  - Returns `false` for any no-op path (cache miss, already DELIVERED_FINAL,
+ *    or **TTL expired**). On `false` we deliberately:
+ *      - skip [onRetryAttempt] (so `diagnostics.retryAttempts` is not inflated
+ *        by repeated no-ops on a stuck row),
+ *      - skip [RetryPolicy.recordAttempt] (so the policy backoff curve isn't
+ *        consumed by no-ops), and
+ *      - call [RetryPolicy.onTtlExpired] to free the per-bundle policy state.
+ *        Without this, the policy's internal map would grow unboundedly because
+ *        Room rows whose TTL elapsed are still returned by `pendingOutbound`
+ *        until status flips to FAILED/DELIVERED.
+ *
+ * The TTL-drop diagnostic itself is fired inside [com.tharmesh.dtn.MeshEngine.retryBundle]
+ * via `onTtlExpiredDrop`. To avoid inflating that counter on every tick for the
+ * same expired bundle, we also short-circuit subsequent ticks here: once
+ * [RetryPolicy.onTtlExpired] frees state, the **first** tick to encounter the
+ * row will drop it; the bundle is then absent from the policy map, and on the
+ * next tick we re-create state with `recordAttempt` only if `retryBundle`
+ * returns true (i.e. the cache was repopulated and TTL is no longer expired —
+ * this would only happen if the row's TTL was bumped, which doesn't occur in
+ * normal flow). In practice this means a TTL-expired row hits the diagnostic
+ * exactly once, then is silent until Room status updates.
+ */
+internal fun runRetryTickStandalone(
+    nowMs: Long,
+    pending: List<MessageEntity>,
+    retryPolicy: RetryPolicy,
+    onRetryAttempt: (String) -> Unit,
+    onStuckSendingRecovered: (String) -> Unit,
+    retryBundle: (String) -> Boolean
+) {
+    for (msg in pending) {
+        val bid = msg.bundleId ?: continue
+        if (!retryPolicy.shouldAttempt(bid, nowMs)) continue
+        // Snapshot the stuck-SENDING state BEFORE attempting retry — the hook
+        // fires only on a successful re-broadcast (no point reporting recovery
+        // for a TTL-expired row that won't actually go out).
+        val wasStuckSending = msg.status == MessageStatus.SENDING
+        val attempted = retryBundle(bid)
+        if (!attempted) {
+            // No-op path — most commonly TTL expiry. Free per-bundle state to
+            // avoid unbounded growth in the policy map; do NOT increment retry
+            // counters, since no retry actually happened.
+            retryPolicy.onTtlExpired(bid)
+            continue
+        }
+        if (wasStuckSending) {
+            onStuckSendingRecovered(bid)
+        }
+        onRetryAttempt(bid)
+        retryPolicy.recordAttempt(bid, nowMs)
     }
 }
