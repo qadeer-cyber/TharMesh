@@ -254,9 +254,15 @@ class MessageRepository(
                 val updated = db.messageDao().markFailedIfStillInFlight(event.bundleId)
                 if (updated > 0) {
                     val msg = db.messageDao().getByBundleId(event.bundleId) ?: return@launch
-                    db.conversationDao().setLastMessage(
-                        msg.peerUserId, msg.body, msg.timestamp, MessageStatus.FAILED
-                    )
+                    // Re-check: a concurrent BundleSent/BundleAcked coroutine may have
+                    // already advanced the message past FAILED (fanout to multiple peers
+                    // where one fails and another succeeds). Only reflect FAILED in the
+                    // conversation row if the message is still actually FAILED.
+                    if (msg.status == MessageStatus.FAILED) {
+                        db.conversationDao().setLastMessage(
+                            msg.peerUserId, msg.body, msg.timestamp, MessageStatus.FAILED
+                        )
+                    }
                 }
             }
             is MeshEvent.PeerConnected -> scope.launch(Dispatchers.IO) {
