@@ -2,6 +2,7 @@ package com.tharmesh.data
 
 import android.content.Context
 import com.tharmesh.crypto.CryptoBox
+import com.tharmesh.identity.CryptoIdentity
 import java.util.UUID
 
 data class UserProfile(
@@ -21,6 +22,9 @@ object UserPrefs {
     private const val KEY_AVATAR = "avatar_url"
     private const val KEY_PROVIDER = "auth_provider"
     private const val KEY_AUTHENTICATED = "authenticated"
+    private const val KEY_PRIVATE_KEY = "identity_private_key_b64"
+    private const val KEY_PUBLIC_KEY = "identity_public_key_b64"
+    private const val KEY_FINGERPRINT = "identity_fingerprint"
 
     const val PROVIDER_ANONYMOUS = "anonymous"
     const val PROVIDER_GOOGLE = "google"
@@ -85,5 +89,47 @@ object UserPrefs {
     fun userIdFromGoogleSub(googleSub: String): String {
         val hash = CryptoBox.sha256(googleSub).take(12)
         return "tm-$hash"
+    }
+
+    /**
+     * Return the device's long-term signing identity, generating + persisting a
+     * fresh ECDSA P-256 keypair on first call. Subsequent calls deserialize the
+     * stored PKCS#8 / X.509 base64 blobs via [CryptoIdentity.fromBase64].
+     *
+     * NOTE: the private key is stored in SharedPreferences, NOT Android Keystore.
+     * This is a deliberate Stage 4.6 baseline — a later stage should migrate to
+     * Keystore (API 23+) for hardware-backed storage. Until then, device
+     * compromise == identity compromise. Documented as a Known Limitation.
+     */
+    @JvmStatic
+    @Synchronized
+    fun ensureIdentity(context: Context): CryptoIdentity {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val priv = prefs.getString(KEY_PRIVATE_KEY, null)
+        val pub = prefs.getString(KEY_PUBLIC_KEY, null)
+        if (!priv.isNullOrBlank() && !pub.isNullOrBlank()) {
+            val restored = CryptoIdentity.fromBase64(priv, pub)
+            if (restored != null) return restored
+            // Stored blobs are corrupted — regenerate. Log via println (no Android
+            // logger at the UserPrefs layer). This IS a security-relevant event:
+            // peers that had pinned our old key via TOFU will now reject us until
+            // their state is cleared. Acceptable for the rare corruption case.
+            println("UserPrefs.ensureIdentity: stored keypair failed to decode, regenerating")
+        }
+        val identity = CryptoIdentity.generate()
+        prefs.edit()
+            .putString(KEY_PRIVATE_KEY, identity.privateKeyBase64)
+            .putString(KEY_PUBLIC_KEY, identity.publicKeyBase64)
+            .putString(KEY_FINGERPRINT, identity.fingerprint)
+            .apply()
+        return identity
+    }
+
+    /** Read-only — returns null if no identity has been generated yet. */
+    fun readIdentity(context: Context): CryptoIdentity? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val priv = prefs.getString(KEY_PRIVATE_KEY, null) ?: return null
+        val pub = prefs.getString(KEY_PUBLIC_KEY, null) ?: return null
+        return CryptoIdentity.fromBase64(priv, pub)
     }
 }

@@ -135,7 +135,8 @@ class MessagesFragment : Fragment() {
             holder.time.text = DateFormat.format("HH:mm", Date(conv.lastTimestamp))
 
             val statusGlyph = when (conv.lastMessageStatus) {
-                MessageStatus.QUEUED -> "⏳ "
+                MessageStatus.QUEUED,
+                MessageStatus.SENDING -> "⏳ "
                 MessageStatus.SENT -> "✓ "
                 MessageStatus.DELIVERED -> "✓✓ "
                 MessageStatus.READ -> "✓✓ "

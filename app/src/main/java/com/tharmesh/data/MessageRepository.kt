@@ -227,6 +227,11 @@ class MessageRepository(
 
     private fun onMeshEvent(event: MeshEvent) {
         when (event) {
+            is MeshEvent.BundleSending -> scope.launch(Dispatchers.IO) {
+                // Transport accepted the bundle; bytes are queued inside Nearby but
+                // PayloadSent has not yet fired. Authoritative "in flight" state.
+                advanceByBundleId(event.bundleId, MessageStatus.SENDING)
+            }
             is MeshEvent.BundleSent -> scope.launch(Dispatchers.IO) {
                 messagesSent++
                 advanceByBundleId(event.bundleId, MessageStatus.SENT)
@@ -242,6 +247,46 @@ class MessageRepository(
                 messagesRelayed++
                 handleIncomingBundle(event.bundle)
             }
+            is MeshEvent.BundleFailed -> scope.launch(Dispatchers.IO) {
+                // Only flip rows that are still in-flight (QUEUED or SENDING). A late
+                // Error arriving after the message already advanced to SENT/DELIVERED/READ
+                // must not regress it — the retry loop promoted it forward correctly.
+                val updated = db.messageDao().markFailedIfStillInFlight(event.bundleId)
+                if (updated > 0) {
+                    val msg = db.messageDao().getByBundleId(event.bundleId) ?: return@launch
+                    // Re-check: a concurrent BundleSent/BundleAcked coroutine may have
+                    // already advanced the message past FAILED (fanout to multiple peers
+                    // where one fails and another succeeds). Only reflect FAILED in the
+                    // conversation row if the message is still actually FAILED.
+                    if (msg.status == MessageStatus.FAILED) {
+                        db.conversationDao().setLastMessage(
+                            msg.peerUserId, msg.body, msg.timestamp, MessageStatus.FAILED
+                        )
+                    }
+                }
+            }
+            is MeshEvent.PeerConnected -> scope.launch(Dispatchers.IO) {
+                // Event-driven flush: the timer-based retry loop is a safety net; firing
+                // an immediate retry here means a QUEUED message gets a fresh send attempt
+                // the moment a peer actually becomes reachable.
+                flushPendingForLocalUser()
+            }
+            is MeshEvent.PeerFound,
+            is MeshEvent.PeerDisconnected -> {
+                // Data source handles these; nothing for the repository to do.
+            }
+        }
+    }
+
+    /**
+     * Re-broadcast every undelivered outbound message we know about. Called on
+     * [MeshEvent.PeerConnected] and from the store-and-forward timer.
+     */
+    private fun flushPendingForLocalUser() {
+        val pending = db.messageDao().pendingOutbound(myUserId())
+        for (msg in pending) {
+            val id = msg.bundleId ?: continue
+            mesh.retryBundle(id)
         }
     }
 
@@ -271,11 +316,12 @@ class MessageRepository(
             while (true) {
                 delay(STORE_AND_FORWARD_INTERVAL_MS)
                 try {
-                    val pending = db.messageDao().pendingOutbound(myUserId())
-                    for (msg in pending) {
-                        val id = msg.bundleId ?: continue
-                        mesh.retryBundle(id)
-                    }
+                    flushPendingForLocalUser()
+                    // Opportunistic expired-bundle cleanup — keeps the persistent
+                    // bundle table from growing unboundedly when the app stays up
+                    // for long periods. Cheap: single DELETE-WHERE on an indexed
+                    // column.
+                    mesh.sweepExpiredPersistent()
                 } catch (_: Throwable) {
                     // Ignore transient I/O failures; next tick will retry.
                 }

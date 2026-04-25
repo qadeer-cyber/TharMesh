@@ -65,16 +65,20 @@ class NearbyConnectionsTransport(
         userIdToEndpoint.clear()
     }
 
-    override fun send(peerId: String, payload: ByteArray): Boolean {
+    override fun send(peerId: String, payload: ByteArray, sendId: Long): Boolean {
         val endpointId = userIdToEndpoint[peerId]
         if (endpointId == null) {
-            listener?.invoke(TransportEvent.Error(peerId, "No Nearby endpoint for userId"))
+            // No endpoint: report failure synchronously. Caller must not assume the
+            // synchronous `false` return on its own — the Error event carries sendId.
+            listener?.invoke(TransportEvent.Error(peerId, sendId, "No Nearby endpoint for userId"))
             return false
         }
         client.sendPayload(endpointId, Payload.fromBytes(payload))
-            .addOnSuccessListener { listener?.invoke(TransportEvent.PayloadSent(peerId, payload.size)) }
+            .addOnSuccessListener {
+                listener?.invoke(TransportEvent.PayloadSent(peerId, sendId, payload.size))
+            }
             .addOnFailureListener { e ->
-                listener?.invoke(TransportEvent.Error(peerId, "sendPayload failed: ${e.message}"))
+                listener?.invoke(TransportEvent.Error(peerId, sendId, "sendPayload failed: ${e.message}"))
             }
         return true
     }
@@ -84,7 +88,7 @@ class NearbyConnectionsTransport(
         client.startAdvertising(localPeerId, serviceId, connectionLifecycleCallback, options)
             .addOnFailureListener { e ->
                 Log.w(TAG, "startAdvertising failed", e)
-                listener?.invoke(TransportEvent.Error(null, "startAdvertising: ${e.message}"))
+                listener?.invoke(TransportEvent.Error(null, 0L, "startAdvertising: ${e.message}"))
             }
     }
 
@@ -93,7 +97,7 @@ class NearbyConnectionsTransport(
         client.startDiscovery(serviceId, endpointDiscoveryCallback, options)
             .addOnFailureListener { e ->
                 Log.w(TAG, "startDiscovery failed", e)
-                listener?.invoke(TransportEvent.Error(null, "startDiscovery: ${e.message}"))
+                listener?.invoke(TransportEvent.Error(null, 0L, "startDiscovery: ${e.message}"))
             }
     }
 
@@ -137,7 +141,7 @@ class NearbyConnectionsTransport(
                     userIdToEndpoint.remove(userId, endpointId)
                 }
                 listener?.invoke(
-                    TransportEvent.Error(userId, "connection failed: ${resolution.status.statusMessage}")
+                    TransportEvent.Error(userId, 0L, "connection failed: ${resolution.status.statusMessage}")
                 )
             }
         }

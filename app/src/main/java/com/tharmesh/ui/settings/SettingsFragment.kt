@@ -10,12 +10,15 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import com.tharmesh.TharMeshApp
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
+import com.tharmesh.diagnostics.FieldTestMode
 import com.tharmesh.ui.auth.LoginActivity
+import com.tharmesh.ui.diagnostics.DiagnosticsActivity
 import tharmesh.app.R
 
 /**
@@ -46,20 +49,7 @@ class SettingsFragment : Fragment() {
         renderProfile()
 
         val rows = view.findViewById<LinearLayout>(R.id.settings_rows)
-        rows.removeAllViews()
-        val profileRow = addRow(rows, R.drawable.ic_user, R.drawable.bg_round_icon_cyan,
-            R.string.settings_profile, R.string.settings_profile_sub)
-        profileRow.setOnClickListener { showEditProfileDialog() }
-        addRow(rows, R.drawable.ic_lock, R.drawable.bg_round_icon_green,
-            R.string.settings_security, R.string.settings_security_sub)
-        addRow(rows, R.drawable.ic_wifi, R.drawable.bg_round_icon_cyan,
-            R.string.settings_mesh, R.string.settings_mesh_sub)
-        addRow(rows, R.drawable.ic_storage, R.drawable.bg_round_icon_amber,
-            R.string.settings_storage, R.string.settings_storage_sub)
-        addRow(rows, R.drawable.ic_bolt, R.drawable.bg_round_icon_amber,
-            R.string.settings_battery, R.string.settings_battery_sub)
-        addRow(rows, R.drawable.ic_shield, R.drawable.bg_round_icon_green,
-            R.string.settings_about, R.string.settings_about_sub)
+        renderRows(rows)
 
         view.findViewById<Button>(R.id.button_sign_out).setOnClickListener {
             AlertDialog.Builder(ctx)
@@ -79,6 +69,50 @@ class SettingsFragment : Fragment() {
                 }
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show()
+        }
+    }
+
+    /**
+     * Rebuilds the settings rows. A long-press on the About row toggles Stage 5.1
+     * Field Test Mode; when enabled, a Diagnostics row becomes visible. No new
+     * XML resources or icons are needed — existing shield / wifi icons are reused.
+     */
+    private fun renderRows(rows: LinearLayout) {
+        val ctx = requireContext()
+        rows.removeAllViews()
+        val profileRow = addRow(rows, R.drawable.ic_user, R.drawable.bg_round_icon_cyan,
+            R.string.settings_profile, R.string.settings_profile_sub)
+        profileRow.setOnClickListener { showEditProfileDialog() }
+        addRow(rows, R.drawable.ic_lock, R.drawable.bg_round_icon_green,
+            R.string.settings_security, R.string.settings_security_sub)
+        addRow(rows, R.drawable.ic_wifi, R.drawable.bg_round_icon_cyan,
+            R.string.settings_mesh, R.string.settings_mesh_sub)
+        addRow(rows, R.drawable.ic_storage, R.drawable.bg_round_icon_amber,
+            R.string.settings_storage, R.string.settings_storage_sub)
+        addRow(rows, R.drawable.ic_bolt, R.drawable.bg_round_icon_amber,
+            R.string.settings_battery, R.string.settings_battery_sub)
+
+        if (FieldTestMode.isEnabled(ctx)) {
+            val diagRow = addRow(rows, R.drawable.ic_wifi, R.drawable.bg_round_icon_green,
+                R.string.settings_diagnostics, R.string.settings_diagnostics_sub)
+            diagRow.setOnClickListener {
+                startActivity(Intent(ctx, DiagnosticsActivity::class.java))
+            }
+        }
+
+        val aboutRow = addRow(rows, R.drawable.ic_shield, R.drawable.bg_round_icon_green,
+            R.string.settings_about, R.string.settings_about_sub)
+        // Hidden entry point: long-press About to toggle Field Test Mode. No
+        // visible affordance — field testers get instructions separately.
+        aboutRow.setOnLongClickListener {
+            val enabled = FieldTestMode.toggle(ctx)
+            Toast.makeText(
+                ctx,
+                if (enabled) R.string.field_test_enabled else R.string.field_test_disabled,
+                Toast.LENGTH_SHORT
+            ).show()
+            renderRows(rows)
+            true
         }
     }
 

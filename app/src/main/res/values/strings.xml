@@ -111,6 +111,10 @@
     <string name="devices_empty_sub">Turn on Bluetooth/Wi-Fi and move within ~30 m of another TharMesh device, then tap Scan.</string>
     <string name="devices_scanning_sub">Looking for TharMesh devices over Bluetooth + Wi-Fi…</string>
     <string name="devices_connect">Connect</string>
+
+    <string name="perms_needed_title">Permissions needed</string>
+    <string name="perms_needed_body">TharMesh needs Bluetooth, Location and nearby-device permissions to discover other phones over the mesh. Without them the app cannot see anyone.</string>
+    <string name="perms_needed_retry">Grant</string>
     <string name="devices_connected">Connected</string>
 
     <!-- Signal quality labels -->
@@ -147,6 +151,21 @@
     <string name="settings_about">About TharMesh</string>
     <string name="settings_about_sub">Version, open-source credits</string>
     <string name="settings_sign_out">Sign out</string>
+
+    <!-- Stage 5.1 — Field Test Mode + Diagnostics. -->
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_subtitle">Live mesh counters. Enabled only in Field Test Mode.</string>
+    <string name="diagnostics_counters">Counters</string>
+    <string name="diagnostics_recent">Recent events (newest first)</string>
+    <string name="diagnostics_recent_empty">No mesh events yet.</string>
+    <string name="diagnostics_refresh">Refresh</string>
+    <string name="diagnostics_clear">Clear</string>
+    <string name="diagnostics_share">Share diagnostics</string>
+    <string name="diagnostics_share_subject">TharMesh diagnostics</string>
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="settings_diagnostics_sub">Live mesh counters + recent events</string>
+    <string name="field_test_enabled">Field Test Mode enabled</string>
+    <string name="field_test_disabled">Field Test Mode disabled</string>
 
     <!-- Accessibility -->
     <string name="cd_logo">TharMesh logo</string>

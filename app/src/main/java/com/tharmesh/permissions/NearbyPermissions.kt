@@ -1,7 +1,10 @@
 package com.tharmesh.permissions
 
 import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 
 /**
  * Canonical list of runtime permissions needed for Google Nearby Connections at different
@@ -42,4 +45,15 @@ object NearbyPermissions {
                 Manifest.permission.CHANGE_WIFI_STATE
             )
         }
+
+    /**
+     * True when every runtime permission in [required] is currently granted. Used by
+     * [com.tharmesh.TharMeshApp.ensureMeshStarted] to refuse to start the transport
+     * until the user has accepted — if we started anyway, Nearby's advertise/discover
+     * calls would silently fail and the mesh would stay permanently dead because the
+     * `started` flag had already been flipped to true.
+     */
+    fun allGranted(context: Context): Boolean = required.all { perm ->
+        ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+    }
 }

@@ -11,7 +11,16 @@ data class MeshBundle(
     val ttlUntil: Long,
     val hopsLeft: Int,
     val signature: String,
-    val status: String
+    val status: String,
+    /**
+     * Base64(X.509 DER) of the originator's ECDSA P-256 public key. Empty when the
+     * bundle predates Stage 4.6 (legacy-compat path only) or came from an engine
+     * constructed without a [com.tharmesh.identity.CryptoIdentity]. Used by
+     * receivers to verify [signature] against the canonical signing blob (see
+     * [com.tharmesh.identity.CryptoIdentity.canonicalBundleBytes]) and to feed the
+     * trust-on-first-use store ([com.tharmesh.identity.PeerTrustStore]).
+     */
+    val srcPubKey: String = ""
 )
 
 object BundleCodec {
@@ -26,6 +35,13 @@ object BundleCodec {
         json.put("hops", bundle.hopsLeft)
         json.put("sig", bundle.signature)
         json.put("status", bundle.status)
+        // Only serialize srcPubKey when we actually have one — keeps legacy wire
+        // format byte-identical for pre-Stage-4.6 bundles and lets receivers
+        // distinguish "signed bundle whose pubkey is missing" (reject) from
+        // "legacy unsigned bundle" (accept only under allowLegacyUnsigned).
+        if (bundle.srcPubKey.isNotEmpty()) {
+            json.put("pk", bundle.srcPubKey)
+        }
         return json.toString()
     }
 
@@ -40,7 +56,8 @@ object BundleCodec {
                 ttlUntil = json.optLong("ttl", 0L),
                 hopsLeft = json.optInt("hops", 0),
                 signature = json.optString("sig", ""),
-                status = json.optString("status", "PENDING")
+                status = json.optString("status", "PENDING"),
+                srcPubKey = json.optString("pk", "")
             )
         } catch (ignored: Throwable) {
             null

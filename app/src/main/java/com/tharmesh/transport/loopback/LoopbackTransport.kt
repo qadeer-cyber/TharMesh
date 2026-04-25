@@ -41,18 +41,18 @@ class LoopbackTransport(private val hub: Hub = Hub.shared) : Transport {
         }
     }
 
-    override fun send(peerId: String, payload: ByteArray): Boolean {
+    override fun send(peerId: String, payload: ByteArray, sendId: Long): Boolean {
         if (!running) {
-            listener?.invoke(TransportEvent.Error(peerId, "Transport not started"))
+            listener?.invoke(TransportEvent.Error(peerId, sendId, "Transport not started"))
             return false
         }
         val peer = hub.get(peerId)
         if (peer == null) {
-            listener?.invoke(TransportEvent.Error(peerId, "Peer not connected"))
+            listener?.invoke(TransportEvent.Error(peerId, sendId, "Peer not connected"))
             return false
         }
         peer.deliverEvent(TransportEvent.PayloadReceived(localPeerId, payload))
-        listener?.invoke(TransportEvent.PayloadSent(peerId, payload.size))
+        listener?.invoke(TransportEvent.PayloadSent(peerId, sendId, payload.size))
         return true
     }
 

@@ -54,10 +54,13 @@ interface MessageDao {
 
     /**
      * Atomic monotonic status advance. Only applies the update if the target rank is
-     * strictly higher than the current rank, and never touches FAILED rows. Returns the
-     * number of rows affected so the caller can skip the conversation bump when the
-     * update was a no-op (e.g. a stale BundleSent arriving after BundleAcked). Prevents
-     * the read-then-write TOCTOU race when multiple mesh events fire concurrently.
+     * strictly higher than the current rank. FAILED has rank -1, so a successful retry
+     * (BundleSent → rank 1, BundleDelivered → rank 2, BundleRead → rank 3) can promote
+     * a FAILED row forward; this is an advance, not a regression, and is intentional
+     * because [pendingOutbound] includes FAILED rows in the store-and-forward queue.
+     * Returns the number of rows affected so the caller can skip the conversation bump
+     * when the update was a no-op (e.g. a stale BundleSent arriving after BundleAcked).
+     * Prevents the read-then-write TOCTOU race when multiple mesh events fire concurrently.
      */
     @Query(
         """
@@ -67,19 +70,20 @@ interface MessageDao {
                deliveredAt = CASE WHEN :status = 'DELIVERED' THEN :ts ELSE deliveredAt END,
                readAt = CASE WHEN :status = 'READ' THEN :ts ELSE readAt END
          WHERE bundleId = :bundleId
-           AND status != 'FAILED'
            AND (CASE :status
                   WHEN 'QUEUED' THEN 0
-                  WHEN 'SENT' THEN 1
-                  WHEN 'DELIVERED' THEN 2
-                  WHEN 'READ' THEN 3
+                  WHEN 'SENDING' THEN 1
+                  WHEN 'SENT' THEN 2
+                  WHEN 'DELIVERED' THEN 3
+                  WHEN 'READ' THEN 4
                   ELSE -1
                 END)
              > (CASE status
                   WHEN 'QUEUED' THEN 0
-                  WHEN 'SENT' THEN 1
-                  WHEN 'DELIVERED' THEN 2
-                  WHEN 'READ' THEN 3
+                  WHEN 'SENDING' THEN 1
+                  WHEN 'SENT' THEN 2
+                  WHEN 'DELIVERED' THEN 3
+                  WHEN 'READ' THEN 4
                   ELSE -1
                 END)
         """
@@ -115,16 +119,34 @@ interface MessageDao {
     /**
      * Outbound messages that have NOT yet been DELIVERED/READ — the store-and-forward
      * retry loop re-broadcasts these every tick in case a peer came back online.
+     * SENDING is included because a device that crashes between [Transport.send]
+     * accepting the payload and Nearby firing PayloadSent would otherwise wedge the
+     * row; on next launch the retry sweep re-broadcasts and advances it forward.
      */
     @Query(
         """
         SELECT * FROM messages
          WHERE fromUserId = :myUserId
-           AND (status = 'QUEUED' OR status = 'SENT' OR status = 'FAILED')
+           AND (status = 'QUEUED' OR status = 'SENDING' OR status = 'SENT' OR status = 'FAILED')
            AND bundleId IS NOT NULL
          ORDER BY timestamp ASC
          LIMIT 50
         """
     )
     fun pendingOutbound(myUserId: String): List<MessageEntity>
+
+    /**
+     * Flip a QUEUED-or-SENDING row to FAILED on a transport-layer send error. Skips
+     * rows that are already past SENDING (SENT/DELIVERED/READ) so a late Error on a
+     * retry doesn't regress a successfully-delivered message. Returns rows affected.
+     */
+    @Query(
+        """
+        UPDATE messages
+           SET status = 'FAILED'
+         WHERE bundleId = :bundleId
+           AND (status = 'QUEUED' OR status = 'SENDING')
+        """
+    )
+    fun markFailedIfStillInFlight(bundleId: String): Int
 }
