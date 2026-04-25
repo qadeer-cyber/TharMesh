@@ -1,0 +1,116 @@
+package com.tharmesh.ui.diagnostics
+
+import android.content.Intent
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.widget.Button
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import com.tharmesh.TharMeshApp
+import com.tharmesh.diagnostics.DiagnosticsCollector
+import tharmesh.app.R
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * Stage 5.1 — Field Test Mode diagnostics screen. Read-only view of the
+ * in-memory [DiagnosticsCollector] counters + the last N [com.tharmesh.dtn.MeshEvent]s,
+ * with Refresh / Clear / Share actions. No new XML theme / color resources,
+ * no new dependencies; reuses `TmCard`, `TmButton.Ghost`, `TmButton.Primary`,
+ * and the `Text.*` styles already present.
+ */
+class DiagnosticsActivity : AppCompatActivity() {
+
+    private lateinit var counters: TextView
+    private lateinit var recent: TextView
+    private val ui = Handler(Looper.getMainLooper())
+    private val refresh = object : Runnable {
+        override fun run() {
+            render()
+            ui.postDelayed(this, 1_000L)
+        }
+    }
+
+    private val collector: DiagnosticsCollector
+        get() = (application as TharMeshApp).diagnostics
+
+    private val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_diagnostics)
+        counters = findViewById(R.id.diagnostics_counters)
+        recent = findViewById(R.id.diagnostics_recent)
+
+        findViewById<Button>(R.id.button_refresh).setOnClickListener { render() }
+        findViewById<Button>(R.id.button_clear).setOnClickListener {
+            collector.reset()
+            render()
+        }
+        findViewById<Button>(R.id.button_share).setOnClickListener { share() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ui.post(refresh)
+    }
+
+    override fun onPause() {
+        ui.removeCallbacks(refresh)
+        super.onPause()
+    }
+
+    private fun render() {
+        val s = collector.snapshot()
+        counters.text = buildString {
+            append("uptime         ").append(formatUptime(s.uptimeMs)).append('\n')
+            append("last event     ").append(if (s.lastEventAt == 0L) "—" else ts.format(Date(s.lastEventAt))).append('\n')
+            append("peers found    ").append(s.peersFound).append('\n')
+            append("peers online   ").append(s.peersCurrentlyConnected)
+                .append(" (+").append(s.peersConnected).append(" / -").append(s.peersDisconnected).append(")\n")
+            append("bundles SENDING  ").append(s.bundlesSending).append('\n')
+            append("bundles SENT     ").append(s.bundlesSent).append('\n')
+            append("bundles DELIVERED").append(' ').append(s.bundlesDelivered).append('\n')
+            append("bundles ACKED    ").append(s.bundlesAcked).append('\n')
+            append("bundles READ     ").append(s.bundlesRead).append('\n')
+            append("bundles FAILED   ").append(s.bundlesFailed)
+        }
+        val events = collector.recentEvents()
+        recent.text = if (events.isEmpty()) {
+            getString(R.string.diagnostics_recent_empty)
+        } else {
+            val sb = StringBuilder(events.size * 48)
+            // Show newest-first so latest events are visible without scrolling.
+            for (i in events.indices.reversed()) {
+                val e = events[i]
+                sb.append(ts.format(Date(e.timestampMs)))
+                    .append("  ")
+                    .append(e.kind)
+                    .append("  ")
+                    .append(e.detail)
+                    .append('\n')
+            }
+            sb.toString()
+        }
+    }
+
+    private fun share() {
+        val body = collector.exportJson()
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.diagnostics_share_subject))
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        startActivity(Intent.createChooser(intent, getString(R.string.diagnostics_share)))
+    }
+
+    private fun formatUptime(ms: Long): String {
+        val s = ms / 1000
+        val h = s / 3600
+        val m = (s % 3600) / 60
+        val sec = s % 60
+        return String.format(Locale.US, "%02d:%02d:%02d", h, m, sec)
+    }
+}
