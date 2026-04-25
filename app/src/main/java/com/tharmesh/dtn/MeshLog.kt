@@ -53,4 +53,8 @@ internal object MeshLog {
     fun skippedAntiSender(bundleId: String, peerId: String) {
         Log.d(TAG, "skipped bundleId=$bundleId peer=$peerId reason=anti_sender")
     }
+
+    fun restored(count: Int) {
+        Log.d(TAG, "restored count=$count source=persistent_bundle_store")
+    }
 }

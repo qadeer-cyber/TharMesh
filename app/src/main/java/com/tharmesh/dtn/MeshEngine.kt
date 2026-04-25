@@ -15,7 +15,8 @@ class MeshEngine(
     private val localUserId: String,
     private val transport: Transport,
     private val now: () -> Long = { System.currentTimeMillis() },
-    private val maxCacheSize: Int = DEFAULT_MAX_CACHE_SIZE
+    private val maxCacheSize: Int = DEFAULT_MAX_CACHE_SIZE,
+    private val bundleStore: BundleStore? = null
 ) {
 
     private val router = Router()
@@ -61,6 +62,28 @@ class MeshEngine(
     }
 
     fun start() {
+        // Rehydrate the in-memory cache from the persistent store BEFORE the transport
+        // comes up. Two invariants matter:
+        //  1. An incoming INV sync frame after start() must reflect bundles we already
+        //     knew about pre-crash, otherwise we would re-request BUNDLE frames we
+        //     already have on disk and cause a resend storm.
+        //  2. The store-and-forward retry loop (MessageRepository) calls retryBundle
+        //     for every pending outbound row in Room; retryBundle looks the bundle up
+        //     in the cache, so the cache must be populated before the first tick.
+        val store = bundleStore
+        if (store != null) {
+            store.deleteExpired(now())
+            val restored = store.loadActive(now())
+            synchronized(cacheLock) {
+                for (b in restored) {
+                    // Use the raw map write, not cachePutLocked — we do NOT want to
+                    // re-persist during restore (no-op but wasteful), and we do NOT
+                    // want LRU eviction to kick in while we're loading the working set.
+                    cache[b.bundleId] = b
+                }
+            }
+            MeshLog.restored(restored.size)
+        }
         transport.start(localUserId)
     }
 
@@ -260,6 +283,13 @@ class MeshEngine(
         }
         val nextHops = bundle.hopsLeft - 1
         val forwarded = bundle.copy(hopsLeft = nextHops, status = "FORWARDED")
+        // Persist the post-decrement state so a crash mid-forward does not repeat the
+        // same forward with the pre-decrement hopsLeft on restart. We intentionally do
+        // NOT update the in-memory cache to `forwarded` — the original bundle is kept
+        // at its original hopsLeft so handleBundle's first-arrival guard still works if
+        // the same bundleId arrives from another peer. Cache = working set; DB = source
+        // of truth for the authoritative relay history.
+        bundleStore?.upsert(forwarded)
         val peers = snapshotConnectedPeers()
         val seenFrom: Set<String> = synchronized(cacheLock) {
             receivedFrom[bundle.bundleId]?.toSet() ?: emptySet()
@@ -399,6 +429,13 @@ class MeshEngine(
                 deliveredSnapshot = delivered
             }
         }
+        // Persist outside the cache lock. If this was a first arrival, upsert the full
+        // bundle; if we're also the destination, the subsequent persistStatus flips the
+        // on-disk status to DELIVERED_FINAL so a restart does not re-fire BundleDelivered.
+        if (isFirstArrival) bundleStore?.upsert(bundle)
+        if (deliveredSnapshot != null && !alreadyDelivered) {
+            persistStatus(bundle.bundleId, "DELIVERED_FINAL")
+        }
         MeshLog.received(bundle.bundleId, peerId, bundle.destId, bundle.hopsLeft, isFirstArrival)
 
         if (deliveredSnapshot != null) {
@@ -438,6 +475,9 @@ class MeshEngine(
             true
         }
         if (firstAck) {
+            // Mirror the DELIVERED_FINAL status to disk so a restart does not treat the
+            // bundle as still-pending and try to re-send.
+            persistStatus(bundleId, "DELIVERED_FINAL")
             eventListener?.invoke(MeshEvent.BundleAcked(bundleId, ackedBy))
             MeshLog.acked(bundleId, ackedBy)
         }
@@ -453,10 +493,27 @@ class MeshEngine(
 
     /**
      * Insert-or-update a bundle in the cache with LRU eviction when we exceed [maxCacheSize].
-     * Public-ish only for tests; production paths use this via queueText/handleBundle.
+     * Also persists to the [BundleStore] so the bundle survives process death. Public-ish
+     * only for tests; production paths use this via queueText/handleBundle/forwardBundle.
      */
     internal fun cachePut(bundle: MeshBundle) {
         synchronized(cacheLock) { cachePutLocked(bundle) }
+        // Persist AFTER the cache mutation (outside the lock) so a slow Room write
+        // does not block concurrent cache readers. Idempotent: REPLACE on bundleId.
+        bundleStore?.upsert(bundle)
+    }
+
+    /** Just update the on-disk status without re-writing the full payload. */
+    private fun persistStatus(bundleId: String, status: String) {
+        bundleStore?.updateStatus(bundleId, status)
+    }
+
+    /**
+     * Periodic sweep of the persistent store. Called by the repository's store-and-forward
+     * tick so long-lived expired rows do not accumulate unboundedly on disk.
+     */
+    fun sweepExpiredPersistent() {
+        bundleStore?.deleteExpired(now())
     }
 
     internal fun cacheSize(): Int = synchronized(cacheLock) { cache.size }

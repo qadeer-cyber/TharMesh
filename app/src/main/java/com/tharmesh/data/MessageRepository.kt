@@ -317,6 +317,11 @@ class MessageRepository(
                 delay(STORE_AND_FORWARD_INTERVAL_MS)
                 try {
                     flushPendingForLocalUser()
+                    // Opportunistic expired-bundle cleanup — keeps the persistent
+                    // bundle table from growing unboundedly when the app stays up
+                    // for long periods. Cheap: single DELETE-WHERE on an indexed
+                    // column.
+                    mesh.sweepExpiredPersistent()
                 } catch (_: Throwable) {
                     // Ignore transient I/O failures; next tick will retry.
                 }

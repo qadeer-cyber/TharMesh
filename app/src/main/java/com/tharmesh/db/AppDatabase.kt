@@ -20,7 +20,7 @@ import com.tharmesh.db.entity.MessageEntity
         ConversationEntity::class,
         ContactEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

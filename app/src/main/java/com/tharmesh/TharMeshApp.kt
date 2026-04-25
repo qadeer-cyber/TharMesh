@@ -4,6 +4,7 @@ import android.app.Application
 import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
+import com.tharmesh.db.RoomBundleStore
 import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.mesh.EmptyMeshDataSource
 import com.tharmesh.mesh.NearbyDirectory
@@ -82,7 +83,14 @@ class TharMeshApp : Application() {
         if (meshReady) return
         val profile = UserPrefs.readProfile(this) ?: return
         val t: Transport = NearbyConnectionsTransport(this)
-        val engine = MeshEngine(profile.userId, t)
+        // Wire the persistent bundle cache so the engine survives process death:
+        // start() will restore non-expired bundles, every cachePut / status update
+        // mirrors to disk, and the repository tick calls sweepExpiredPersistent().
+        val engine = MeshEngine(
+            localUserId = profile.userId,
+            transport = t,
+            bundleStore = RoomBundleStore(database.bundleDao())
+        )
         val repo = MessageRepository(
             db = database,
             mesh = engine,
