@@ -61,8 +61,12 @@ class MessageRepository(
     /**
      * Stage 5.3 — set of bundleIds that should be retried using the aggressive
      * [RetryConfig.SOS] curve instead of the [retryConfig] default. Populated
-     * by [broadcastSos] and cleared in [onMeshEvent] when the bundle reaches a
-     * terminal state (delivered / read / failed). Synchronised on itself.
+     * by [broadcastSos] and cleared in [onMeshEvent] when the bundle reaches
+     * a truly terminal state — DELIVERED or READ. FAILED is intentionally
+     * NOT a clear point: FAILED rows are included in the store-and-forward
+     * [pendingOutbound] sweep AND are eligible for manual [retryFailedMessage]
+     * retries, so the bundle should keep the SOS curve until it is actually
+     * acked or the TTL expires. Synchronised on itself.
      */
     private val priorityBundleIds: MutableSet<String> = HashSet()
 
@@ -411,7 +415,19 @@ class MessageRepository(
         // and shows "⏳" while we re-issue. The retry loop's pendingOutbound
         // query already includes FAILED rows, but flipping to QUEUED makes the
         // UI feedback instant.
-        db.messageDao().updateStatusById(messageId, MessageStatus.QUEUED, now())
+        //
+        // Use the rank-protected advanceStatusByBundleId rather than the
+        // unconditional updateStatusById: between our `msg.status == FAILED`
+        // read above and the write here, a concurrent BundleAcked / BundleRead
+        // coroutine may have advanced the row past FAILED to DELIVERED / READ
+        // (rare but possible if a relay's ack landed in the gap). Rank-based
+        // advance treats QUEUED (rank 0) > FAILED (rank -1) as a legal forward
+        // step, but QUEUED < DELIVERED (3) / READ (4) blocks the regression
+        // and returns 0. In that case we surface false to the caller so the
+        // chat UI's "already advanced" Toast fires instead of silently winning
+        // a write race.
+        val updated = db.messageDao().advanceStatusByBundleId(bid, MessageStatus.QUEUED, now())
+        if (updated == 0) return@runIo false
         db.conversationDao().setLastMessage(
             msg.peerUserId, msg.body, msg.timestamp, MessageStatus.QUEUED
         )
