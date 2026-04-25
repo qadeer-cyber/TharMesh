@@ -198,15 +198,47 @@ class TharMeshApp : Application() {
         // → BundleDao_Impl.deleteExpired. Move the whole startup chain (engine
         // rehydrate + transport.start + retry loop kickoff + scan) onto the IO
         // dispatcher so the launch path is uniformly off-main-thread.
+        val capturedEngine = engine
+        val capturedRepo = repo
         appScope.launch(Dispatchers.IO) {
-            engine.start()
-            repo.startStoreAndForwardLoop()
-            // Data source flips to SCANNING until the first peer arrives; makes the
-            // Devices tab show the correct empty-vs-searching copy without a separate
-            // button click.
+            // PR #14 follow-up — the deferred startup must NOT proceed if a
+            // stopMesh() (sign-out) or a fresh ensureMeshReady() (sign-in as
+            // a different user) has run in the meantime. Without these gates,
+            // the captured `engine` / `repo` references would restart the OLD
+            // engine on the OLD identity, causing split-brain when the user
+            // signs back in: two transports advertising in the same process.
+            // Pre-flight gate: was the launch superseded before we got the
+            // dispatcher slot? Cheap check; covers the common "fast sign-out
+            // before any IO ran" case.
+            if (!isStartCurrent(capturedEngine)) return@launch
+            capturedEngine.start()
+            capturedRepo.startStoreAndForwardLoop()
+            // Data source flips to SCANNING until the first peer arrives; makes
+            // the Devices tab show the correct empty-vs-searching copy without
+            // a separate button click.
             realSource?.startScan()
+            // Post-flight gate: if stopMesh / re-sign-in happened DURING the
+            // chain above, the just-started engine is now orphaned (stopMesh's
+            // engine.stop() ran before this transport actually came up, so it
+            // was effectively a no-op at the time). Tear down what we started
+            // so the OLD engine doesn't keep advertising.
+            if (!isStartCurrent(capturedEngine)) {
+                capturedRepo.stopStoreAndForwardLoop()
+                capturedEngine.stop()
+            }
         }
     }
+
+    /**
+     * PR #14 follow-up — used by the deferred startup coroutine in
+     * [ensureMeshStarted] to verify that the captured [MeshEngine] reference
+     * is still the live one for the current sign-in. Returns false after a
+     * [stopMesh] (which clears [started]) or after a subsequent
+     * [ensureMeshReady] swapped in a fresh engine for a different identity.
+     */
+    @Synchronized
+    private fun isStartCurrent(eng: MeshEngine): Boolean =
+        started && meshEngine === eng
 
     @Synchronized
     fun stopMesh() {
