@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet_top"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="16dp">
+
+    <View
+        android:layout_width="42dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/bg_sheet_grabber" />
+
+    <TextView
+        style="@style/Text.H2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="14dp"
+        android:text="@string/new_chat_title" />
+
+    <TextView
+        android:id="@+id/new_chat_section_contacts"
+        style="@style/Text.Caption"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="4dp"
+        android:text="@string/new_chat_section_contacts" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_new_chat_contacts"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="240dp"
+        android:overScrollMode="ifContentScrolls" />
+
+    <TextView
+        android:id="@+id/new_chat_no_contacts"
+        style="@style/Text.Caption"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="6dp"
+        android:text="@string/new_chat_no_contacts"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="6dp"
+        android:background="?attr/tmSurface2" />
+
+    <TextView
+        style="@style/Text.Caption"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginBottom="2dp"
+        android:text="@string/new_chat_section_add" />
+
+    <TextView
+        android:id="@+id/new_chat_action_scan"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:drawablePadding="16dp"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:text="@string/new_chat_action_scan_qr"
+        android:textColor="?attr/tmTextPrimary"
+        android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/new_chat_action_nearby"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:drawablePadding="16dp"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:text="@string/new_chat_action_find_nearby"
+        android:textColor="?attr/tmTextPrimary"
+        android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/new_chat_action_userid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:drawablePadding="16dp"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:text="@string/new_chat_action_enter_userid"
+        android:textColor="?attr/tmTextPrimary"
+        android:textSize="15sp" />
+
+</LinearLayout>

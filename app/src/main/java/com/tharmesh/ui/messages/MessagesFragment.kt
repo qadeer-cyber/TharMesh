@@ -285,12 +285,24 @@ class MessagesFragment : Fragment() {
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
-        view.findViewById<Button>(R.id.button_empty_start_chat).setOnClickListener { showDevicePicker() }
+        view.findViewById<Button>(R.id.button_empty_start_chat).setOnClickListener { showNewChatSheet() }
     }
 
     private fun bindFabs(view: View) {
-        view.findViewById<FloatingActionButton>(R.id.fab_new_chat).setOnClickListener { showDevicePicker() }
-        view.findViewById<FloatingActionButton>(R.id.fab_new_chat_small).setOnClickListener { showDevicePicker() }
+        view.findViewById<FloatingActionButton>(R.id.fab_new_chat).setOnClickListener { showNewChatSheet() }
+        view.findViewById<FloatingActionButton>(R.id.fab_new_chat_small).setOnClickListener { showNewChatSheet() }
+    }
+
+    /**
+     * Opens the "New chat" sheet — saved contacts at the top, then explicit
+     * QR / nearby / userId paths beneath. The legacy [DevicePickerSheet] is
+     * still reachable via the sheet's "Find nearby" action for the
+     * first-contact path, but tapping a saved contact opens [ChatActivity]
+     * directly without going through any picker.
+     */
+    private fun showNewChatSheet() {
+        val sheet = NewChatSheet()
+        sheet.show(parentFragmentManager, NewChatSheet.TAG)
     }
 
     /**

@@ -87,6 +87,13 @@
     <string name="status_failed">!</string>
 
     <string name="new_chat_recipient_hint">Recipient userId</string>
+    <string name="new_chat_title">New chat</string>
+    <string name="new_chat_section_contacts">Saved contacts</string>
+    <string name="new_chat_section_add">Add a new contact</string>
+    <string name="new_chat_action_scan_qr">Scan QR</string>
+    <string name="new_chat_action_find_nearby">Find nearby</string>
+    <string name="new_chat_action_enter_userid">Enter userId</string>
+    <string name="new_chat_no_contacts">No saved contacts yet. Add one below.</string>
     <string name="dialog_start_chat">Start chat</string>
     <string name="dialog_start">Open</string>
     <string name="dialog_cancel">Cancel</string>
