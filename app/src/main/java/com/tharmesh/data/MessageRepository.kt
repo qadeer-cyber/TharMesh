@@ -35,11 +35,15 @@ import java.util.UUID
  *    UI.
  *  - `markChatRead(peerId)` flips incoming messages from this peer to READ locally and emits
  *    READ receipts over the mesh so the sender's UI shows the blue ticks.
- *  - Handles incoming bundles from [MeshEngine], decrypts (TODO), persists the message, and
- *    bumps the conversation row (last message + unread++).
+ *  - Handles incoming bundles from [MeshEngine], unseals the envelope when
+ *    present, persists the message, and bumps the conversation row.
  *
- * Encryption is a TODO: bodies ride the wire as plaintext in [MeshBundle.payloadCiphertext].
- * Wire AES-GCM via [com.tharmesh.crypto.CryptoBox] once per-contact key agreement is in place.
+ * Encryption: when a [com.tharmesh.crypto.PeerKeyRing] is wired, the send
+ * path wraps the body in a [com.tharmesh.crypto.SealedEnvelope] (AES-256 /
+ * GCM over an ECDH-derived key); receive reverses the wrap. Peers whose
+ * public keys we have not pinned yet fall back to plaintext bodies so the
+ * TOFU bootstrap path remains open. The SOS framing runs OUTSIDE the
+ * envelope so encrypted SOS bundles still trigger the disaster alert.
  */
 class MessageRepository(
     private val db: AppDatabase,
@@ -77,7 +81,18 @@ class MessageRepository(
      * payload prefix so receivers can recognise it. Defaults to `false` so
      * tests don't accidentally trigger disaster behaviour.
      */
-    private val isDisasterModeEnabled: () -> Boolean = { false }
+    private val isDisasterModeEnabled: () -> Boolean = { false },
+    /**
+     * Optional per-peer AES key ring. When provided, [send] wraps the
+     * outgoing body in a [com.tharmesh.crypto.SealedEnvelope] for any peer
+     * whose public key we have pinned, and [handleIncomingBundle] unwraps
+     * envelopes it recognises. When null (production bring-up before the
+     * key ring is wired, or tests that don't care about encryption), both
+     * paths fall back to plaintext bodies. The SOS prefix and all wire
+     * signatures are applied OUTSIDE the envelope, so this change is
+     * invisible to relays and TOFU key-pinning.
+     */
+    private val peerKeyRing: com.tharmesh.crypto.PeerKeyRing? = null
 ) {
 
     /**
@@ -231,11 +246,21 @@ class MessageRepository(
         // Local DB stores the user's raw body so the chat history is clean;
         // the wire-side payload carries the SOS prefix only when the bundle
         // is actually priority. Idempotent — broadcastSos can also pre-mark.
-        val wireBody = if (effectivePriority) {
+        val sosFramed = if (effectivePriority) {
             com.tharmesh.disaster.SosPayload.encode(body)
         } else {
             body
         }
+        // Apply end-to-end encryption OUTSIDE the SOS frame so the on-wire
+        // ciphertext hides both the message body and the SOS marker from
+        // eavesdroppers; relays don't look at body content anyway (they
+        // forward bytes keyed by destId). Falls back to plaintext when we
+        // have no pinned public key for the recipient — this is the
+        // TOFU/bootstrap path for peers whose keys we haven't learnt yet.
+        val wireBody = peerKeyRing
+            ?.keyFor(toUserId)
+            ?.let { com.tharmesh.crypto.SealedEnvelope.seal(sosFramed, it) }
+            ?: sosFramed
         val entity = MessageEntity(
             fromUserId = me,
             toUserId = toUserId,
@@ -256,7 +281,6 @@ class MessageRepository(
         if (effectivePriority) {
             synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
         }
-        // Plaintext body on the wire for now; TODO: CryptoBox.encrypt(body, perContactKey, iv).
         mesh.queueText(
             destId = toUserId,
             payloadCiphertext = wireBody,
@@ -302,9 +326,22 @@ class MessageRepository(
             val existing = db.messageDao().getByBundleId(bundle.bundleId)
             if (existing != null) return@launch
 
-            // TODO: CryptoBox.decrypt(bundle.payloadCiphertext, perContactKey, iv)
+            // Unseal end-to-end envelope when present. Unknown prefix or a
+            // decrypt failure falls back to the raw body — preserves the
+            // plaintext path for peers that haven't been key-pinned yet and
+            // keeps the receive loop working through a key-rotation window.
+            // SOS detection runs OUTSIDE the envelope, so encrypted SOS
+            // bundles still trigger the alert once decrypted.
             val raw = bundle.payloadCiphertext
-            val decoded = com.tharmesh.disaster.SosPayload.decode(raw)
+            val unsealed = if (com.tharmesh.crypto.SealedEnvelope.looksSealed(raw)) {
+                peerKeyRing
+                    ?.keyFor(bundle.srcId)
+                    ?.let { com.tharmesh.crypto.SealedEnvelope.unseal(raw, it) }
+                    ?: raw
+            } else {
+                raw
+            }
+            val decoded = com.tharmesh.disaster.SosPayload.decode(unsealed)
             val plaintext = decoded.body
             if (decoded.isSos) {
                 // Fire the alert hook regardless of whether the local user is

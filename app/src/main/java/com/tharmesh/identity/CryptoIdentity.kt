@@ -51,6 +51,16 @@ class CryptoIdentity private constructor(
         get() = Base64Url.encode(keyPair.private.encoded)
 
     /**
+     * Raw [PrivateKey] for ECDH key agreement with a peer's pinned public key
+     * (see [com.tharmesh.crypto.PeerKeyRing]). Intentionally package-internal
+     * rather than plain-public: callers outside the identity/crypto boundary
+     * should derive an envelope via the key ring instead of reaching for the
+     * key material directly.
+     */
+    internal val privateKey: PrivateKey
+        get() = keyPair.private
+
+    /**
      * Sign arbitrary bytes with the device's private key. Returns Base64(DER signature).
      * Callers should pass the canonical signing blob produced by
      * [canonicalBundleBytes] to avoid signature-format drift across versions.

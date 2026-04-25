@@ -148,6 +148,16 @@ class TharMeshApp : Application() {
         val retryConfig = FieldTestMode.resolveRetryConfig(this)
         val pacer = PerPeerSendPacer(retryConfig.perPeerSendGapMs)
         val diag = diagnostics
+        // Per-peer symmetric key ring over static ECDH on our P-256 signing
+        // key. The ring resolves peer public keys via the pinned
+        // [PeerTrustStore], so encryption switches on automatically the
+        // first time we receive a signed bundle from a peer (TOFU) and can
+        // be locked down further via the out-of-band QR verify flow.
+        val keyRing = com.tharmesh.crypto.PeerKeyRing(
+            localPrivateKey = identity.privateKey,
+            localUserId = profile.userId,
+            resolvePublicKeyBase64 = { peerId -> peerTrustStore.storedKey(peerId) }
+        )
         val engine = MeshEngine(
             localUserId = profile.userId,
             transport = t,
@@ -174,7 +184,8 @@ class TharMeshApp : Application() {
             // payloads so the controller can vibrate + ring (it is itself
             // gated by the persisted toggle, so off-mode peers stay silent).
             onSosReceived = { DisasterModeController.onSosReceived(this) },
-            isDisasterModeEnabled = { DisasterModeController.shouldForcePriority() }
+            isDisasterModeEnabled = { DisasterModeController.shouldForcePriority() },
+            peerKeyRing = keyRing
         )
         val source = NearbyMeshDataSource(engine)
         directory.setSource(source)
