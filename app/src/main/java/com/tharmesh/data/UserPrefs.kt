@@ -36,6 +36,17 @@ object UserPrefs {
      */
     private const val KEY_THEME_MODE = "theme_mode"
 
+    /**
+     * Stage 6.3 — manual Disaster Mode toggle. When true:
+     *   - every outgoing bundle is sent with `priority = true` so the engine
+     *     bypasses [com.tharmesh.dtn.PerPeerSendPacer] and the retry loop
+     *     applies [com.tharmesh.dtn.RetryConfig.SOS]
+     *   - incoming SOS-prefixed bundles vibrate + ring on the device
+     *   - the persistent red banner in MainActivity is shown
+     * Never auto-enabled — the user explicitly opts in via Settings.
+     */
+    private const val KEY_DISASTER_MODE = "disaster_mode"
+
     const val PROVIDER_ANONYMOUS = "anonymous"
     const val PROVIDER_GOOGLE = "google"
 
@@ -159,5 +170,17 @@ object UserPrefs {
     fun setThemeMode(context: Context, mode: ThemeManager.Mode) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    @JvmStatic
+    fun isDisasterModeEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_DISASTER_MODE, false)
+    }
+
+    @JvmStatic
+    fun setDisasterModeEnabled(context: Context, enabled: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_DISASTER_MODE, enabled).apply()
     }
 }

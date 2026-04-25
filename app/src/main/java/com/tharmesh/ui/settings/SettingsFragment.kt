@@ -17,6 +17,7 @@ import com.tharmesh.TharMeshApp
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.diagnostics.FieldTestMode
+import com.tharmesh.disaster.DisasterModeController
 import com.tharmesh.ui.auth.LoginActivity
 import com.tharmesh.ui.diagnostics.DiagnosticsActivity
 import com.tharmesh.ui.theme.ThemeManager
@@ -100,6 +101,17 @@ class SettingsFragment : Fragment() {
         addRow(rows, R.drawable.ic_bolt, R.drawable.bg_round_icon_amber,
             R.string.settings_battery, R.string.settings_battery_sub)
 
+        // Stage 6.3 — Disaster Mode toggle row. Subtitle reflects current
+        // persisted state so the user can see at a glance whether their
+        // outgoing bundles are using the SOS curve.
+        val disasterOn = UserPrefs.isDisasterModeEnabled(ctx)
+        val disasterRow = addRow(
+            rows, R.drawable.ic_alert, R.drawable.bg_round_icon_danger,
+            R.string.settings_disaster,
+            if (disasterOn) R.string.settings_disaster_sub_on else R.string.settings_disaster_sub_off
+        )
+        disasterRow.setOnClickListener { showDisasterModeDialog(rows) }
+
         if (FieldTestMode.isEnabled(ctx)) {
             val diagRow = addRow(rows, R.drawable.ic_wifi, R.drawable.bg_round_icon_green,
                 R.string.settings_diagnostics, R.string.settings_diagnostics_sub)
@@ -153,6 +165,34 @@ class SettingsFragment : Fragment() {
                 val mode = ThemeManager.Mode.values()[which]
                 ThemeManager.setAndApply(ctx, mode)
                 dialog.dismiss()
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    /**
+     * Confirm-then-toggle dialog for Disaster Mode. Always shows a
+     * confirmation step (the feature has measurable battery impact and the
+     * user pressed it from the Settings list, not from a panic-button); on
+     * confirm the persisted flag flips and the rows are re-rendered so the
+     * subtitle copy follows the new state. The MainActivity banner picks up
+     * the change via [DisasterModeController.enabled].
+     */
+    private fun showDisasterModeDialog(rows: LinearLayout) {
+        val ctx = requireContext()
+        val isOn = UserPrefs.isDisasterModeEnabled(ctx)
+        val titleRes = if (isOn) R.string.settings_disaster_dialog_disable_title
+                       else R.string.settings_disaster_dialog_title
+        val bodyRes = if (isOn) R.string.settings_disaster_dialog_disable_body
+                      else R.string.settings_disaster_dialog_body
+        val positiveRes = if (isOn) R.string.settings_disaster_dialog_disable
+                          else R.string.settings_disaster_dialog_enable
+        AlertDialog.Builder(ctx)
+            .setTitle(titleRes)
+            .setMessage(bodyRes)
+            .setPositiveButton(positiveRes) { _, _ ->
+                DisasterModeController.setEnabled(ctx, !isOn)
+                renderRows(rows)
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
