@@ -1,0 +1,95 @@
+name: Android CI
+
+# Verifies the High Sierra / iMac Mid 2010 toolchain on every PR and push to
+# main: JDK 11 (Gradle 6.5 / AGP 4.1.3 will not run on 17+), Android SDK
+# platforms;android-30 + build-tools;30.0.3. Runs assembleDebug and the
+# JVM unit test suite; does NOT run instrumented tests.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
+      ANDROID_COMPILE_SDK: "30"
+      ANDROID_BUILD_TOOLS: "30.0.3"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # sdkmanager shipped with current GitHub-hosted runners is JDK-17
+      # bytecode, so it will not load under a JDK 11 JVM. Install JDK 17
+      # FIRST, run setup-android while it is active, then overwrite JAVA_HOME
+      # with JDK 11 for the actual build (Gradle 6.5 / AGP 4.1.3 won't start
+      # on JDK 17+). setup-java@v4 writes JAVA_HOME to the job env, so the
+      # later step wins.
+      - name: Set up JDK 17 (for sdkmanager only)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+
+      - name: Set up JDK 11 (for Gradle + AGP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Verify JAVA_HOME points at JDK 11
+        run: |
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          test -x "$JAVA_HOME/bin/java"
+          "$JAVA_HOME/bin/java" -version 2>&1 | grep -q '"11' || { echo "JAVA_HOME is not JDK 11"; exit 1; }
+
+      - name: Assemble debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Run unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tharmesh-app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/test-results/testDebugUnitTest
+          if-no-files-found: ignore
