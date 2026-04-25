@@ -271,4 +271,35 @@ class MessageRepositoryStuckSendingRecoveryTest {
             policy.currentState("ttl-1")
         )
     }
+
+    @Test
+    fun onTtlClearCallback_firesOnceWithBundleId_whenRetryReturnsFalse() {
+        // Stage 5.3 follow-up — verifies the new onTtlClear hook on
+        // runRetryTickStandalone fires on the no-op path so the repository can
+        // drop SOS priority tracking alongside the retry-policy state.
+        val cleared = mutableListOf<String>()
+        val policy = newPolicy()
+        // Seed policy state.
+        runRetryTickStandalone(
+            nowMs = 0L,
+            pending = listOf(row(30, "p1", MessageStatus.QUEUED)),
+            retryPolicy = policy,
+            onRetryAttempt = { },
+            onStuckSendingRecovered = { },
+            retryBundle = { true }
+        )
+        assertTrue("onTtlClear must NOT fire on the success path", cleared.isEmpty())
+
+        // TTL no-op tick.
+        runRetryTickStandalone(
+            nowMs = 100_000L,
+            pending = listOf(row(30, "p1", MessageStatus.QUEUED)),
+            retryPolicy = policy,
+            onRetryAttempt = { },
+            onStuckSendingRecovered = { },
+            retryBundle = { false },
+            onTtlClear = { cleared.add(it) }
+        )
+        assertEquals(listOf("p1"), cleared)
+    }
 }
