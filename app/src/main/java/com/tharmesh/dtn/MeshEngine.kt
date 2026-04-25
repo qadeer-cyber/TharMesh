@@ -268,7 +268,13 @@ class MeshEngine(
                 MeshLog.skippedAntiSender(bundle.bundleId, peer)
                 continue
             }
-            if (!router.shouldForward(forwarded, peer, nowMs)) continue
+            // Use the PRE-decrement bundle for Router.shouldForward. Router rejects
+            // hopsLeft <= 0, so passing the decremented copy (which may be 0 on the
+            // last legitimate hop) would silently drop the final forward. The memo is
+            // keyed by bundleId anyway, so the hopsLeft value on the argument is only
+            // used for the hop/ttl guard — and the pre-decrement value is what we
+            // actually validated above.
+            if (!router.shouldForward(bundle, peer, nowMs)) continue
             // Relay forwards are not correlated with a local outbound message row —
             // use sendId=0 so PayloadSent doesn't try to advance a non-existent row.
             transport.send(peer, payloadBytes, sendId = 0L)

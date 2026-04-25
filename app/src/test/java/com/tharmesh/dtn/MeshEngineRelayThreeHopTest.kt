@@ -121,6 +121,38 @@ class MeshEngineRelayThreeHopTest {
     }
 
     @Test
+    fun threeHop_hopsEqualOne_stillForwardsOnce() {
+        // hops=1: A fanouts to B with hopsLeft=1. B is not the destination, decrements
+        // to 0, and forwards one last time to C. C receives with hopsLeft=0 and can
+        // deliver (destination delivery does not require positive hops). This locks in
+        // that Router.shouldForward receives the PRE-decrement bundle — otherwise the
+        // last legitimate hop would be silently dropped.
+        val tA = BridgedTransport()
+        val tB = BridgedTransport()
+        val tC = BridgedTransport()
+        val a = MeshEngine("A", tA)
+        val b = MeshEngine("B", tB)
+        val c = MeshEngine("C", tC)
+        val cEvents: MutableList<MeshEvent> = CopyOnWriteArrayList()
+        c.setEventListener { cEvents.add(it) }
+        a.start(); b.start(); c.start()
+        tA.link(tB)
+        tB.link(tC)
+
+        a.queueText(
+            destId = "C",
+            payloadCiphertext = "last-hop",
+            ttlMs = 60_000L,
+            hops = 1,
+            bundleIdHint = "last-hop-bundle"
+        )
+
+        val delivered = cEvents.filterIsInstance<MeshEvent.BundleDelivered>()
+        assertEquals("hops=1 must still reach C via B's last forward", 1, delivered.size)
+        assertEquals(0, delivered[0].bundle.hopsLeft)
+    }
+
+    @Test
     fun threeHop_hopsLeftZero_stopsRelay() {
         val tA = BridgedTransport()
         val tB = BridgedTransport()

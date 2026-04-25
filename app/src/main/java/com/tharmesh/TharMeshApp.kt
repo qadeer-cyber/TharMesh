@@ -47,6 +47,8 @@ class TharMeshApp : Application() {
     private var meshEngine: MeshEngine? = null
     @Volatile private var started: Boolean = false
 
+    private var realSource: NearbyMeshDataSource? = null
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -56,24 +58,12 @@ class TharMeshApp : Application() {
         // will swap in NearbyMeshDataSource inside ensureMeshStarted() without changing
         // the directory reference any Fragment is holding.
         directory = NearbyDirectory(appScope, EmptyMeshDataSource())
-    }
-
-    /**
-     * Idempotently creates the [MeshEngine] and [MessageRepository] for the local user, then
-     * starts advertising + discovering over Nearby. Safe to call from multiple activities and
-     * from background threads — `@Synchronized` guarantees two racing callers cannot both
-     * observe `started == false` and wire duplicate transports / repositories.
-     */
-    @Synchronized
-    fun ensureMeshStarted() {
-        if (started) return
-        // Refuse to wire the transport before runtime Bluetooth/Location permissions are
-        // granted — Nearby's startAdvertising / startDiscovery silently fail without them,
-        // and we must NOT flip `started = true` in that state, otherwise this method
-        // becomes a permanent no-op and the mesh stays dead forever. MainActivity calls
-        // us again from onRequestPermissionsResult once the user grants, and from then on
-        // the normal idempotency kicks in.
-        if (!NearbyPermissions.allGranted(this)) return
+        // Eagerly construct the mesh/repository graph — even before runtime permissions
+        // are granted, Activities/Fragments may call TharMeshApp.get().repository in
+        // onViewCreated (Messages, Chats, Chat, Contacts). The transport itself is NOT
+        // started here — start()/advertise/discover is deferred to ensureMeshStarted()
+        // which is permission-gated. Construction is perm-safe: NearbyConnectionsTransport's
+        // constructor only stores the Context; MeshEngine's constructor only sets a listener.
         val profile = UserPrefs.ensureProfile(this)
         val t: Transport = NearbyConnectionsTransport(this)
         val engine = MeshEngine(profile.userId, t)
@@ -83,19 +73,37 @@ class TharMeshApp : Application() {
             myUserId = { profile.userId },
             scope = appScope
         )
-        // Swap the UI-facing data source to the real one now that the engine exists.
-        // directory is a stable reference — callers that already captured it now see
-        // updates flow through from the real NearbyMeshDataSource without re-reading.
-        val realSource = NearbyMeshDataSource(engine)
-        directory.setSource(realSource)
+        val source = NearbyMeshDataSource(engine)
+        directory.setSource(source)
         transport = t
         meshEngine = engine
         repository = repo
+        realSource = source
+    }
+
+    /**
+     * Idempotently starts the transport (advertising + discovery) and the store-and-forward
+     * retry loop. Safe to call from multiple activities and from background threads —
+     * `@Synchronized` guarantees two racing callers cannot both observe `started == false`
+     * and wire duplicate listeners.
+     *
+     * Permission-gated: Nearby's startAdvertising / startDiscovery silently fail without
+     * BLUETOOTH_* / ACCESS_FINE_LOCATION, so we refuse to flip `started = true` until the
+     * user grants. [com.tharmesh.ui.main.MainActivity.onRequestPermissionsResult] re-calls
+     * us once the permission dialog resolves. The repository graph was constructed eagerly
+     * in [onCreate] so UI screens can read the DB even before this runs.
+     */
+    @Synchronized
+    fun ensureMeshStarted() {
+        if (started) return
+        if (!NearbyPermissions.allGranted(this)) return
+        val engine = meshEngine ?: return
+        val repo = repository
         engine.start()
         repo.startStoreAndForwardLoop()
         // Data source flips to SCANNING until the first peer arrives; makes the Devices
         // tab show the correct empty-vs-searching copy without a separate button click.
-        realSource.startScan()
+        realSource?.startScan()
         started = true
     }
 
@@ -108,6 +116,7 @@ class TharMeshApp : Application() {
         // a user signing out and a different user signing back in would briefly see
         // stale peers. Directory reference stays stable.
         directory.setSource(EmptyMeshDataSource())
+        realSource = null
         started = false
     }
 
