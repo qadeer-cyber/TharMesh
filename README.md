@@ -264,24 +264,18 @@ The following items are tracked but not yet implemented. They are listed in roug
 
 ## Contributing
 
-Contributions are welcome. Please follow the workflow below:
-
-1. Open an issue describing the change you'd like to make so it can be discussed before you spend time on it.
-2. Fork the repository and create a feature branch off `main`.
-3. Keep changes minimal and focused. Match the existing code style and conventions — the codebase deliberately targets older toolchains (JDK 11, Gradle 6.5, AGP 4.1.3) and avoids new dependencies unless strictly required.
-4. Add unit tests for any behavioural change. The full suite must remain green:
-
-   ```bash
-   ./gradlew testDebugUnitTest
-   ./gradlew assembleDebug
-   ```
-
-5. Open a pull request against `main`. The PR description should include a short note on what you tested and any field-test scenarios that were affected.
-
-For substantial design changes (new protocol frames, new persistence schema, new permissions), open a design issue first and link it from the PR.
+TharMesh is proprietary software. Forks, pull requests, and external modifications are **not accepted** unless explicitly approved in writing by the copyright owner. Opening an issue is fine, but please do not submit code changes without prior written authorization — see the [License](#license) section below.
 
 ---
 
 ## License
 
-Licensing terms will be published alongside the first tagged release. Until then, the source is provided as-is for review and field testing only.
+**TharMesh Proprietary License — Copyright (c) 2026 Abdul Qadeer / Qadeer Cyber. All rights reserved.**
+
+This software and its source code are proprietary and confidential. No permission is granted to copy, modify, merge, publish, distribute, sublicense, sell, host, deploy, reverse engineer, rebrand, or use this software or any substantial portion of it for commercial or non-commercial purposes without prior written permission from the copyright owner.
+
+Viewing or accessing this repository does not grant any license or usage rights. Any unauthorized use, reproduction, redistribution, or derivative work is strictly prohibited.
+
+The full license text is in the [LICENSE](./LICENSE) file at the repository root.
+
+`SPDX-License-Identifier: LicenseRef-TharMesh-Proprietary`
