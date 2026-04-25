@@ -264,18 +264,29 @@ The following items are tracked but not yet implemented. They are listed in roug
 
 ## Contributing
 
-TharMesh is proprietary software. Forks, pull requests, and external modifications are **not accepted** unless explicitly approved in writing by the copyright owner. Opening an issue is fine, but please do not submit code changes without prior written authorization — see the [License](#license) section below.
+**This is NOT open source.** TharMesh is proprietary software. Forks, pull requests, and external modifications are **not accepted** unless explicitly approved in writing by the copyright owner. Submitting code changes without prior written authorization is a violation of the license. See the [License](#license) section below.
 
 ---
 
 ## License
 
-**TharMesh Proprietary License — Copyright (c) 2026 Abdul Qadeer / Qadeer Cyber. All rights reserved.**
+**TharMesh Proprietary License — Copyright (c) 2026 Abdul Qadeer (Qadeer Cyber). All rights reserved.**
+
+**This is NOT open source. Use is strictly prohibited without prior written permission from the copyright owner.**
 
 This software and its source code are proprietary and confidential. No permission is granted to copy, modify, merge, publish, distribute, sublicense, sell, host, deploy, reverse engineer, rebrand, or use this software or any substantial portion of it for commercial or non-commercial purposes without prior written permission from the copyright owner.
+
+Additional restrictions apply, including but not limited to:
+
+- **No public hosting** — you may not host the software on any public or private server, deploy it as a service, or expose it through an API.
+- **No benchmark or competitive use** — you may not use the software to build, train, or evaluate competing products, nor benchmark / reverse-engineer it for competitive purposes.
+- **Termination** — any violation of these terms immediately terminates all rights granted to you under this license.
+- **Governing law** — this license is governed by the laws of Pakistan.
 
 Viewing or accessing this repository does not grant any license or usage rights. Any unauthorized use, reproduction, redistribution, or derivative work is strictly prohibited.
 
 The full license text is in the [LICENSE](./LICENSE) file at the repository root.
+
+TharMesh™ is a trademark of Abdul Qadeer (Qadeer Cyber).
 
 `SPDX-License-Identifier: LicenseRef-TharMesh-Proprietary`
