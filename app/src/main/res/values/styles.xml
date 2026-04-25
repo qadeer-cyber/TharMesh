@@ -83,7 +83,7 @@
          saturated WhatsApp green regardless of activated state). -->
     <style name="TmChip.Filter" parent="">
         <item name="android:background">@drawable/bg_chip_filter</item>
-        <item name="android:backgroundTint">@android:color/transparent</item>
+        <item name="android:backgroundTint">@null</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">13sp</item>
         <item name="android:minWidth">0dp</item>
