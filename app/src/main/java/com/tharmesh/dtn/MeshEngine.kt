@@ -402,6 +402,18 @@ class MeshEngine(
     }
 
     /**
+     * True iff at least one peer is currently connected at the transport layer.
+     * Used by the store-and-forward retry loop to suppress retries during an
+     * outage — without this the loop would call [retryBundle] →
+     * [broadcastBundle], which logs `noConnectedPeers` and returns silently,
+     * yet the caller still recorded a retry attempt and consumed the
+     * [RetryPolicy] backoff curve. Checking at the loop level keeps per-bundle
+     * retry state untouched during the outage so the nextRetryAt window
+     * doesn't march up to the maxDelay ceiling before the peer returns.
+     */
+    fun hasConnectedPeers(): Boolean = synchronized(peersLock) { connectedPeers.isNotEmpty() }
+
+    /**
      * Called by the repository on PeerConnected — re-broadcasts all of our own cached
      * outbound bundles that are not yet DELIVERED, so the new peer gets them immediately
      * instead of waiting for the retry timer.

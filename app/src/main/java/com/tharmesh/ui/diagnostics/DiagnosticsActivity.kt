@@ -109,7 +109,8 @@ class DiagnosticsActivity : AppCompatActivity() {
             append("send rejected    ").append(s.sendRejected).append('\n')
             append("send paced       ").append(s.sendPaced).append('\n')
             append("ttl expired drops").append(' ').append(s.ttlExpiredDrops).append('\n')
-            append("stuck SENDING rec").append(' ').append(s.stuckSendingRecovered)
+            append("stuck SENDING rec").append(' ').append(s.stuckSendingRecovered).append('\n')
+            append("retry supp (offline) ").append(s.retrySuppressedNoPeers)
         }
         val events = collector.recentEvents()
         recent.text = if (events.isEmpty()) {

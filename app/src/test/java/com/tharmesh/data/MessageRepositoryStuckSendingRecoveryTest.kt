@@ -272,6 +272,110 @@ class MessageRepositoryStuckSendingRecoveryTest {
         )
     }
 
+    // ---------- No-connected-peers suppression ----------
+
+    @Test
+    fun noConnectedPeers_suppressesRetry_andDoesNotTouchPolicyState() {
+        val retried = AtomicLong(0L)
+        val rebroadcast = mutableListOf<String>()
+        val suppressed = mutableListOf<String>()
+        val policy = newPolicy()
+        runRetryTickStandalone(
+            nowMs = 0L,
+            pending = listOf(row(40, "off-1", MessageStatus.QUEUED)),
+            retryPolicy = policy,
+            onRetryAttempt = { retried.incrementAndGet() },
+            onStuckSendingRecovered = { },
+            retryBundle = { rebroadcast.add(it); true },
+            hasConnectedPeers = { false },
+            onRetrySuppressedNoPeers = { suppressed.add(it) }
+        )
+        // No re-broadcast was attempted, no retry was recorded, no policy state
+        // was created. The suppression hook fired exactly once with the bundleId.
+        assertEquals(0L, retried.get())
+        assertTrue(rebroadcast.isEmpty())
+        assertEquals(listOf("off-1"), suppressed)
+        assertEquals(
+            "policy state must be untouched during offline suppression",
+            null,
+            policy.currentState("off-1")
+        )
+    }
+
+    @Test
+    fun noConnectedPeers_doesNotAdvanceBackoff_acrossMultipleTicks() {
+        // Regression: before this fix, every offline tick advanced the retry
+        // counter and consumed the backoff curve — by the time the peer
+        // returned, nextRetryAt could be pinned at the maxDelay ceiling for
+        // minutes before any send was re-attempted. This test asserts the
+        // curve is preserved across an outage.
+        val cfg = RetryConfig.DEFAULT.copy(jitterFraction = 0.0)
+        val policy = RetryPolicy(cfg, rand = { 0.5 })
+        val pending = listOf(row(41, "off-2", MessageStatus.QUEUED))
+
+        // Tick 1 at t=0 with a peer present → seeds policy state (attempt=1, next=5000).
+        runRetryTickStandalone(
+            nowMs = 0L, pending = pending, retryPolicy = policy,
+            onRetryAttempt = { }, onStuckSendingRecovered = { },
+            retryBundle = { true },
+            hasConnectedPeers = { true }
+        )
+        val afterSeed = policy.currentState("off-2")!!
+        assertEquals(1, afterSeed.attemptCount)
+        assertEquals(5_000L, afterSeed.nextRetryAt)
+
+        // Ticks 2..5 at 60s intervals with NO peers — policy state must be frozen.
+        for (t in longArrayOf(60_000L, 120_000L, 180_000L, 240_000L)) {
+            runRetryTickStandalone(
+                nowMs = t, pending = pending, retryPolicy = policy,
+                onRetryAttempt = { }, onStuckSendingRecovered = { },
+                retryBundle = { true },
+                hasConnectedPeers = { false }
+            )
+        }
+        val afterOutage = policy.currentState("off-2")!!
+        assertEquals(
+            "attemptCount must not advance during offline period",
+            1, afterOutage.attemptCount
+        )
+        assertEquals(
+            "nextRetryAt must not advance during offline period",
+            5_000L, afterOutage.nextRetryAt
+        )
+    }
+
+    @Test
+    fun noConnectedPeers_respectsShouldAttemptGate_doesNotFireSuppressionDuringBackoff() {
+        // While the per-bundle backoff window is still open (shouldAttempt
+        // returns false), the offline-suppression hook must NOT fire either —
+        // there was no retry to suppress. Only bundles the tick would have
+        // otherwise retried should count toward retrySuppressedNoPeers.
+        val cfg = RetryConfig.DEFAULT.copy(jitterFraction = 0.0)
+        val policy = RetryPolicy(cfg, rand = { 0.5 })
+        val suppressed = mutableListOf<String>()
+        val pending = listOf(row(42, "off-3", MessageStatus.QUEUED))
+
+        // Seed attempt at t=0 with peer → next eligible at t=5000.
+        runRetryTickStandalone(
+            nowMs = 0L, pending = pending, retryPolicy = policy,
+            onRetryAttempt = { }, onStuckSendingRecovered = { },
+            retryBundle = { true },
+            hasConnectedPeers = { true }
+        )
+        // Tick at t=2500 (backoff not elapsed) with NO peers — no suppression fired.
+        runRetryTickStandalone(
+            nowMs = 2_500L, pending = pending, retryPolicy = policy,
+            onRetryAttempt = { }, onStuckSendingRecovered = { },
+            retryBundle = { true },
+            hasConnectedPeers = { false },
+            onRetrySuppressedNoPeers = { suppressed.add(it) }
+        )
+        assertTrue(
+            "suppression must not fire when shouldAttempt would have blocked",
+            suppressed.isEmpty()
+        )
+    }
+
     @Test
     fun onTtlClearCallback_firesOnceWithBundleId_whenRetryReturnsFalse() {
         // Stage 5.3 follow-up — verifies the new onTtlClear hook on
