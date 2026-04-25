@@ -90,8 +90,8 @@ class ScanQrActivity : AppCompatActivity() {
         barcodeView.visibility = View.VISIBLE
         barcodeView.decodeContinuous(object : BarcodeCallback {
             override fun barcodeResult(result: BarcodeResult) {
-                if (hasReturned) return
-                hasReturned = true
+                // The terminal `hasReturned` guard lives inside [returnResult]
+                // so paste-dialog and scanner paths gate against each other.
                 barcodeView.pause()
                 returnResult(result.text.orEmpty())
             }
@@ -152,8 +152,17 @@ class ScanQrActivity : AppCompatActivity() {
      * Parse [raw] as a [QrCodec] payload first, then as an [InviteCode],
      * and finally treat it as a literal userId. Sets the activity result
      * with whichever fields could be resolved.
+     *
+     * Single source of truth for [hasReturned]: both the scanner callback
+     * and the paste dialog funnel through here, so a queued
+     * `barcodeResult` event firing after the user has already submitted
+     * a pasted invite cannot overwrite the deliberate paste with an
+     * unrelated scan (Devin Review: PR #33).
      */
     private fun returnResult(raw: String) {
+        if (hasReturned) return
+        hasReturned = true
+
         val text = raw.trim()
         if (text.isEmpty()) return
 
