@@ -299,22 +299,8 @@
     </LinearLayout>
 
     <!-- ================================================================ -->
-    <!-- FAB stack (small "edit" above main "+")                          -->
+    <!-- FAB — single "+" opens the New-chat sheet.                      -->
     <!-- ================================================================ -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_new_chat_small"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="92dp"
-        android:contentDescription="@string/new_chat"
-        android:src="@drawable/ic_edit_pencil"
-        app:backgroundTint="?attr/tmSurface2"
-        app:tint="?attr/tmTextPrimary"
-        app:fabSize="mini"
-        app:elevation="4dp" />
-
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_new_chat"
         android:layout_width="wrap_content"

@@ -293,7 +293,6 @@ class MessagesFragment : Fragment() {
 
     private fun bindFabs(view: View) {
         view.findViewById<FloatingActionButton>(R.id.fab_new_chat).setOnClickListener { showNewChatSheet() }
-        view.findViewById<FloatingActionButton>(R.id.fab_new_chat_small).setOnClickListener { showNewChatSheet() }
     }
 
     /**
