@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 6.1 — WhatsApp-style Chats home.
+
+  Top row:    large "TharMesh" title + icon row (mesh / theme-toggle / alerts /
+              camera / profile / overflow).
+  Search:     rounded pill with magnifier icon and "Search nearby peers or
+              messages" hint. Filters the live conversation list (no fake rows).
+  Filters:    horizontally-scrolling chip group (All / Unread / Nearby /
+              Trusted / +). Each chip is wired to a real predicate against
+              MessageRepository / NearbyDirectory / PeerIdentityDao.
+  Body:       conversation list (RecyclerView) or empty state.
+  FAB stack:  small new-message FAB stacked above the primary "+" FAB.
+
+  Light/dark are theme-attribute driven; bg_screen_gradient resolves to a
+  flat white in light and the pre-6.1 dark gradient in dark, and the chat
+  rows themselves stay flat in light + card-glass in dark via drawable-night.
+-->
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -11,30 +28,196 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <!-- ============================================================== -->
+        <!-- Top icon row                                                   -->
+        <!-- ============================================================== -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:paddingTop="20dp"
-            android:paddingBottom="12dp">
+            android:paddingEnd="8dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="6dp">
 
             <TextView
-                style="@style/Text.H1"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/tab_messages" />
+                android:text="@string/app_name"
+                android:textColor="?attr/tmTextPrimary"
+                android:textSize="26sp"
+                android:textStyle="bold" />
 
             <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="@string/cd_search"
-                android:src="@drawable/ic_search" />
+                android:id="@+id/btn_top_mesh"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_top_icon"
+                android:contentDescription="@string/dash_network_title"
+                android:padding="8dp"
+                android:src="@drawable/ic_wifi" />
+
+            <ImageView
+                android:id="@+id/btn_top_theme"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_top_icon"
+                android:contentDescription="@string/settings_theme"
+                android:padding="8dp"
+                android:src="@drawable/ic_moon" />
+
+            <ImageView
+                android:id="@+id/btn_top_alerts"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_top_icon"
+                android:contentDescription="@string/tab_alerts"
+                android:padding="8dp"
+                android:src="@drawable/ic_alert" />
+
+            <ImageView
+                android:id="@+id/btn_top_camera"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_top_icon"
+                android:contentDescription="@string/chat_attach"
+                android:padding="8dp"
+                android:src="@drawable/ic_camera" />
+
+            <FrameLayout
+                android:id="@+id/btn_top_profile"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="4dp">
+
+                <TextView
+                    android:id="@+id/top_profile_avatar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_avatar"
+                    android:gravity="center"
+                    android:text="A"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/btn_top_overflow"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_top_icon"
+                android:contentDescription="@string/settings_title"
+                android:padding="8dp"
+                android:src="@drawable/ic_more_vert" />
         </LinearLayout>
 
+        <!-- ============================================================== -->
+        <!-- Search pill                                                    -->
+        <!-- ============================================================== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_search_pill"
+            android:gravity="center_vertical"
+            android:minHeight="44dp"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="@string/cd_search"
+                android:src="@drawable/ic_search" />
+
+            <EditText
+                android:id="@+id/chats_search"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:background="@null"
+                android:hint="@string/chats_search_hint"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:maxLines="1"
+                android:textColor="?attr/tmTextPrimary"
+                android:textColorHint="?attr/tmTextSecondary"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- ============================================================== -->
+        <!-- Filter chip row                                                -->
+        <!-- ============================================================== -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="10dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/chip_filter_all"
+                    style="@style/TmChip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/chat_filter_all" />
+
+                <Button
+                    android:id="@+id/chip_filter_unread"
+                    style="@style/TmChip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/chat_filter_unread" />
+
+                <Button
+                    android:id="@+id/chip_filter_nearby"
+                    style="@style/TmChip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/chat_filter_nearby" />
+
+                <Button
+                    android:id="@+id/chip_filter_trusted"
+                    style="@style/TmChip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/chat_filter_trusted" />
+
+                <FrameLayout
+                    android:id="@+id/chip_filter_plus"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="2dp"
+                    android:background="@drawable/bg_chip_plus">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/new_chat"
+                        android:src="@drawable/ic_plus_thin" />
+                </FrameLayout>
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- ============================================================== -->
+        <!-- Conversation list / empty state                                -->
+        <!-- ============================================================== -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -45,8 +228,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:paddingTop="4dp"
-                android:paddingBottom="88dp" />
+                android:paddingTop="2dp"
+                android:paddingBottom="120dp" />
 
             <LinearLayout
                 android:id="@+id/empty_chats"
@@ -61,7 +244,7 @@
                 <FrameLayout
                     android:layout_width="80dp"
                     android:layout_height="80dp"
-                    android:background="@drawable/bg_round_icon_cyan">
+                    android:background="@drawable/bg_round_icon_green">
 
                     <ImageView
                         android:layout_width="36dp"
@@ -97,6 +280,23 @@
         </FrameLayout>
     </LinearLayout>
 
+    <!-- ================================================================ -->
+    <!-- FAB stack (small "edit" above main "+")                          -->
+    <!-- ================================================================ -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_new_chat_small"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="92dp"
+        android:contentDescription="@string/new_chat"
+        android:src="@drawable/ic_edit_pencil"
+        app:backgroundTint="?attr/tmSurface2"
+        app:tint="?attr/tmTextPrimary"
+        app:fabSize="mini"
+        app:elevation="4dp" />
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_new_chat"
         android:layout_width="wrap_content"
@@ -105,8 +305,8 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/new_chat"
         android:src="@drawable/ic_plus"
-        app:backgroundTint="@color/tm_neon_cyan"
-        app:tint="@color/tm_bg"
+        app:backgroundTint="?attr/tmNeonGreen"
+        app:tint="?attr/tmBg"
         app:elevation="6dp" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

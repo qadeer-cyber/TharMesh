@@ -1,23 +1,74 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!--
-        Premium dark theme. We inherit from the Material Components NoActionBar
-        parent so the Material bottom nav and buttons continue to work, then
-        override surface/background/accent colors for the "offline mesh" look.
+        Stage 6.1 — Theme.TharMesh becomes a DayNight theme. The default
+        (values/themes.xml, this file) binds the WhatsApp-inspired LIGHT palette
+        to all ?attr/tmX attrs declared in values/attrs.xml. The values-night/
+        sibling rebinds the same attrs to the original premium DARK palette so
+        the pre-6.1 cyber-mesh look is preserved when the user picks Dark or
+        when the system is in night mode.
+
+        The user-facing Theme Mode setting (System / Light / Dark) is applied
+        via [com.tharmesh.ui.theme.ThemeManager], which calls
+        AppCompatDelegate.setDefaultNightMode(...) — Android then drives the
+        DayNight resolution and recreates running activities cleanly.
     -->
-    <style name="Theme.TharMesh" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="colorPrimary">@color/tm_neon_cyan</item>
-        <item name="colorPrimaryVariant">@color/tm_neon_cyan_dim</item>
-        <item name="colorOnPrimary">@color/tm_bg</item>
-        <item name="colorSecondary">@color/tm_neon_green</item>
-        <item name="colorSecondaryVariant">@color/tm_neon_green_dim</item>
-        <item name="colorOnSecondary">@color/tm_bg</item>
-        <item name="colorSurface">@color/tm_surface</item>
-        <item name="colorOnSurface">@color/tm_text_primary</item>
-        <item name="android:colorBackground">@color/tm_bg</item>
-        <item name="android:textColorPrimary">@color/tm_text_primary</item>
-        <item name="android:textColorSecondary">@color/tm_text_secondary</item>
-        <item name="android:windowBackground">@color/tm_bg</item>
-        <item name="android:statusBarColor" tools:targetApi="l">@color/tm_bg</item>
-        <item name="android:navigationBarColor" tools:targetApi="l">@color/tm_bg</item>
+    <style name="Theme.TharMesh" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Material baseline (kept; tinted to the WhatsApp green in light). -->
+        <item name="colorPrimary">@color/tm_light_neon_green</item>
+        <item name="colorPrimaryVariant">@color/tm_light_neon_green_dim</item>
+        <item name="colorOnPrimary">@color/tm_light_bg</item>
+        <item name="colorSecondary">@color/tm_light_neon_cyan</item>
+        <item name="colorSecondaryVariant">@color/tm_light_neon_cyan_dim</item>
+        <item name="colorOnSecondary">@color/tm_light_bg</item>
+        <item name="colorSurface">@color/tm_light_surface</item>
+        <item name="colorOnSurface">@color/tm_light_text_primary</item>
+        <item name="android:colorBackground">@color/tm_light_bg</item>
+        <item name="android:textColorPrimary">@color/tm_light_text_primary</item>
+        <item name="android:textColorSecondary">@color/tm_light_text_secondary</item>
+        <item name="android:windowBackground">@color/tm_light_bg</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/tm_light_bg</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@color/tm_light_bg</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+
+        <!-- TharMesh palette attrs — LIGHT bindings. -->
+        <item name="tmBg">@color/tm_light_bg</item>
+        <item name="tmBg2">@color/tm_light_bg_2</item>
+        <item name="tmSurface">@color/tm_light_surface</item>
+        <item name="tmSurface2">@color/tm_light_surface_2</item>
+        <item name="tmSurfaceGlass">@color/tm_light_surface_glass</item>
+        <item name="tmStroke">@color/tm_light_stroke</item>
+        <item name="tmStrokeSoft">@color/tm_light_stroke_soft</item>
+
+        <item name="tmTextPrimary">@color/tm_light_text_primary</item>
+        <item name="tmTextSecondary">@color/tm_light_text_secondary</item>
+        <item name="tmTextMuted">@color/tm_light_text_muted</item>
+
+        <item name="tmNeonCyan">@color/tm_light_neon_cyan</item>
+        <item name="tmNeonCyanDim">@color/tm_light_neon_cyan_dim</item>
+        <item name="tmNeonGreen">@color/tm_light_neon_green</item>
+        <item name="tmNeonGreenDim">@color/tm_light_neon_green_dim</item>
+        <item name="tmDesertAmber">@color/tm_light_desert_amber</item>
+        <item name="tmDanger">@color/tm_light_danger</item>
+        <item name="tmDangerDim">@color/tm_light_danger_dim</item>
+        <item name="tmWarning">@color/tm_light_warning</item>
+
+        <item name="tmBubbleMeStart">@color/tm_light_bubble_me_start</item>
+        <item name="tmBubbleMeEnd">@color/tm_light_bubble_me_end</item>
+        <item name="tmBubblePeer">@color/tm_light_bubble_peer</item>
+        <item name="tmBubbleTextMe">@color/tm_light_bubble_text_me</item>
+        <item name="tmBubbleTextPeer">@color/tm_light_bubble_text_peer</item>
+
+        <item name="tmTickRead">@color/tm_light_tick_read</item>
+        <item name="tmTickDefault">@color/tm_light_tick_default</item>
+        <item name="tmUnreadBadge">@color/tm_light_unread_badge</item>
+        <item name="tmUnreadBadgeText">@color/tm_light_unread_badge_text</item>
+
+        <item name="tmGradientTop">@color/tm_light_gradient_top</item>
+        <item name="tmGradientBottom">@color/tm_light_gradient_bottom</item>
+        <item name="tmGlowCyan20">@color/tm_light_glow_cyan_20</item>
+        <item name="tmGlowGreen20">@color/tm_light_glow_green_20</item>
+        <item name="tmGlowDanger20">@color/tm_light_glow_danger_20</item>
+
+        <item name="tmSearchFill">@color/tm_light_search_fill</item>
     </style>
 </resources>

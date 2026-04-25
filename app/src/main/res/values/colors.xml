@@ -1,32 +1,125 @@
 <resources>
-    <!-- Legacy aliases (kept so older layouts like activity_chats.xml still compile). -->
+    <!--
+      Stage 6.1 — color palette. Two parallel sets:
+
+        tm_dark_*  — premium "offline survival" cyber-mesh palette (the original
+                     TharMesh dark UI). Bound to ?attr/tmX in values-night/themes.xml.
+
+        tm_light_* — WhatsApp-inspired clean palette. Bound to ?attr/tmX in
+                     values/themes.xml.
+
+      The legacy @color/tm_* aliases (without dark/light suffix) below remain
+      for layouts / drawables not yet migrated to ?attr/. They alias the dark
+      palette so the pre-6.1 dark UI is byte-equivalent.
+    -->
+
+    <!-- ================================================================ -->
+    <!-- DARK palette (preserves pre-6.1 cyber-mesh look)                   -->
+    <!-- ================================================================ -->
+    <color name="tm_dark_bg">#0A0E1A</color>
+    <color name="tm_dark_bg_2">#0F1524</color>
+    <color name="tm_dark_surface">#131A2B</color>
+    <color name="tm_dark_surface_2">#1A2238</color>
+    <color name="tm_dark_surface_glass">#1F2940</color>
+    <color name="tm_dark_stroke">#2A3757</color>
+    <color name="tm_dark_stroke_soft">#1E2A45</color>
+
+    <color name="tm_dark_text_primary">#E6ECF5</color>
+    <color name="tm_dark_text_secondary">#8A97B5</color>
+    <color name="tm_dark_text_muted">#5E6B87</color>
+
+    <color name="tm_dark_neon_cyan">#00E5FF</color>
+    <color name="tm_dark_neon_cyan_dim">#1A4B5C</color>
+    <color name="tm_dark_neon_green">#00E676</color>
+    <color name="tm_dark_neon_green_dim">#0F3B26</color>
+    <color name="tm_dark_desert_amber">#F0B070</color>
+    <color name="tm_dark_danger">#FF4E6A</color>
+    <color name="tm_dark_danger_dim">#3B1520</color>
+    <color name="tm_dark_warning">#FFC857</color>
+
+    <color name="tm_dark_bubble_me_start">#0EA5E9</color>
+    <color name="tm_dark_bubble_me_end">#2563EB</color>
+    <color name="tm_dark_bubble_peer">#1A2238</color>
+    <color name="tm_dark_bubble_text_me">#FFFFFF</color>
+    <color name="tm_dark_bubble_text_peer">#E6ECF5</color>
+
+    <color name="tm_dark_tick_read">#00E5FF</color>
+    <color name="tm_dark_tick_default">#8A97B5</color>
+    <color name="tm_dark_unread_badge">#00E676</color>
+    <color name="tm_dark_unread_badge_text">#0A0E1A</color>
+
+    <color name="tm_dark_gradient_top">#0F1524</color>
+    <color name="tm_dark_gradient_bottom">#050812</color>
+    <color name="tm_dark_glow_cyan_20">#3300E5FF</color>
+    <color name="tm_dark_glow_green_20">#3300E676</color>
+    <color name="tm_dark_glow_danger_20">#33FF4E6A</color>
+
+    <color name="tm_dark_search_fill">#1A2238</color>
+
+    <!-- ================================================================ -->
+    <!-- LIGHT palette (WhatsApp-inspired clean UI)                         -->
+    <!-- ================================================================ -->
+    <color name="tm_light_bg">#FFFFFF</color>
+    <color name="tm_light_bg_2">#F7F8FA</color>
+    <color name="tm_light_surface">#FFFFFF</color>
+    <color name="tm_light_surface_2">#F7F8FA</color>
+    <color name="tm_light_surface_glass">#FFFFFF</color>
+    <color name="tm_light_stroke">#E9EDEF</color>
+    <color name="tm_light_stroke_soft">#F0F2F5</color>
+
+    <color name="tm_light_text_primary">#111B21</color>
+    <color name="tm_light_text_secondary">#667781</color>
+    <color name="tm_light_text_muted">#8696A0</color>
+
+    <!-- Light-mode "cyan" accent is WhatsApp's tick-blue; "green" is WhatsApp green. -->
+    <color name="tm_light_neon_cyan">#1FA2FF</color>
+    <color name="tm_light_neon_cyan_dim">#D6ECFF</color>
+    <color name="tm_light_neon_green">#25D366</color>
+    <color name="tm_light_neon_green_dim">#D9FDD3</color>
+    <color name="tm_light_desert_amber">#F09D38</color>
+    <color name="tm_light_danger">#E53935</color>
+    <color name="tm_light_danger_dim">#FBE9E7</color>
+    <color name="tm_light_warning">#F09D38</color>
+
+    <color name="tm_light_bubble_me_start">#D9FDD3</color>
+    <color name="tm_light_bubble_me_end">#D9FDD3</color>
+    <color name="tm_light_bubble_peer">#FFFFFF</color>
+    <color name="tm_light_bubble_text_me">#111B21</color>
+    <color name="tm_light_bubble_text_peer">#111B21</color>
+
+    <color name="tm_light_tick_read">#53BDEB</color>
+    <color name="tm_light_tick_default">#8696A0</color>
+    <color name="tm_light_unread_badge">#25D366</color>
+    <color name="tm_light_unread_badge_text">#FFFFFF</color>
+
+    <color name="tm_light_gradient_top">#FFFFFF</color>
+    <color name="tm_light_gradient_bottom">#FFFFFF</color>
+    <color name="tm_light_glow_cyan_20">#331FA2FF</color>
+    <color name="tm_light_glow_green_20">#3325D366</color>
+    <color name="tm_light_glow_danger_20">#33E53935</color>
+
+    <color name="tm_light_search_fill">#F0F2F5</color>
+
+    <!-- ================================================================ -->
+    <!-- Legacy aliases — point at the dark palette so pre-6.1 layouts and  -->
+    <!-- drawables that still reference @color/tm_X render exactly as       -->
+    <!-- before. New code should use ?attr/tmX instead.                     -->
+    <!-- ================================================================ -->
     <color name="tm_primary">#0B1120</color>
     <color name="tm_accent">#00E5FF</color>
-    <!-- Legacy Material defaults (kept so generated code still compiles). -->
-    <color name="purple_500">#6200EE</color>
-    <color name="purple_700">#3700B3</color>
-    <color name="teal_200">#03DAC5</color>
-    <color name="black">#000000</color>
-    <color name="white">#FFFFFF</color>
 
-    <!--
-        TharMesh premium dark palette. "Offline survival communication system" vibe:
-        deep desert night as the base, neon cyan + neon green as accents, muted
-        desert amber as a warm highlight.
-    -->
-    <color name="tm_bg">#0A0E1A</color>              <!-- deep desert night -->
-    <color name="tm_bg_2">#0F1524</color>            <!-- elevated background -->
-    <color name="tm_surface">#131A2B</color>         <!-- card surface -->
-    <color name="tm_surface_2">#1A2238</color>       <!-- elevated card surface -->
-    <color name="tm_surface_glass">#1F2940</color>   <!-- glassmorphism card -->
-    <color name="tm_stroke">#2A3757</color>          <!-- card border -->
-    <color name="tm_stroke_soft">#1E2A45</color>     <!-- subtle divider -->
+    <color name="tm_bg">#0A0E1A</color>
+    <color name="tm_bg_2">#0F1524</color>
+    <color name="tm_surface">#131A2B</color>
+    <color name="tm_surface_2">#1A2238</color>
+    <color name="tm_surface_glass">#1F2940</color>
+    <color name="tm_stroke">#2A3757</color>
+    <color name="tm_stroke_soft">#1E2A45</color>
 
     <color name="tm_text_primary">#E6ECF5</color>
     <color name="tm_text_secondary">#8A97B5</color>
     <color name="tm_text_muted">#5E6B87</color>
 
-    <!-- Accents -->
     <color name="tm_neon_cyan">#00E5FF</color>
     <color name="tm_neon_cyan_dim">#1A4B5C</color>
     <color name="tm_neon_green">#00E676</color>
@@ -36,22 +129,26 @@
     <color name="tm_danger_dim">#3B1520</color>
     <color name="tm_warning">#FFC857</color>
 
-    <!-- Chat -->
     <color name="tm_bubble_me_start">#0EA5E9</color>
     <color name="tm_bubble_me_end">#2563EB</color>
     <color name="tm_bubble_peer">#1A2238</color>
     <color name="tm_bubble_text_me">#FFFFFF</color>
     <color name="tm_bubble_text_peer">#E6ECF5</color>
 
-    <!-- Status ticks -->
     <color name="tm_tick_read">#00E5FF</color>
     <color name="tm_tick_default">#8A97B5</color>
     <color name="tm_unread_badge">#00E676</color>
 
-    <!-- Gradients / glows -->
     <color name="tm_gradient_top">#0F1524</color>
     <color name="tm_gradient_bottom">#050812</color>
     <color name="tm_glow_cyan_20">#3300E5FF</color>
     <color name="tm_glow_green_20">#3300E676</color>
     <color name="tm_glow_danger_20">#33FF4E6A</color>
+
+    <!-- Material defaults kept so generated code still compiles. -->
+    <color name="purple_500">#6200EE</color>
+    <color name="purple_700">#3700B3</color>
+    <color name="teal_200">#03DAC5</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
 </resources>

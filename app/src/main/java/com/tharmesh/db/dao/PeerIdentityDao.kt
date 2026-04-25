@@ -24,4 +24,13 @@ interface PeerIdentityDao {
 
     @Query("SELECT COUNT(*) FROM peer_identity")
     fun count(): Int
+
+    /**
+     * Stage 6.1 — userIds for every TOFU-bound peer. Used by the Chats home's
+     * "Trusted" filter chip. Stage 6.2 will refine this to peers explicitly
+     * marked verified=true via QR scan; for now any peer whose identity has
+     * been seen and pinned counts as trusted.
+     */
+    @Query("SELECT userId FROM peer_identity")
+    fun getAllUserIds(): List<String>
 }

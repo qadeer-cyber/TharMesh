@@ -18,6 +18,7 @@ import com.tharmesh.mesh.NearbyMeshDataSource
 import com.tharmesh.permissions.NearbyPermissions
 import com.tharmesh.transport.Transport
 import com.tharmesh.transport.nearby.NearbyConnectionsTransport
+import com.tharmesh.ui.theme.ThemeManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,6 +70,12 @@ class TharMeshApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Stage 6.1 — apply the persisted Theme Mode BEFORE any Activity is
+        // created so the launcher Activity is inflated against the right
+        // night-mode resources on the very first frame. AppCompat handles
+        // recreation cleanly when the user later changes the mode from
+        // Settings; we never call recreate() ourselves.
+        ThemeManager.applyFromPrefs(this)
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         database = AppDatabase.getInstance(this)
         // Pre-login placeholder. The directory holds its own StateFlows; setSource()

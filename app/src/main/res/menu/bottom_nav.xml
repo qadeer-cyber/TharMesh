@@ -1,21 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 6.1 — WhatsApp-style 5-tab structure: Chats / Devices / Alerts / Relay
+  / Settings. Item ids are renamed to nav_chats / nav_alerts / nav_relay so the
+  navigation routing reads naturally; the Activity binds each id to the
+  Fragment that owns the corresponding feature surface today, with placeholders
+  in place for Stage 6.4 (Channels → Alerts) and Stage 6.5 (Topology → Relay).
+-->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:id="@+id/nav_home"
-        android:icon="@drawable/ic_home"
-        android:title="@string/tab_home" />
+        android:id="@+id/nav_chats"
+        android:icon="@drawable/ic_message"
+        android:title="@string/tab_chats" />
     <item
         android:id="@+id/nav_devices"
         android:icon="@drawable/ic_devices"
         android:title="@string/tab_devices" />
     <item
-        android:id="@+id/nav_messages"
-        android:icon="@drawable/ic_message"
-        android:title="@string/tab_messages" />
-    <item
-        android:id="@+id/nav_status"
+        android:id="@+id/nav_alerts"
         android:icon="@drawable/ic_alert"
-        android:title="@string/tab_status" />
+        android:title="@string/tab_alerts" />
+    <item
+        android:id="@+id/nav_relay"
+        android:icon="@drawable/ic_home"
+        android:title="@string/tab_relay" />
     <item
         android:id="@+id/nav_settings"
         android:icon="@drawable/ic_settings"

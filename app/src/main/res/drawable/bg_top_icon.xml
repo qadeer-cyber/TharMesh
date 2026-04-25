@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 6.1 — circular touch background for the WhatsApp-style top icon row.
+  Resolves to a soft surface tint in light mode (no border) and a subtle
+  glass surface in dark mode. ?attr/selectableItemBackgroundBorderless adds
+  a ripple on tap.
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/tmStrokeSoft">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</ripple>

@@ -21,14 +21,14 @@
         android:gravity="center_vertical"
         android:padding="12dp"
         android:visibility="gone"
-        android:background="@color/tm_bg_2">
+        android:background="?attr/tmBg2">
 
         <TextView
             android:id="@+id/mesh_status_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textColor="@color/tm_text_primary"
+            android:textColor="?attr/tmTextPrimary"
             android:textSize="14sp"
             tools:text="Bluetooth is off — turn it on to use the mesh"
             xmlns:tools="http://schemas.android.com/tools" />
@@ -41,7 +41,7 @@
             android:minHeight="0dp"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
-            android:textColor="@color/tm_accent"
+            android:textColor="?attr/tmNeonCyan"
             android:background="@android:color/transparent"
             android:text="@string/banner_action_retry"
             android:visibility="gone" />
@@ -56,14 +56,22 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="@color/tm_stroke_soft" />
+        android:background="?attr/tmStrokeSoft" />
 
+    <!--
+      Stage 6.1 — WhatsApp-style bottom nav. itemBackground paints a soft
+      green pill behind the active tab (state_checked=true, see
+      drawable/bg_nav_pill.xml); inactive tabs render flat. The pill is
+      themed so it appears as the WhatsApp green tint in light mode and the
+      neon-green-dim glow in dark mode, preserving the pre-6.1 cyber look.
+    -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/tm_bg_2"
+        android:background="?attr/tmBg"
         android:minHeight="64dp"
+        app:itemBackground="@drawable/bg_nav_pill"
         app:itemIconTint="@color/nav_item_color"
         app:itemTextColor="@color/nav_item_color"
         app:labelVisibilityMode="labeled"

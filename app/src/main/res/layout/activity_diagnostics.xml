@@ -2,13 +2,13 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/tm_bg"
+    android:background="?attr/tmBg"
     android:orientation="vertical">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/tm_primary"
+        android:background="?attr/tmBg"
         android:padding="16dp"
         android:text="@string/diagnostics_title"
         android:textColor="@android:color/white"
@@ -56,7 +56,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:fontFamily="monospace"
-                    android:textColor="@color/tm_text_primary" />
+                    android:textColor="?attr/tmTextPrimary" />
             </LinearLayout>
 
             <LinearLayout
@@ -79,7 +79,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:fontFamily="monospace"
-                    android:textColor="@color/tm_text_primary"
+                    android:textColor="?attr/tmTextPrimary"
                     android:textSize="12sp" />
             </LinearLayout>
 
@@ -95,7 +95,7 @@
                     android:id="@+id/switch_disable_backoff"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/tm_text_primary"
+                    android:textColor="?attr/tmTextPrimary"
                     android:text="@string/field_test_disable_backoff" />
 
                 <TextView
@@ -110,7 +110,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:textColor="@color/tm_text_primary"
+                    android:textColor="?attr/tmTextPrimary"
                     android:text="@string/field_test_force_high_freq" />
 
                 <TextView

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 6.1 — themeable color attributes. Layouts and drawables that need to
+  swap appearance between the WhatsApp-style light theme and the existing
+  premium dark theme reference these attrs as ?attr/tmX. The concrete color
+  values are bound by Theme.TharMesh in values/themes.xml (light / day) and
+  values-night/themes.xml (dark / night). All names are 1:1 with the legacy
+  @color/tm_X tokens so the dark-mode rendering is byte-equivalent to the
+  pre-6.1 build.
+-->
+<resources>
+    <!-- Surfaces -->
+    <attr name="tmBg" format="color" />
+    <attr name="tmBg2" format="color" />
+    <attr name="tmSurface" format="color" />
+    <attr name="tmSurface2" format="color" />
+    <attr name="tmSurfaceGlass" format="color" />
+    <attr name="tmStroke" format="color" />
+    <attr name="tmStrokeSoft" format="color" />
+
+    <!-- Text -->
+    <attr name="tmTextPrimary" format="color" />
+    <attr name="tmTextSecondary" format="color" />
+    <attr name="tmTextMuted" format="color" />
+
+    <!-- Accents (semantic; resolves to neon cyan / green in dark, soft blue /
+         WhatsApp green in light). -->
+    <attr name="tmNeonCyan" format="color" />
+    <attr name="tmNeonCyanDim" format="color" />
+    <attr name="tmNeonGreen" format="color" />
+    <attr name="tmNeonGreenDim" format="color" />
+    <attr name="tmDesertAmber" format="color" />
+    <attr name="tmDanger" format="color" />
+    <attr name="tmDangerDim" format="color" />
+    <attr name="tmWarning" format="color" />
+
+    <!-- Chat bubbles -->
+    <attr name="tmBubbleMeStart" format="color" />
+    <attr name="tmBubbleMeEnd" format="color" />
+    <attr name="tmBubblePeer" format="color" />
+    <attr name="tmBubbleTextMe" format="color" />
+    <attr name="tmBubbleTextPeer" format="color" />
+
+    <!-- Status ticks / unread badge -->
+    <attr name="tmTickRead" format="color" />
+    <attr name="tmTickDefault" format="color" />
+    <attr name="tmUnreadBadge" format="color" />
+    <attr name="tmUnreadBadgeText" format="color" />
+
+    <!-- Gradients / glows -->
+    <attr name="tmGradientTop" format="color" />
+    <attr name="tmGradientBottom" format="color" />
+    <attr name="tmGlowCyan20" format="color" />
+    <attr name="tmGlowGreen20" format="color" />
+    <attr name="tmGlowDanger20" format="color" />
+
+    <!-- Search field fill (rounded-pill input on the chats home). -->
+    <attr name="tmSearchFill" format="color" />
+</resources>
