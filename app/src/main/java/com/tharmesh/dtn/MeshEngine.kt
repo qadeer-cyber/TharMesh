@@ -122,12 +122,28 @@ class MeshEngine(
      * `Nearby.getConnectionsClient(applicationContext)` shared by every
      * transport in the process).
      *
-     * With this flag: `stop()` flips it before tearing down the transport,
-     * and `start()` returns immediately if it was set. A new
-     * `MeshEngine` for a different identity has its own flag, so this never
-     * blocks legitimate restarts.
+     * The check-then-act pair must be atomic with respect to [stop], or
+     * else slow Room I/O during [start] (`bundleStore.deleteExpired` +
+     * `loadActive`) opens a multi-millisecond window where `stop()` can
+     * flip the flag and tear down the transport between the [closed] read
+     * and the [Transport.start] call. To close that window, the read
+     * paired with [Transport.start] in [start] and the write paired with
+     * [Transport.stop] in [stop] both run inside [lifecycleLock].
+     *
+     * A new `MeshEngine` for a different identity has its own [closed]
+     * flag and its own [lifecycleLock], so this never blocks legitimate
+     * restarts on a sign-out → sign-in cycle.
      */
     private val closed = AtomicBoolean(false)
+
+    /**
+     * Serialises the [closed]-check + [Transport.start] pair against the
+     * [closed]-set + [Transport.stop] pair. Held only across the actual
+     * transport-touching calls; the slow cache-rehydrate work in [start]
+     * runs OUTSIDE the lock so a concurrent [stop] doesn't block the main
+     * thread on Room I/O. See [closed] kdoc for the race this closes.
+     */
+    private val lifecycleLock = Any()
 
     init {
         transport.setListener { event: TransportEvent ->
@@ -136,8 +152,9 @@ class MeshEngine(
     }
 
     fun start() {
-        // PR #14 follow-up: refuse to restart an engine that has already been
-        // retired. See [closed] kdoc for the race this closes.
+        // Cheap early-out: if we were already retired before any I/O began,
+        // skip the rehydrate work entirely. This is purely an optimisation;
+        // the authoritative gate is inside [lifecycleLock] below.
         if (closed.get()) {
             MeshLog.startAfterStopIgnored(localUserId)
             return
@@ -150,6 +167,13 @@ class MeshEngine(
         //  2. The store-and-forward retry loop (MessageRepository) calls retryBundle
         //     for every pending outbound row in Room; retryBundle looks the bundle up
         //     in the cache, so the cache must be populated before the first tick.
+        //
+        // This block runs OUTSIDE [lifecycleLock] so a concurrent [stop] from
+        // the main thread isn't blocked on Room I/O. If [stop] wins the race
+        // and flips [closed] while we're rehydrating, the lock-protected
+        // re-check below will see it and bail before [Transport.start] runs;
+        // the cache work we just did is harmless (this engine instance is
+        // about to be discarded).
         val store = bundleStore
         if (store != null) {
             store.deleteExpired(now())
@@ -164,21 +188,38 @@ class MeshEngine(
             }
             MeshLog.restored(restored.size)
         }
-        transport.start(localUserId)
+        // Authoritative gate: the lock-protected re-check + [Transport.start]
+        // pair is atomic w.r.t. [stop]'s [closed]-set + [Transport.stop] pair.
+        // After this block, either we started the transport AND [stop] (if any)
+        // will subsequently tear it down cleanly, or we observed [closed]=true
+        // and never touched the transport. No interleaving can produce a
+        // zombie transport on the singleton ConnectionsClient.
+        synchronized(lifecycleLock) {
+            if (closed.get()) {
+                MeshLog.startAfterStopIgnored(localUserId)
+                return
+            }
+            transport.start(localUserId)
+        }
     }
 
     fun stop() {
-        // PR #14 follow-up: flip the retired flag BEFORE tearing down the
-        // transport. A concurrent ensureMeshStarted coroutine that races past
-        // its pre-flight gate and calls start() on this instance will see the
-        // flag and bail before re-touching the transport.
-        closed.set(true)
-        transport.stop()
+        // Atomic w.r.t. [start]: setting [closed] before [Transport.stop]
+        // ensures a concurrent [start] that loses the race will see
+        // [closed]=true on its lock-protected re-check and skip
+        // [Transport.start] entirely. Holding the lock around the
+        // [Transport.stop] call also ensures we cannot tear down a transport
+        // that [start] is mid-bringing-up.
+        synchronized(lifecycleLock) {
+            closed.set(true)
+            transport.stop()
+        }
         // The transport's stop() tears down endpoints but does not fire PeerDisconnected
         // events — manually clear the peer-connection set so a subsequent start() does
         // not try to send to stale peers that would immediately fail and flip messages
         // to FAILED. receivedFrom is tied to the same session's transport identity, so
-        // clear it too.
+        // clear it too. These can run outside [lifecycleLock] — they don't
+        // touch the transport.
         synchronized(peersLock) { connectedPeers.clear() }
         synchronized(cacheLock) { receivedFrom.clear() }
     }
