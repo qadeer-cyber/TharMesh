@@ -117,6 +117,27 @@
     <string name="contacts_scan_qr">Scan QR</string>
     <string name="contacts_add_by_invite">Add by invite code</string>
     <string name="contacts_empty">No contacts yet</string>
+    <string name="contacts_empty_title">No contacts yet</string>
+    <string name="contacts_empty_subtitle">Add a contact by QR or nearby mesh discovery</string>
+    <string name="contacts_search_hint">Search by name or userId</string>
+    <string name="contacts_filter_all">All</string>
+    <string name="contacts_filter_online">Online</string>
+    <string name="contacts_filter_verified">Verified</string>
+    <string name="contacts_filter_unverified">Unverified</string>
+    <string name="contacts_status_online">online</string>
+    <string name="contacts_status_offline">offline</string>
+    <string name="contacts_status_last_seen_fmt">last seen %1$s</string>
+    <string name="contact_profile_message">Message</string>
+    <string name="contact_profile_verify_qr">Verify by QR</string>
+    <string name="contact_profile_remove">Remove contact</string>
+    <string name="contact_profile_remove_confirm_title">Remove contact?</string>
+    <string name="contact_profile_remove_confirm_msg">%1$s will be removed from your contacts. Your chat history and verified key are kept; you can re-add them at any time.</string>
+    <string name="contact_profile_removed_toast">%1$s removed from contacts</string>
+    <string name="contact_profile_userid_label">userId</string>
+    <string name="contact_profile_fingerprint_label">Public key fingerprint</string>
+    <string name="contact_profile_status_label">Status</string>
+    <string name="contact_profile_added_label">Added</string>
+    <string name="contact_profile_no_fingerprint">— not yet seen on the mesh</string>
 
     <!-- Dashboard -->
     <string name="dash_connected_title">Connected to Mesh</string>

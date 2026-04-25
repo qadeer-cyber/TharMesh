@@ -129,6 +129,9 @@ class MessagesFragment : Fragment() {
                 nav?.selectedItemId = R.id.nav_settings
                 true
             }
+            popup.menu.add(R.string.tab_devices).setOnMenuItemClickListener {
+                startActivity(Intent(ctx, com.tharmesh.ui.devices.DevicesActivity::class.java)); true
+            }
             popup.menu.add(R.string.diagnostics_title).setOnMenuItemClickListener {
                 startActivity(Intent(ctx, DiagnosticsActivity::class.java)); true
             }

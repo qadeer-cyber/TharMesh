@@ -12,9 +12,9 @@
         android:icon="@drawable/ic_message"
         android:title="@string/tab_chats" />
     <item
-        android:id="@+id/nav_devices"
+        android:id="@+id/nav_contacts"
         android:icon="@drawable/ic_devices"
-        android:title="@string/tab_devices" />
+        android:title="@string/tab_contacts" />
     <item
         android:id="@+id/nav_alerts"
         android:icon="@drawable/ic_alert"

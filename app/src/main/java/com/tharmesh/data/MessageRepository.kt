@@ -292,6 +292,17 @@ class MessageRepository(
         }
     }
 
+    /**
+     * PR B — remove a contact by userId. Deletes the [ContactEntity] only;
+     * conversation history (`conversations` + `messages`) and the TOFU pin
+     * in `peer_identity` are intentionally preserved so the user can re-add
+     * the contact later and resume the same thread + verified shield. Safe
+     * to call for unknown userIds (returns 0).
+     */
+    suspend fun removeContact(userId: String): Int {
+        return runIo { db.contactDao().deleteByUserId(userId) }
+    }
+
     private fun ensureConversationBlocking(peerUserId: String, title: String) {
         val convDao = db.conversationDao()
         if (convDao.getByUserId(peerUserId) == null) {
