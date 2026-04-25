@@ -21,6 +21,7 @@ import com.tharmesh.transport.nearby.NearbyConnectionsTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Process singleton. Wires identity → transport → mesh engine → message repository.
@@ -178,18 +179,33 @@ class TharMeshApp : Application() {
         val repo = repository
         // After stopMesh(), realSource was closed + nulled and the directory swapped
         // to EmptyMeshDataSource. Re-wire a fresh NearbyMeshDataSource so peer events
-        // flow back into the Devices tab on sign-out → sign-in cycles.
+        // flow back into the Devices tab on sign-out → sign-in cycles. This is
+        // pure in-memory wiring — safe to do synchronously on the main thread.
         if (realSource == null) {
             val source = NearbyMeshDataSource(engine)
             directory.setSource(source)
             realSource = source
         }
-        engine.start()
-        repo.startStoreAndForwardLoop()
-        // Data source flips to SCANNING until the first peer arrives; makes the Devices
-        // tab show the correct empty-vs-searching copy without a separate button click.
-        realSource?.startScan()
+        // Flip the started flag synchronously BEFORE launching the IO work so a
+        // re-entrant call from a sibling Activity.onCreate (chats, contacts, …)
+        // returns immediately and we don't double-start the transport.
         started = true
+        // engine.start() rehydrates the persistent bundle cache via Room
+        // (BundleStore.deleteExpired + loadActive) and must NOT run on the main
+        // thread — Room throws IllegalStateException("Cannot access database on
+        // the main thread …") otherwise. Crash repro: cold-launch with non-empty
+        // bundle table → MainActivity.onCreate → ensureMeshStarted → engine.start
+        // → BundleDao_Impl.deleteExpired. Move the whole startup chain (engine
+        // rehydrate + transport.start + retry loop kickoff + scan) onto the IO
+        // dispatcher so the launch path is uniformly off-main-thread.
+        appScope.launch(Dispatchers.IO) {
+            engine.start()
+            repo.startStoreAndForwardLoop()
+            // Data source flips to SCANNING until the first peer arrives; makes the
+            // Devices tab show the correct empty-vs-searching copy without a separate
+            // button click.
+            realSource?.startScan()
+        }
     }
 
     @Synchronized
