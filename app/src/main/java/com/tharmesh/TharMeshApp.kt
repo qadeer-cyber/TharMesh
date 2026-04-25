@@ -168,6 +168,7 @@ class TharMeshApp : Application() {
             onRetryAttempt = { bundleId -> diag.recordRetryAttempt(bundleId) },
             onStuckSendingRecovered = { bundleId -> diag.recordStuckSendingRecovered(bundleId) },
             onPeerChurnSuppressed = { peerId -> diag.recordPeerChurnSuppressed(peerId) },
+            onRetrySuppressedNoPeers = { bundleId -> diag.recordRetrySuppressedNoPeers(bundleId) },
             // Stage 6.3 — wire disaster-mode hooks. The send path consults
             // [isDisasterModeEnabled] on every outgoing bundle, and the
             // receive path calls [onSosReceived] on inbound SOS-marked

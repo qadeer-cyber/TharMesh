@@ -46,6 +46,7 @@ class DiagnosticsCollector(
     val sendPaced = AtomicLong(0)
     val ttlExpiredDrops = AtomicLong(0)
     val stuckSendingRecovered = AtomicLong(0)
+    val retrySuppressedNoPeers = AtomicLong(0)
 
     private val createdAt: Long = now()
     @Volatile private var lastEventAt: Long = 0L
@@ -136,7 +137,8 @@ class DiagnosticsCollector(
         val sendRejected: Long,
         val sendPaced: Long,
         val ttlExpiredDrops: Long,
-        val stuckSendingRecovered: Long
+        val stuckSendingRecovered: Long,
+        val retrySuppressedNoPeers: Long
     )
 
     fun snapshot(): Snapshot {
@@ -160,7 +162,8 @@ class DiagnosticsCollector(
             sendRejected = sendRejected.get(),
             sendPaced = sendPaced.get(),
             ttlExpiredDrops = ttlExpiredDrops.get(),
-            stuckSendingRecovered = stuckSendingRecovered.get()
+            stuckSendingRecovered = stuckSendingRecovered.get(),
+            retrySuppressedNoPeers = retrySuppressedNoPeers.get()
         )
     }
 
@@ -187,6 +190,7 @@ class DiagnosticsCollector(
             .put("sendPaced", s.sendPaced)
             .put("ttlExpiredDrops", s.ttlExpiredDrops)
             .put("stuckSendingRecovered", s.stuckSendingRecovered)
+            .put("retrySuppressedNoPeers", s.retrySuppressedNoPeers)
         val events = JSONArray()
         for (e in recentEvents()) {
             events.put(
@@ -246,6 +250,12 @@ class DiagnosticsCollector(
         record("StuckSendingRecovered", bundleId)
     }
 
+    fun recordRetrySuppressedNoPeers(bundleId: String) {
+        retrySuppressedNoPeers.incrementAndGet()
+        lastEventAt = now()
+        record("RetrySuppressedNoPeers", bundleId)
+    }
+
     /** Reset counters + recent events. Used by the "Clear" UI action. */
     fun reset() {
         peersFound.set(0); peersConnected.set(0); peersDisconnected.set(0)
@@ -254,6 +264,7 @@ class DiagnosticsCollector(
         retryAttempts.set(0); peerChurnEvents.set(0)
         sendRejected.set(0); sendPaced.set(0)
         ttlExpiredDrops.set(0); stuckSendingRecovered.set(0)
+        retrySuppressedNoPeers.set(0)
         synchronized(recentLock) { recent.clear() }
         lastEventAt = 0L
     }

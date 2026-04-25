@@ -62,6 +62,15 @@ class MessageRepository(
     /** Diagnostic hook: a peer reconnect was suppressed by the churn debouncer. */
     private val onPeerChurnSuppressed: (peerId: String) -> Unit = { _ -> },
     /**
+     * Diagnostic hook: a retry-tick iteration was skipped because the mesh had
+     * no connected peers. Fires once per eligible pending bundle per tick, so
+     * field testers can correlate retry droughts with outages. The per-bundle
+     * [RetryPolicy] state is intentionally untouched — when the peer returns
+     * the normal shouldAttempt/recordAttempt flow resumes at the same backoff
+     * window instead of marching to the ceiling during the outage.
+     */
+    private val onRetrySuppressedNoPeers: (bundleId: String) -> Unit = { _ -> },
+    /**
      * Stage 6.3 — fired from [handleIncomingBundle] when an inbound bundle
      * carries the SOS payload prefix. The default no-op keeps the receive
      * path side-effect-free in tests; production wiring sets this to
@@ -565,7 +574,11 @@ class MessageRepository(
             // Stage 5.3 — drop SOS priority tracking on TTL expiry too, not
             // just on DELIVERED / READ. Without this the priority set leaks
             // one UUID per SOS target whose TTL eventually elapses.
-            onTtlClear = { bid -> clearPriority(bid) }
+            onTtlClear = { bid -> clearPriority(bid) },
+            // Skip retry work when no peers are connected — prevents the
+            // RetryPolicy backoff curve from being consumed during outages.
+            hasConnectedPeers = { mesh.hasConnectedPeers() },
+            onRetrySuppressedNoPeers = onRetrySuppressedNoPeers
         )
     }
 
@@ -699,11 +712,38 @@ internal fun runRetryTickStandalone(
      * otherwise leak alongside the now-released [retryPolicy] state. Default:
      * no-op so non-priority callers see Stage 5.2 behaviour unchanged.
      */
-    onTtlClear: (String) -> Unit = { }
+    onTtlClear: (String) -> Unit = { },
+    /**
+     * True iff the transport currently has at least one connected peer. When
+     * false, a tick skips the per-bundle retry work entirely — the policy
+     * state is intentionally untouched so the backoff curve does not advance
+     * during an outage. Default: always true (preserves pre-existing
+     * behaviour for callers that don't care about this gate).
+     */
+    hasConnectedPeers: () -> Boolean = { true },
+    /**
+     * Invoked once per eligible pending bundle per tick when a retry was
+     * skipped because [hasConnectedPeers] returned false. Lets diagnostics
+     * correlate retry droughts with outages without inflating retryAttempts
+     * (no send actually happened).
+     */
+    onRetrySuppressedNoPeers: (String) -> Unit = { }
 ) {
+    // Check peers once per tick rather than per bundle — the set changes at
+    // transport-event granularity, not within a single sweep. Avoids taking
+    // [MeshEngine.peersLock] N times per tick when nothing has changed.
+    val peersAvailable = hasConnectedPeers()
     for (msg in pending) {
         val bid = msg.bundleId ?: continue
         if (!retryPolicy.shouldAttempt(bid, nowMs)) continue
+        if (!peersAvailable) {
+            // No peers — skip the retry but do NOT touch per-bundle policy state.
+            // The next tick after PeerConnected will pick up exactly where we
+            // left off (nextRetryAt unchanged), and retryAllPendingForLocalUser
+            // fires an immediate opportunistic broadcast on reconnect anyway.
+            onRetrySuppressedNoPeers(bid)
+            continue
+        }
         // Snapshot the stuck-SENDING state BEFORE attempting retry — the hook
         // fires only on a successful re-broadcast (no point reporting recovery
         // for a TTL-expired row that won't actually go out).
