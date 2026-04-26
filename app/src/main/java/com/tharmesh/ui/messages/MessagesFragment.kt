@@ -83,6 +83,7 @@ class MessagesFragment : Fragment() {
         bindFilterChips(view)
         bindList(view)
         bindFabs(view)
+        bindNearbySuggestionBanner(view)
 
         viewLifecycleOwner.lifecycleScope.launch {
             repository.observeConversations().collectLatest { list ->
@@ -289,11 +290,84 @@ class MessagesFragment : Fragment() {
         recycler.adapter = adapter
 
         view.findViewById<Button>(R.id.button_empty_start_chat).setOnClickListener { showNewChatSheet() }
+        view.findViewById<Button>(R.id.button_empty_invite).setOnClickListener { shareInvite() }
     }
 
     private fun bindFabs(view: View) {
         view.findViewById<FloatingActionButton>(R.id.fab_new_chat).setOnClickListener { showNewChatSheet() }
     }
+
+    /**
+     * Stage 7 PR D — fire the system share chooser with the user's
+     * `tharmesh://invite?…` URI. No-op with a toast if no profile yet
+     * (shouldn't happen post-LoginActivity but guards a corner case).
+     */
+    private fun shareInvite() {
+        if (!com.tharmesh.ui.invite.InviteSharer.share(requireContext())) {
+            android.widget.Toast.makeText(
+                requireContext(),
+                R.string.invite_share_chooser,
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    /**
+     * Stage 7 PR D — nearby tap-to-add banner. Watches
+     * [com.tharmesh.mesh.NearbyDirectory.nodes] in tandem with the
+     * contact list; surfaces the first online peer that isn't already
+     * a contact (and hasn't been dismissed this session) so the user
+     * can add them with one tap. **No auto-add anywhere.** Dismiss
+     * suppresses for the rest of this fragment instance.
+     */
+    private fun bindNearbySuggestionBanner(view: View) {
+        val banner = view.findViewById<View>(R.id.nearby_suggest_banner)
+        val text = view.findViewById<TextView>(R.id.nearby_banner_text)
+        val addBtn = view.findViewById<Button>(R.id.nearby_banner_add)
+        val dismiss = view.findViewById<ImageView>(R.id.nearby_banner_dismiss)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val app = TharMeshApp.get()
+            val nodesFlow = app.directory.nodes
+            val contactsFlow = app.repository.observeContacts()
+            kotlinx.coroutines.flow.combine(nodesFlow, contactsFlow) { nodes, contacts ->
+                val contactIds = contacts.map { it.userId }.toHashSet()
+                nodes.firstOrNull { node ->
+                    node.online &&
+                        node.userId !in contactIds &&
+                        node.userId !in dismissedSuggestions
+                }
+            }.collectLatest { candidate ->
+                if (candidate == null) {
+                    banner.visibility = View.GONE
+                    return@collectLatest
+                }
+                banner.visibility = View.VISIBLE
+                text.text = getString(R.string.nearby_banner_text_fmt, candidate.name)
+                addBtn.setOnClickListener {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            app.repository.addContact(candidate.userId, candidate.name)
+                        }
+                        // The banner row will auto-hide on the next combine
+                        // tick once the contact lands in observeContacts.
+                        openChat(candidate.userId, candidate.name, avatarBgForPeer(candidate.userId))
+                    }
+                }
+                dismiss.setOnClickListener {
+                    dismissedSuggestions.add(candidate.userId)
+                    banner.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    /**
+     * Per-fragment-instance set of peers the user explicitly dismissed
+     * via the nearby banner. Cleared on fragment destroy — intentional,
+     * so re-entering Chats gives the user another chance.
+     */
+    private val dismissedSuggestions: MutableSet<String> = HashSet()
 
     /**
      * Opens the "New chat" sheet — saved contacts at the top, then explicit
