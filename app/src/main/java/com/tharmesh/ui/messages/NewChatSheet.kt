@@ -69,10 +69,22 @@ class NewChatSheet : BottomSheetDialogFragment() {
         }
         view.findViewById<View>(R.id.new_chat_action_nearby).setOnClickListener {
             val sheet = DevicePickerSheet()
-            sheet.listener = DevicePickerSheet.Listener { node -> openChatWithNewContact(node) }
+            sheet.listener = DevicePickerSheet.Listener { node ->
+                // Do NOT dismiss the parent sheet here. The picker
+                // listener fires after the user picks a device, often
+                // seconds after this click. If we dismissed [this]
+                // sheet up front, [viewLifecycleOwner] would be
+                // destroyed by the time the listener fires, and the
+                // coroutine launched in [openChatWithNewContact] would
+                // run on a cancelled scope (or worse, hit a
+                // [requireContext] / [requireActivity] after detach
+                // and crash with IllegalStateException).
+                //
+                // Self-dismiss happens at the end of [openChat] once
+                // [ChatActivity] has been launched.
+                openChatWithNewContact(node)
+            }
             sheet.show(parentFragmentManager, DevicePickerSheet.TAG)
-            // Dismiss self so only one sheet is on screen at a time.
-            dismissAllowingStateLoss()
         }
         view.findViewById<View>(R.id.new_chat_action_userid).setOnClickListener {
             promptUserIdAdd()
@@ -123,9 +135,25 @@ class NewChatSheet : BottomSheetDialogFragment() {
     }
 
     private fun openChatWithNewContact(node: MeshNode) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            withContext(Dispatchers.IO) { repository.addContact(node.userId, node.name) }
-            openChat(node.userId, node.name)
+        // Capture activity/context BEFORE the suspending Dispatchers.IO
+        // hop. If the user dismisses the sheet (or kills the device
+        // picker) while addContact() is in flight, the fragment may
+        // detach by the time we get back to the main thread; using a
+        // captured Activity reference (whose lifecycle outlives a
+        // single sheet) keeps us crash-free.
+        val activity = activity ?: return
+        val app = TharMeshApp.get()
+        app.appScope.launch {
+            withContext(Dispatchers.IO) { app.repository.addContact(node.userId, node.name) }
+            withContext(Dispatchers.Main) {
+                if (activity.isFinishing || activity.isDestroyed) return@withContext
+                val intent = Intent(activity, ChatActivity::class.java).apply {
+                    putExtra(ChatActivity.EXTRA_TO_USER_ID, node.userId)
+                    putExtra(ChatActivity.EXTRA_TITLE, node.name)
+                }
+                activity.startActivity(intent)
+                if (isAdded) dismissAllowingStateLoss()
+            }
         }
     }
 
