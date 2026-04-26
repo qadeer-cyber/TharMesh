@@ -155,6 +155,18 @@
     <string name="scan_qr_permission_msg">TharMesh uses the camera to read a peer\'s QR code. The image never leaves your device.</string>
     <string name="scan_qr_grant_camera">Allow camera</string>
 
+    <!-- Stage 7 PR D — invite system + nearby banner -->
+    <string name="empty_chats_invite">Invite a friend</string>
+    <string name="nearby_banner_icon_desc">Nearby peer</string>
+    <string name="nearby_banner_dismiss_desc">Dismiss</string>
+    <string name="nearby_banner_add">Add</string>
+    <string name="nearby_banner_text_fmt">User nearby: %1$s</string>
+    <string name="invite_share_subject">Add me on TharMesh</string>
+    <string name="invite_share_body">Add me on TharMesh — %1$s\n\nScan or open this invite:\n%2$s</string>
+    <string name="invite_share_chooser">Share invite</string>
+    <string name="invite_share_no_profile">Set up your profile first</string>
+    <string name="invite_chat_menu">Invite to TharMesh</string>
+
     <!-- Onboarding (Stage 7 PR C) -->
     <string name="onb_continue">Continue</string>
     <string name="onb_skip_for_now">Skip for now</string>
