@@ -17,6 +17,7 @@ import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.data.UserProfile
 import com.tharmesh.ui.main.MainActivity
+import com.tharmesh.ui.onboarding.OnboardingActivity
 
 /**
  * First-run gate. If a profile already exists, skip straight to [MainActivity]. Otherwise
@@ -31,7 +32,7 @@ class LoginActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (UserPrefs.hasProfile(this)) {
-            goToMain()
+            goToNext()
             return
         }
         setContentView(R.layout.activity_login)
@@ -97,11 +98,24 @@ class LoginActivity : AppCompatActivity() {
     private fun finishWith(profile: UserProfile) {
         UserPrefs.saveProfile(this, profile)
         TharMeshApp.get().ensureMeshStarted()
-        goToMain()
+        goToNext()
     }
 
-    private fun goToMain() {
-        val next = Intent(this, MainActivity::class.java)
+    /**
+     * Stage 7 PR C — fresh installs (anonymous path with auto-generated
+     * `user-<8hex>` username) drop into [OnboardingActivity] for the
+     * three-step name + mesh + first-contact flow before reaching
+     * [MainActivity]. Existing installs and Google-signed users with a
+     * real display name are grandfathered through
+     * [UserPrefs.shouldShowOnboarding].
+     */
+    private fun goToNext() {
+        val target = if (UserPrefs.shouldShowOnboarding(this)) {
+            OnboardingActivity::class.java
+        } else {
+            MainActivity::class.java
+        }
+        val next = Intent(this, target)
         next.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(next)
         setResult(Activity.RESULT_OK)

@@ -155,6 +155,28 @@
     <string name="scan_qr_permission_msg">TharMesh uses the camera to read a peer\'s QR code. The image never leaves your device.</string>
     <string name="scan_qr_grant_camera">Allow camera</string>
 
+    <!-- Onboarding (Stage 7 PR C) -->
+    <string name="onb_continue">Continue</string>
+    <string name="onb_skip_for_now">Skip for now</string>
+    <string name="onb_finish">Finish</string>
+    <string name="onb_name_title">Set your name</string>
+    <string name="onb_name_subtitle">This is what your peers see when you appear nearby.</string>
+    <string name="onb_name_hint">Your name</string>
+    <string name="onb_name_pick_photo">Add photo (optional)</string>
+    <string name="onb_name_avatar_desc">Your profile photo</string>
+    <string name="onb_no_picker">No image picker available</string>
+    <string name="onb_photo_save_failed">Could not save photo</string>
+    <string name="onb_mesh_title">Enable mesh</string>
+    <string name="onb_mesh_subtitle">TharMesh uses Bluetooth + Wi-Fi to find peers nearby. No internet, no servers.</string>
+    <string name="onb_mesh_explainer">We\'ll ask for Bluetooth and Location next. Location is required for Bluetooth scanning on Android — TharMesh never reads your GPS.</string>
+    <string name="onb_mesh_enable">Enable mesh</string>
+    <string name="onb_mesh_enabled">Mesh enabled</string>
+    <string name="onb_mesh_icon_desc">TharMesh logo</string>
+    <string name="onb_first_title">Add your first contact</string>
+    <string name="onb_first_subtitle">Scan a friend\'s TharMesh QR, or show yours so they can add you.</string>
+    <string name="onb_first_scan_qr">Scan a QR</string>
+    <string name="onb_first_show_my_qr">Show my QR</string>
+
     <!-- Dashboard -->
     <string name="dash_connected_title">Connected to Mesh</string>
     <string name="dash_connected_sub">You are securely connected to the mesh network</string>

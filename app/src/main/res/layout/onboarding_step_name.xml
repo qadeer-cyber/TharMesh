@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/onb_name_title"
+        android:textColor="?attr/tmTextPrimary"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="32dp"
+        android:gravity="center"
+        android:text="@string/onb_name_subtitle"
+        android:textColor="?attr/tmTextSecondary"
+        android:textSize="14sp" />
+
+    <FrameLayout
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_marginBottom="20dp">
+
+        <ImageView
+            android:id="@+id/onb_avatar_image"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_avatar_circle"
+            android:contentDescription="@string/onb_name_avatar_desc"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/onb_avatar_letter"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textColor="?attr/tmTextPrimary"
+            android:textSize="48sp"
+            android:textStyle="bold" />
+    </FrameLayout>
+
+    <Button
+        android:id="@+id/onb_pick_photo"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/onb_name_pick_photo" />
+
+    <EditText
+        android:id="@+id/onb_name_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:hint="@string/onb_name_hint"
+        android:imeOptions="actionDone"
+        android:inputType="textPersonName"
+        android:maxLength="32"
+        android:textColor="?attr/tmTextPrimary"
+        android:textColorHint="?attr/tmTextSecondary" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <Button
+        android:id="@+id/onb_name_continue"
+        style="@style/TmButton.Primary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:enabled="false"
+        android:text="@string/onb_continue" />
+</LinearLayout>

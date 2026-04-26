@@ -51,6 +51,9 @@
         <activity android:name="com.tharmesh.ui.groups.GroupsActivity" />
         <activity android:name="com.tharmesh.ui.contacts.ScanQrActivity" />
         <activity android:name="com.tharmesh.ui.contacts.MyQrActivity" />
+        <activity
+            android:name="com.tharmesh.ui.onboarding.OnboardingActivity"
+            android:screenOrientation="portrait" />
         <activity android:name="com.tharmesh.ui.contacts.ContactsActivity" />
         <activity android:name="com.tharmesh.ui.contacts.ContactProfileActivity" />
         <activity android:name="com.tharmesh.ui.devices.DevicesActivity" />
