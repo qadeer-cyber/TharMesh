@@ -177,6 +177,8 @@ class ContactsFragment : Fragment() {
             ?.takeIf { it.isNotBlank() }
             ?: code
         val pubKey = data?.getStringExtra(ScanQrActivity.RESULT_PUB_KEY)?.takeIf { it.isNotBlank() }
+        // Stage 7 PR E — QR scan from Contacts tab counts as accepting an invite.
+        com.tharmesh.data.GrowthMetrics.recordInviteAccepted(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 repository.addContact(code, displayName)

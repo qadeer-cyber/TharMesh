@@ -111,6 +111,15 @@ class DiagnosticsActivity : AppCompatActivity() {
             append("ttl expired drops").append(' ').append(s.ttlExpiredDrops).append('\n')
             append("stuck SENDING rec").append(' ').append(s.stuckSendingRecovered).append('\n')
             append("retry supp (offline) ").append(s.retrySuppressedNoPeers).append('\n')
+            // Stage 7 PR E — local-only growth counters. Read from
+            // SharedPreferences via [com.tharmesh.data.GrowthMetrics]; no
+            // network or backend involvement.
+            val g = com.tharmesh.data.GrowthMetrics.snapshot(this@DiagnosticsActivity)
+            append("growth\n")
+            append("  contacts added   ").append(g.contactsAdded).append('\n')
+            append("  invites sent     ").append(g.invitesSent).append('\n')
+            append("  invites accepted ").append(g.invitesAccepted).append('\n')
+            append("  chats started    ").append(g.chatsStarted).append('\n')
             append("relay forwards   ").append(s.relayForwards)
                 .append("  (").append(formatBytes(s.relayedBytesTotal)).append(")\n")
             val perPeer = collector.relayedBytesByPeer()

@@ -100,6 +100,10 @@ class NewChatSheet : BottomSheetDialogFragment() {
             ?.takeIf { it.isNotBlank() }
             ?: code
         val pubKey = data?.getStringExtra(ScanQrActivity.RESULT_PUB_KEY)?.takeIf { it.isNotBlank() }
+        // Stage 7 PR E — QR-scan-and-added is the canonical
+        // "invite accepted" event (vs. addContact alone, which also
+        // covers manual userId entry and nearby-tap paths).
+        com.tharmesh.data.GrowthMetrics.recordInviteAccepted(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 repository.addContact(code, displayName)

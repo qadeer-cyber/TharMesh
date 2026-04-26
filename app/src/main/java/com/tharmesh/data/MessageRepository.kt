@@ -84,6 +84,24 @@ class MessageRepository(
      */
     private val onSosReceived: () -> Unit = {},
     /**
+     * Stage 7 PR E — fired after a contact has been upserted. Production
+     * wiring increments [GrowthMetrics.recordContactAdded]; tests use the
+     * default no-op. The hook fires for every successful upsert,
+     * including re-adds (the existing call sites tolerate re-adding an
+     * existing contact, so this is intentionally non-deduplicated — a
+     * contact going from removed → re-added is a fresh acquisition for
+     * growth purposes).
+     */
+    private val onContactAdded: (userId: String) -> Unit = { _ -> },
+    /**
+     * Stage 7 PR E — fired exactly once per `(myUserId, peerUserId)`
+     * pair, the first time the user sends a message to that peer. Used
+     * to drive [GrowthMetrics.recordChatStarted] + the post-first-chat
+     * viral prompt. The repository checks the message DAO under the
+     * IO dispatcher to ensure idempotency across process restarts.
+     */
+    private val onFirstChatStarted: (peerUserId: String) -> Unit = { _ -> },
+    /**
      * Stage 6.3 — gating predicate consulted on every [send] / [broadcastSos]
      * call. When true, every outgoing bundle is force-marked priority (SOS
      * retry curve + pacer bypass) and its body is wrapped with the SOS
@@ -289,7 +307,7 @@ class MessageRepository(
             db.contactDao().upsert(entity)
             ensureConversationBlocking(userId, entity.displayName)
             entity
-        }
+        }.also { onContactAdded(userId) }
     }
 
     /**
@@ -372,11 +390,16 @@ class MessageRepository(
             replyToId = replyToId,
             replyToPreview = replyPreview
         )
-        val messageId = runIo {
+        val (messageId, isFirstChat) = runIo {
+            // Stage 7 PR E — detect "first message ever sent to this
+            // peer" before insert so the GrowthMetrics hook fires
+            // exactly once per peer across the lifetime of the install.
+            val first = db.messageDao().countOutgoingTo(me, toUserId) == 0
             val id = db.messageDao().insert(entity)
             bumpConversation(toUserId, body, ts, MessageStatus.QUEUED, incrementUnread = false)
-            id
+            id to first
         }
+        if (isFirstChat) onFirstChatStarted(toUserId)
 
         if (effectivePriority) {
             synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }

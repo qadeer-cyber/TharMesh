@@ -16,6 +16,26 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages")
     fun count(): Int
 
+    /**
+     * Stage 7 PR E — count of outgoing messages to a given peer.
+     * Used by [com.tharmesh.data.MessageRepository.send] to detect
+     * whether the about-to-be-inserted message is the *first* the
+     * user has ever sent to that peer (drives the
+     * [com.tharmesh.data.GrowthMetrics] `chats_started` counter +
+     * the post-first-chat viral prompt). Counts both inbound and
+     * outbound row directions for the same `peerUserId` would
+     * over-count, so the predicate is intentionally tight on
+     * `fromUserId == :myUserId AND toUserId == :peerUserId`.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+         WHERE fromUserId = :myUserId
+           AND toUserId = :peerUserId
+        """
+    )
+    fun countOutgoingTo(myUserId: String, peerUserId: String): Int
+
     @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
     fun getById(id: Long): MessageEntity?
 
