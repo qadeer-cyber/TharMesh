@@ -394,9 +394,21 @@ class MessageRepository(
             // Stage 7 PR E — detect "first message ever sent to this
             // peer" before insert so the GrowthMetrics hook fires
             // exactly once per peer across the lifetime of the install.
-            val first = db.messageDao().countOutgoingTo(me, toUserId) == 0
-            val id = db.messageDao().insert(entity)
-            bumpConversation(toUserId, body, ts, MessageStatus.QUEUED, incrementUnread = false)
+            //
+            // The count-then-insert pair runs inside a single Room
+            // transaction so two concurrent send() calls for the same
+            // peer (rapid double-tap, or a user send racing
+            // [broadcastSos]) cannot both observe count == 0 and both
+            // fire the hook. SQLite serialises transactions on the
+            // write connection, so the second send always sees count
+            // >= 1 and skips the hook.
+            var first = false
+            var id = 0L
+            db.runInTransaction {
+                first = db.messageDao().countOutgoingTo(me, toUserId) == 0
+                id = db.messageDao().insert(entity)
+                bumpConversation(toUserId, body, ts, MessageStatus.QUEUED, incrementUnread = false)
+            }
             id to first
         }
         if (isFirstChat) onFirstChatStarted(toUserId)
