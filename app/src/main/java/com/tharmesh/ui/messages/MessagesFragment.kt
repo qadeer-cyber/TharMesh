@@ -306,7 +306,7 @@ class MessagesFragment : Fragment() {
         if (!com.tharmesh.ui.invite.InviteSharer.share(requireContext())) {
             android.widget.Toast.makeText(
                 requireContext(),
-                R.string.invite_share_chooser,
+                R.string.invite_share_no_profile,
                 android.widget.Toast.LENGTH_SHORT
             ).show()
         }

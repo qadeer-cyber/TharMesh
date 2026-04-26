@@ -164,6 +164,7 @@
     <string name="invite_share_subject">Add me on TharMesh</string>
     <string name="invite_share_body">Add me on TharMesh — %1$s\n\nScan or open this invite:\n%2$s</string>
     <string name="invite_share_chooser">Share invite</string>
+    <string name="invite_share_no_profile">Set up your profile first</string>
     <string name="invite_chat_menu">Invite to TharMesh</string>
 
     <!-- Onboarding (Stage 7 PR C) -->
