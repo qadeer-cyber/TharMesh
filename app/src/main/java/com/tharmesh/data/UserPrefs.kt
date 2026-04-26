@@ -79,6 +79,17 @@ object UserPrefs {
     private const val KEY_NOTIF_SOUND = "notif_sound"
     private const val KEY_NOTIF_VIBRATE = "notif_vibrate"
 
+    /**
+     * Stage 7 PR C — first-run onboarding flag. Set to `true` by
+     * [com.tharmesh.ui.onboarding.OnboardingActivity] after the user has
+     * completed (or skipped) the name + mesh + first-contact steps.
+     * [com.tharmesh.ui.auth.LoginActivity] checks this flag to decide
+     * whether to route to onboarding or straight to MainActivity, so
+     * existing installs (which never had onboarding) skip it on
+     * upgrade.
+     */
+    private const val KEY_ONBOARDED = "onboarded"
+
     const val PROVIDER_ANONYMOUS = "anonymous"
     const val PROVIDER_GOOGLE = "google"
 
@@ -130,6 +141,53 @@ object UserPrefs {
             avatarUrl = prefs.getString(KEY_AVATAR, null),
             authProvider = prefs.getString(KEY_PROVIDER, PROVIDER_ANONYMOUS) ?: PROVIDER_ANONYMOUS
         )
+    }
+
+    /**
+     * Stage 7 PR C — true once the user has finished (or skipped)
+     * the onboarding flow. Existing installs created their profile
+     * before this flag existed — for those we treat the flag as
+     * already-set so they aren't pushed back through onboarding on
+     * upgrade. See [shouldShowOnboarding].
+     */
+    @JvmStatic
+    fun isOnboarded(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_ONBOARDED, false)
+    }
+
+    @JvmStatic
+    fun markOnboarded(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_ONBOARDED, true).apply()
+    }
+
+    /**
+     * Returns `true` only for fresh installs that finished
+     * [LoginActivity] but haven't yet completed onboarding. Existing
+     * installs that already had a profile before PR C shipped are
+     * grandfathered: when we see a profile + identity + a username
+     * that was clearly user-chosen (or Google-derived), we mark them
+     * onboarded so they don't get bounced through onboarding on the
+     * upgrade build.
+     */
+    @JvmStatic
+    fun shouldShowOnboarding(context: Context): Boolean {
+        if (isOnboarded(context)) return false
+        val profile = readProfile(context) ?: return true
+        // Pre-PR-C profiles always have username == userId, since
+        // LoginActivity's anonymous path generated `user-<8hex>` and used
+        // it for both fields. Google-signed profiles always have a
+        // distinct human display name. Treat the former as "needs
+        // onboarding"; the latter we grandfather.
+        val looksUserChosen = profile.username.isNotBlank() &&
+            profile.username != profile.userId
+        if (looksUserChosen) {
+            // Persist so we don't re-evaluate on every launch.
+            markOnboarded(context)
+            return false
+        }
+        return true
     }
 
     @JvmStatic
