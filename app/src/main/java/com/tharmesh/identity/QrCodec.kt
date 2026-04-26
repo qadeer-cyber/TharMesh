@@ -68,7 +68,12 @@ object QrCodec {
     }
 
     private fun decodeUri(raw: String): IdentityQrPayload? {
-        if (!raw.startsWith("$INVITE_URI_PREFIX", ignoreCase = true)) return null
+        // Require either an exact match against the prefix or the
+        // prefix followed by '?'. A bare prefix check would also let
+        // through `tharmesh://invitations…` or `tharmesh://invite-foo…`.
+        if (!raw.equals(INVITE_URI_PREFIX, ignoreCase = true) &&
+            !raw.startsWith("$INVITE_URI_PREFIX?", ignoreCase = true)
+        ) return null
         val queryStart = raw.indexOf('?')
         val query = if (queryStart >= 0 && queryStart + 1 < raw.length) {
             raw.substring(queryStart + 1)

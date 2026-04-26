@@ -91,6 +91,15 @@ class QrCodecTest {
     }
 
     @Test
+    fun decode_rejects_prefix_collision_uris() {
+        // Prefix-only matching would let these through; the host /
+        // path must match exactly (modulo case).
+        assertNull(QrCodec.decode("tharmesh://invitations?uid=attacker"))
+        assertNull(QrCodec.decode("tharmesh://invite-malicious?uid=attacker"))
+        assertNull(QrCodec.decode("tharmesh://inviter?uid=attacker"))
+    }
+
+    @Test
     fun decode_uri_handles_url_encoded_special_characters_in_name() {
         val original = IdentityQrPayload(
             userId = "tm-roundtrip",
