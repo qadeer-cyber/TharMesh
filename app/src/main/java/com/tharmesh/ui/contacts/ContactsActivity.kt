@@ -99,6 +99,10 @@ class ContactsActivity : AppCompatActivity() {
                 ?.takeIf { it.isNotBlank() }
                 ?: code
             val pubKey = data?.getStringExtra(ScanQrActivity.RESULT_PUB_KEY)?.takeIf { it.isNotBlank() }
+            // Stage 7 PR E — QR scan from the standalone ContactsActivity
+            // is the same "invite accepted" event as the equivalent path
+            // in NewChatSheet / ContactsFragment / OnboardingActivity.
+            com.tharmesh.data.GrowthMetrics.recordInviteAccepted(this)
             addContact(code, displayName)
             if (pubKey != null) {
                 // Stage 6.2 — out-of-band verify the peer's TOFU pin against the

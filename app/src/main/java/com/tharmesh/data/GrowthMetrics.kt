@@ -21,7 +21,12 @@ import android.content.Context
  *                             user displays their invite QR.
  *  - `invites_accepted`     — bumped from each QR-scan-and-added flow
  *                             (NewChatSheet, ContactsFragment,
- *                             OnboardingActivity, nearby banner).
+ *                             OnboardingActivity, ContactsActivity).
+ *                             Tap-to-add from the nearby banner is NOT
+ *                             counted here — the peer was discovered by
+ *                             the mesh, not invited via QR — but it
+ *                             still bumps `contacts_added` via the
+ *                             repository hook.
  *  - `chats_started`        — bumped on the first outgoing message
  *                             ever sent to a peer (per peer, not per
  *                             session).
