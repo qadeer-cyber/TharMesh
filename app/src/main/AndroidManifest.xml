@@ -28,6 +28,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- Camera for QR code scanning in ScanQrActivity. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <!-- Stage 6.3 Disaster Mode — vibration alert on incoming SOS-priority bundles.
          Normal-protection permission, granted at install time. -->
     <uses-permission android:name="android.permission.VIBRATE" />

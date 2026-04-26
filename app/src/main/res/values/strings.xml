@@ -139,6 +139,22 @@
     <string name="contact_profile_added_label">Added</string>
     <string name="contact_profile_no_fingerprint">— not yet seen on the mesh</string>
 
+    <!-- My QR / Scan QR -->
+    <string name="my_qr_title">My QR</string>
+    <string name="my_qr_subtitle">Show this to a nearby peer to add you instantly</string>
+    <string name="my_qr_image_desc">QR code containing your TharMesh identity</string>
+    <string name="my_qr_invite_label">Invite code</string>
+    <string name="my_qr_share">Share invite</string>
+    <string name="my_qr_share_text">Add me on TharMesh — %1$s\nInvite code: %2$s</string>
+    <string name="scan_qr_title">Scan QR</string>
+    <string name="scan_qr_subtitle">Point the camera at a peer\'s TharMesh QR</string>
+    <string name="scan_qr_paste_fallback">Paste invite instead</string>
+    <string name="scan_qr_paste_dialog_title">Paste QR or invite code</string>
+    <string name="scan_qr_paste_hint">Paste here</string>
+    <string name="scan_qr_permission_title">Camera permission needed</string>
+    <string name="scan_qr_permission_msg">TharMesh uses the camera to read a peer\'s QR code. The image never leaves your device.</string>
+    <string name="scan_qr_grant_camera">Allow camera</string>
+
     <!-- Dashboard -->
     <string name="dash_connected_title">Connected to Mesh</string>
     <string name="dash_connected_sub">You are securely connected to the mesh network</string>
