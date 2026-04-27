@@ -25,6 +25,7 @@ import com.tharmesh.db.entity.ContactEntity
 import com.tharmesh.identity.PeerTrustStore
 import com.tharmesh.mesh.MeshNode
 import com.tharmesh.ui.chat.ChatActivity
+import com.tharmesh.ui.devices.DevicePickerSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
@@ -90,10 +91,20 @@ class ContactsFragment : Fragment() {
             startActivity(Intent(requireContext(), MyQrActivity::class.java))
         }
         view.findViewById<Button>(R.id.btn_scan_qr).setOnClickListener {
-            startActivityForResult(Intent(requireContext(), ScanQrActivity::class.java), REQUEST_SCAN_QR)
+            launchScanQr()
         }
         view.findViewById<Button>(R.id.btn_add_invite).setOnClickListener {
             promptManualAdd()
+        }
+        // Stage 8.0 — empty-state CTAs. Reuse the same handlers as the
+        // top action bar so the buttons in the empty state and the buttons
+        // in the header are visually distinct entry points but logically
+        // identical paths.
+        view.findViewById<Button>(R.id.empty_btn_scan_qr).setOnClickListener {
+            launchScanQr()
+        }
+        view.findViewById<Button>(R.id.empty_btn_find_nearby).setOnClickListener {
+            showFindNearbySheet()
         }
 
         search.addTextChangedListener(object : TextWatcher {
@@ -179,6 +190,11 @@ class ContactsFragment : Fragment() {
         val pubKey = data?.getStringExtra(ScanQrActivity.RESULT_PUB_KEY)?.takeIf { it.isNotBlank() }
         // Stage 7 PR E — QR scan from Contacts tab counts as accepting an invite.
         com.tharmesh.data.GrowthMetrics.recordInviteAccepted(requireContext())
+        // Stage 8.0 — auto-open the chat after a successful add. Pre-8.0 the
+        // user landed back on the Contacts list and had to tap the new row
+        // to start chatting; the spec is "QR scan → auto add → auto open
+        // chat". The trust verify still runs in the background and toasts
+        // its result; landing on the chat doesn't block on it.
         viewLifecycleOwner.lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 repository.addContact(code, displayName)
@@ -187,6 +203,7 @@ class ContactsFragment : Fragment() {
                     withContext(Dispatchers.Main) { surfaceVerifyResult(displayName, res) }
                 }
             }
+            openChatById(code, displayName)
         }
     }
 
@@ -212,18 +229,51 @@ class ContactsFragment : Fragment() {
             .setPositiveButton(R.string.dialog_start) { _, _ ->
                 val userId = input.text?.toString()?.trim().orEmpty()
                 if (userId.isEmpty()) return@setPositiveButton
-                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                    repository.addContact(userId)
+                // Stage 8.0 — auto-open chat after manual add for parity
+                // with QR + nearby paths. The repository.addContact call is
+                // idempotent on userId so re-adds are safe.
+                viewLifecycleOwner.lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { repository.addContact(userId) }
+                    openChatById(userId, userId)
                 }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
 
+    private fun launchScanQr() {
+        startActivityForResult(Intent(requireContext(), ScanQrActivity::class.java), REQUEST_SCAN_QR)
+    }
+
+    /**
+     * Stage 8.0 — open [DevicePickerSheet] from the empty-state "Find
+     * nearby contact" CTA. Tapping a node adds it as a contact and opens
+     * the chat in one shot — same flow [com.tharmesh.ui.messages.NewChatSheet]
+     * uses for its own nearby button.
+     */
+    private fun showFindNearbySheet() {
+        val sheet = DevicePickerSheet()
+        sheet.listener = DevicePickerSheet.Listener { node -> addNearbyAndOpenChat(node) }
+        sheet.show(parentFragmentManager, DevicePickerSheet.TAG)
+    }
+
+    private fun addNearbyAndOpenChat(node: MeshNode) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            withContext(Dispatchers.IO) { repository.addContact(node.userId, node.name) }
+            openChatById(node.userId, node.name)
+        }
+    }
+
     private fun openChat(c: ContactEntity) {
-        val intent = Intent(requireContext(), ChatActivity::class.java)
-        intent.putExtra(ChatActivity.EXTRA_TO_USER_ID, c.userId)
-        intent.putExtra(ChatActivity.EXTRA_TITLE, c.displayName)
+        openChatById(c.userId, c.displayName)
+    }
+
+    private fun openChatById(userId: String, title: String) {
+        val activity = activity ?: return
+        if (activity.isFinishing || activity.isDestroyed) return
+        val intent = Intent(activity, ChatActivity::class.java)
+        intent.putExtra(ChatActivity.EXTRA_TO_USER_ID, userId)
+        intent.putExtra(ChatActivity.EXTRA_TITLE, title)
         startActivity(intent)
     }
 

@@ -33,8 +33,10 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
 
-    <string name="empty_chats">No conversations yet</string>
-    <string name="empty_chats_hint">Start a mesh chat with nearby devices.</string>
+    <string name="empty_chats">No chats yet</string>
+    <!-- Stage 8.0 — replace mesh jargon ("start a mesh chat") with plain
+         user-language: the goal is to add a contact, then chat. -->
+    <string name="empty_chats_hint">Add a contact via QR scan or nearby device to start chatting.</string>
 
     <!-- Chats top-bar mesh status icon + warning dialog. -->
     <string name="cd_mesh_status">Mesh status</string>
@@ -46,7 +48,10 @@
     <string name="mesh_warning_connected_fmt">Mesh is on. %1$d device(s) connected.</string>
     <string name="mesh_warning_open_settings">Open Settings</string>
     <string name="mesh_warning_grant">Grant</string>
-    <string name="empty_chats_button">Start Mesh Chat</string>
+    <!-- Stage 8.0 — was "Start Mesh Chat". Renamed to plain language so the
+         CTA matches the user's actual next step (add a contact, the
+         resulting NewChatSheet still also offers scan / nearby / userId). -->
+    <string name="empty_chats_button">Add your first contact</string>
     <string name="new_chat">New chat</string>
 
     <!-- Device picker bottom sheet -->
@@ -73,11 +78,33 @@
     <string name="chat_send">Send</string>
     <string name="chat_attach">Attach</string>
     <string name="chat_mic">Voice</string>
-    <string name="chat_header_offline">Online · via Mesh</string>
+    <!-- Stage 8.0 — chat-header subtitle. The pre-8.0 string was a static
+         "Online · via Mesh" label that contradicted reality whenever the user
+         was actually offline or had a queued message. The new strings below
+         are state-driven and rendered by [ChatStatusFormatter]; the legacy
+         id is kept (and points at the new "offline" string) for any caller
+         that still references it. -->
+    <string name="chat_header_offline">Offline · messages will send when connected</string>
     <string name="chat_header_encrypted">End-to-end encrypted</string>
     <string name="chat_header_encrypted_sub">Messages are secured on the mesh</string>
     <string name="chat_reply_to">Replying</string>
     <string name="chat_cancel_reply">Cancel reply</string>
+
+    <!-- Stage 8.0 — state-aware mesh subtitle for the chat header. -->
+    <string name="chat_status_online_one">Online · 1 device nearby</string>
+    <string name="chat_status_online_n_fmt">Online · %1$d devices nearby</string>
+    <string name="chat_status_searching">Searching for nearby devices…</string>
+    <string name="chat_status_offline">Offline · messages will send when connected</string>
+
+    <!-- Stage 8.0 — per-message status used in the chat header subtitle.
+         These supersede the inline English literals previously hard-coded
+         in ChatActivity.updateTopStatus. -->
+    <string name="chat_status_msg_queued">Queued — will send when connected</string>
+    <string name="chat_status_msg_sending">Sending…</string>
+    <string name="chat_status_msg_sent">Sent</string>
+    <string name="chat_status_msg_delivered">Delivered</string>
+    <string name="chat_status_msg_read">Read</string>
+    <string name="chat_status_msg_failed">Failed — tap to retry</string>
 
     <!-- WhatsApp-style message status ticks. -->
     <string name="status_queued">⏳</string>
