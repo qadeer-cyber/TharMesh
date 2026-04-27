@@ -97,14 +97,24 @@ class LoginActivity : AppCompatActivity() {
 
     private fun finishWith(profile: UserProfile) {
         UserPrefs.saveProfile(this, profile)
-        // Stage 8.4 \u2014 do NOT start the mesh engine here. If a returning
-        // user has Nearby permissions already granted but has not yet
-        // accepted the current Terms version, starting the mesh would
-        // mean we begin advertising / discovering / processing inbound
-        // bundles before the compliance gate. The mesh is now started
-        // exclusively in [TermsActivity.onAccepted] and
-        // [MainActivity.onCreate], both of which can only run once
-        // [UserPrefs.hasAcceptedCurrentTerms] is true.
+        // Stage 8.4 \u2014 do NOT start the mesh *transport* here (i.e. don't
+        // call ensureMeshStarted): if a returning user has Nearby
+        // permissions already granted but has not yet accepted the
+        // current Terms version, starting the transport would mean we
+        // begin advertising / discovering / processing inbound bundles
+        // before the compliance gate. The transport is now started
+        // exclusively in [TermsActivity.routeOnward] (via the targeted
+        // activities) and [MainActivity.onCreate], both of which only
+        // run once [UserPrefs.hasAcceptedCurrentTerms] is true.
+        //
+        // We DO still need to construct the mesh graph (engine,
+        // repository, etc.) here so that downstream screens like
+        // [com.tharmesh.ui.onboarding.OnboardingActivity] can access
+        // [TharMeshApp.repository] during onboarding step 3 (QR scan).
+        // [TharMeshApp.ensureMeshReady] is permission-safe and
+        // transport-safe \u2014 it only constructs objects in memory
+        // and starts no advertising / discovery.
+        TharMeshApp.get().ensureMeshReady()
         goToNext()
     }
 

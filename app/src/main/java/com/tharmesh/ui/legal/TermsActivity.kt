@@ -61,6 +61,16 @@ class TermsActivity : AppCompatActivity() {
     }
 
     private fun routeOnward() {
+        // Stage 8.4 \u2014 belt-and-suspenders: make sure the mesh graph
+        // (engine, repository, etc.) is constructed before any
+        // downstream screen accesses [com.tharmesh.TharMeshApp.repository].
+        // The primary call site is [com.tharmesh.ui.auth.LoginActivity.
+        // finishWith], but the gate is also reachable directly from
+        // [com.tharmesh.ui.main.MainActivity.onCreate] when an existing
+        // user has not yet accepted the current Terms version, and we
+        // cannot rely on Login having run in that path. ensureMeshReady
+        // is idempotent and starts no transport \u2014 safe to call here.
+        com.tharmesh.TharMeshApp.get().ensureMeshReady()
         val target = if (UserPrefs.shouldShowOnboarding(this)) {
             OnboardingActivity::class.java
         } else {
