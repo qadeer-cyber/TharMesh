@@ -623,10 +623,16 @@ class MessageRepository(
                 // Stage 7.4: drop the offline-queue tracker entry. A
                 // FAILED bundle will not produce a BundleSent, so the
                 // tracker would otherwise retain the id indefinitely.
-                // Note that the row may still be retried later (manual
-                // retry / restart) — that path goes through send() which
-                // mints a new bundleId, so re-tracking will happen with
-                // the new id and not collide with this stale entry.
+                // Note: a manual retry via [retryFailedMessage] (or the
+                // store-and-forward loop) calls mesh.retryBundle(bid)
+                // with the SAME bundleId — those paths bypass send()
+                // and will NOT re-mark the bundle in offlineQueuedTracker.
+                // Consequence: if a FAILED bundle is later retried while
+                // offline and eventually succeeds, the counter
+                // auto_delivered_on_reconnect will not fire for it.
+                // Acceptable for a coarse diagnostic — the spec measures
+                // "first-send queued offline → reconnect → flush", not
+                // recovered-after-failure.
                 offlineQueuedTracker.consumeOnSent(event.bundleId)
                 // Only flip rows that are still in-flight (QUEUED or SENDING). A late
                 // Error arriving after the message already advanced to SENT/DELIVERED/READ
