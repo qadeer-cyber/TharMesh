@@ -195,6 +195,16 @@ class TharMeshApp : Application() {
             // SharedPreferences-backed, and fully offline.
             onContactAdded = { _ -> com.tharmesh.data.GrowthMetrics.recordContactAdded(this) },
             onFirstChatStarted = { _ -> com.tharmesh.data.GrowthMetrics.recordChatStarted(this) },
+            // Stage 7.4 — direct routing diagnostics. Every send() call
+            // bumps direct_send_attempt; sends issued while no peers
+            // are connected bump queued_offline; if such a bundle later
+            // hits BundleSent (after a reconnect) auto_delivered_on_reconnect
+            // fires exactly once, proving store-and-forward worked.
+            onDirectSendAttempt = { diag.recordDirectSendAttempt() },
+            onQueuedOffline = { bundleId -> diag.recordQueuedOffline(bundleId) },
+            onAutoDeliveredOnReconnect = { bundleId ->
+                diag.recordAutoDeliveredOnReconnect(bundleId)
+            },
             isDisasterModeEnabled = { DisasterModeController.shouldForcePriority() },
             peerKeyRing = keyRing,
             // Persist retry-curve state + SOS priority bit so a forced
