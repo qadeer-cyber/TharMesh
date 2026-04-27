@@ -53,6 +53,19 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+        // Stage 8.3 — Pakistan compliance Terms-of-Use gate. MainActivity
+        // is the launcher entry point (see AndroidManifest), so a user
+        // tapping the app icon lands here directly without going through
+        // LoginActivity. Re-check the gate on every cold start so a
+        // build that changes the Terms version (bumps
+        // UserPrefs.LEGAL_TERMS_VERSION_CURRENT) re-prompts existing
+        // users on next launch. TermsActivity routes onward to the
+        // correct downstream activity once accepted.
+        if (!UserPrefs.hasAcceptedCurrentTerms(this)) {
+            startActivity(Intent(this, com.tharmesh.ui.legal.TermsActivity::class.java))
+            finish()
+            return
+        }
         setContentView(R.layout.activity_main)
         TharMeshApp.get().ensureMeshStarted()
         requestNearbyPermissionsIfMissing()

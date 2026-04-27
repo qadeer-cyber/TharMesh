@@ -41,7 +41,12 @@ object SettingsSections {
         STORAGE,
         ACCESSIBILITY,
         LANGUAGE,
-        HELP
+        HELP,
+        // Stage 8.4 — Pakistan legal defensibility. Dedicated top-level
+        // section (not nested inside Help) so Terms / Privacy /
+        // Disclaimer are always one tap away from Settings root, and
+        // are easy to find for any reviewer.
+        LEGAL
     }
 
     fun render(context: Context, container: LinearLayout) {
@@ -90,6 +95,15 @@ object SettingsSections {
             context, container,
             Key.HELP, R.drawable.ic_help,
             R.string.settings_section_help, R.string.settings_section_help_sub
+        )
+        // Stage 8.4 — Legal section is rendered immediately after Help so
+        // it sits directly above Invite (the last entry). Reviewers
+        // looking for the Terms of Use, Privacy Policy, or Disclaimer
+        // find them in two taps from the Settings tab.
+        addRow(
+            context, container,
+            Key.LEGAL, R.drawable.ic_shield_outline,
+            R.string.settings_section_legal, R.string.settings_section_legal_sub
         )
         addInviteRow(context, container)
     }

@@ -97,7 +97,24 @@ class LoginActivity : AppCompatActivity() {
 
     private fun finishWith(profile: UserProfile) {
         UserPrefs.saveProfile(this, profile)
-        TharMeshApp.get().ensureMeshStarted()
+        // Stage 8.4 \u2014 do NOT start the mesh *transport* here (i.e. don't
+        // call ensureMeshStarted): if a returning user has Nearby
+        // permissions already granted but has not yet accepted the
+        // current Terms version, starting the transport would mean we
+        // begin advertising / discovering / processing inbound bundles
+        // before the compliance gate. The transport is now started
+        // exclusively in [TermsActivity.routeOnward] (via the targeted
+        // activities) and [MainActivity.onCreate], both of which only
+        // run once [UserPrefs.hasAcceptedCurrentTerms] is true.
+        //
+        // We DO still need to construct the mesh graph (engine,
+        // repository, etc.) here so that downstream screens like
+        // [com.tharmesh.ui.onboarding.OnboardingActivity] can access
+        // [TharMeshApp.repository] during onboarding step 3 (QR scan).
+        // [TharMeshApp.ensureMeshReady] is permission-safe and
+        // transport-safe \u2014 it only constructs objects in memory
+        // and starts no advertising / discovery.
+        TharMeshApp.get().ensureMeshReady()
         goToNext()
     }
 
@@ -110,10 +127,19 @@ class LoginActivity : AppCompatActivity() {
      * [UserPrefs.shouldShowOnboarding].
      */
     private fun goToNext() {
-        val target = if (UserPrefs.shouldShowOnboarding(this)) {
-            OnboardingActivity::class.java
-        } else {
-            MainActivity::class.java
+        // Stage 8.3 — Pakistan compliance Terms-of-Use gate. Every fresh
+        // install AND every existing install on the first launch after
+        // upgrade lands on TermsActivity until the user explicitly
+        // accepts. Onward routing (Onboarding vs. Main) happens inside
+        // TermsActivity so the gate is the single chokepoint and we can
+        // trust hasAcceptedCurrentTerms == true everywhere downstream.
+        val target = when {
+            !UserPrefs.hasAcceptedCurrentTerms(this) ->
+                com.tharmesh.ui.legal.TermsActivity::class.java
+            UserPrefs.shouldShowOnboarding(this) ->
+                OnboardingActivity::class.java
+            else ->
+                MainActivity::class.java
         }
         val next = Intent(this, target)
         next.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK

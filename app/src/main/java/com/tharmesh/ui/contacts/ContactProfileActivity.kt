@@ -51,6 +51,7 @@ class ContactProfileActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_message).setOnClickListener { onMessage() }
         findViewById<Button>(R.id.btn_verify_qr).setOnClickListener { onVerifyByQr() }
+        findViewById<Button>(R.id.btn_block).setOnClickListener { onBlockToggle() }
         findViewById<Button>(R.id.btn_remove).setOnClickListener { onRemove() }
     }
 
@@ -97,6 +98,16 @@ class ContactProfileActivity : AppCompatActivity() {
                     DateUtils.getRelativeTimeSpanString(c.addedAt).toString()
                 } else "—"
             ShieldRenderer.bind(findViewById(R.id.profile_shield), state)
+            // Stage 8.4 — Block button label reflects current state. We
+            // re-read the block list on every refresh so the label
+            // stays correct after onBlockToggle() and after any
+            // BlockedContactsActivity round-trip.
+            val blocked = com.tharmesh.data.BlockedContacts.isBlocked(
+                this@ContactProfileActivity, userId
+            )
+            findViewById<Button>(R.id.btn_block).setText(
+                if (blocked) R.string.contact_unblock else R.string.contact_block
+            )
         }
     }
 
@@ -136,6 +147,48 @@ class ContactProfileActivity : AppCompatActivity() {
             }
             Toast.makeText(this@ContactProfileActivity, msg, Toast.LENGTH_LONG).show()
             refresh()
+        }
+    }
+
+    /**
+     * Stage 8.4 \u2014 Pakistan compliance: Block / Unblock toggle.
+     *
+     * Block: confirms with an [AlertDialog] before adding the userId
+     * to the local block list. Existing chat history is preserved (we
+     * do NOT auto-remove the contact) so the user can still see what
+     * was said \u2014 future inbound bundles from this peer are silently
+     * dropped by [com.tharmesh.data.MessageRepository.handleIncomingBundle]
+     * before any Room write, and any future re-add via QR / nearby /
+     * invite is silently rejected by addContact.
+     *
+     * Unblock: a lighter confirm and a removal from the block list.
+     * Does NOT auto-restore a contact row; the user can re-add the
+     * contact through normal flows.
+     */
+    private fun onBlockToggle() {
+        val blocked = com.tharmesh.data.BlockedContacts.isBlocked(this, userId)
+        if (blocked) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.contact_unblock_confirm_title)
+                .setMessage(R.string.contact_unblock_confirm_message)
+                .setPositiveButton(R.string.contact_unblock_confirm_button) { _, _ ->
+                    com.tharmesh.data.BlockedContacts.unblock(this, userId)
+                    Toast.makeText(this, R.string.contact_unblocked_toast, Toast.LENGTH_SHORT).show()
+                    refresh()
+                }
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show()
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.contact_block_confirm_title)
+                .setMessage(R.string.contact_block_confirm_message)
+                .setPositiveButton(R.string.contact_block_confirm_button) { _, _ ->
+                    com.tharmesh.data.BlockedContacts.block(this, userId)
+                    Toast.makeText(this, R.string.contact_blocked_toast, Toast.LENGTH_SHORT).show()
+                    refresh()
+                }
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show()
         }
     }
 

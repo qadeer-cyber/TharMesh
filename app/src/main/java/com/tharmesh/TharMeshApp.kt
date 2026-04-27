@@ -212,7 +212,15 @@ class TharMeshApp : Application() {
             // in-flight disaster bundles.
             retryStatePersistence = com.tharmesh.data.RetryStatePersistence.Room(
                 database.retryStateDao()
-            )
+            ),
+            // Stage 8.3 — Pakistan compliance: refuse to (re-)create a
+            // contact row OR persist an inbound message for a peer that
+            // the local user has blocked. The list is SharedPreferences-
+            // backed and survives process death; see [BlockedContacts].
+            isUserBlocked = { userId ->
+                com.tharmesh.data.BlockedContacts.isBlocked(this, userId)
+            },
+            onBlockedSenderDropped = { _, _ -> }
         )
         val source = NearbyMeshDataSource(engine)
         directory.setSource(source)

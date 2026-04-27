@@ -90,6 +90,26 @@ object UserPrefs {
      */
     private const val KEY_ONBOARDED = "onboarded"
 
+    /**
+     * Stage 8.3 — Pakistan legal & compliance gate. The user must accept
+     * the in-app Terms of Use ([com.tharmesh.ui.legal.TermsActivity])
+     * before reaching MainActivity. We persist the version-code that was
+     * accepted (not just a boolean) so that if the Terms text ever
+     * changes we can re-prompt the user without affecting any other
+     * persisted state.
+     */
+    private const val KEY_LEGAL_TERMS_VERSION = "legal_terms_version_accepted"
+    private const val KEY_LEGAL_TERMS_ACCEPTED_AT = "legal_terms_accepted_at_ms"
+
+    /**
+     * Current version code of the Terms of Use text. Bump this whenever
+     * the [com.tharmesh.ui.legal.LegalDocBodies.TERMS] string changes in
+     * a way that requires re-acceptance. Stored as a const so the gate
+     * check ([hasAcceptedCurrentTerms]) and the acceptance write
+     * ([markTermsAccepted]) cannot disagree.
+     */
+    const val LEGAL_TERMS_VERSION_CURRENT = 1
+
     const val PROVIDER_ANONYMOUS = "anonymous"
     const val PROVIDER_GOOGLE = "google"
 
@@ -194,6 +214,52 @@ object UserPrefs {
     fun signOut(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().clear().apply()
+    }
+
+    // ---------------------------------------------------------------- //
+    // Stage 8.3 — Legal / compliance acceptance                        //
+    // ---------------------------------------------------------------- //
+
+    /**
+     * `true` if the user has explicitly accepted the current version of
+     * the Terms of Use. Default `false` so brand-new installs always go
+     * through the gate, AND existing installs are forced to accept the
+     * Terms on the next launch after upgrading to a build that carries
+     * this gate. Acceptance is intentionally NOT inferred from any
+     * pre-existing state — Pakistan compliance requires an explicit
+     * "Accept" action recorded against the current Terms version.
+     */
+    @JvmStatic
+    fun hasAcceptedCurrentTerms(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val accepted = prefs.getInt(KEY_LEGAL_TERMS_VERSION, 0)
+        return accepted >= LEGAL_TERMS_VERSION_CURRENT
+    }
+
+    /**
+     * Persist that the user accepted the Terms of Use. Records both the
+     * version-code that was accepted (so a future Terms revision can
+     * re-prompt) and the wall-clock timestamp (handy for diagnostics
+     * and any future audit-log surface).
+     */
+    @JvmStatic
+    fun markTermsAccepted(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putInt(KEY_LEGAL_TERMS_VERSION, LEGAL_TERMS_VERSION_CURRENT)
+            .putLong(KEY_LEGAL_TERMS_ACCEPTED_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    /**
+     * Wall-clock millis of the user's most recent Terms acceptance, or
+     * `0L` if they have never accepted. Used by the About screen to
+     * surface "Terms accepted on …" so the user has a paper trail.
+     */
+    @JvmStatic
+    fun termsAcceptedAtMs(context: Context): Long {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getLong(KEY_LEGAL_TERMS_ACCEPTED_AT, 0L)
     }
 
     /** Stable userId derived from Google's `sub` claim so reinstalls keep the same mesh ID. */
