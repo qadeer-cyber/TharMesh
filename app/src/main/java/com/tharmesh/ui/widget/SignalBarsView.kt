@@ -123,7 +123,10 @@ class SignalBarsView @JvmOverloads constructor(
         val gap = width * 0.10f / (barCount - 1).coerceAtLeast(1)
         val barWidth = (width - gap * (barCount - 1)) / barCount
         for (i in 0 until barCount) {
-            val tallness = 0.40f + 0.20f * i  // 0.40 → 1.00 across the 4 bars
+            // 0.35 → 0.845 across the 4 bars; the cap at ~0.85 leaves
+            // headroom for the +10% breathing overshoot so the tallest
+            // bar isn't clipped at the top of the view bounds.
+            val tallness = 0.35f + 0.165f * i
             val baseHeight = height * tallness
             val isLit = i < litCount
             // Phase-offset breathing: each bar's individual height pulses
