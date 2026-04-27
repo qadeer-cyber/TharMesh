@@ -13,7 +13,6 @@
         android:layout_gravity="start"
         android:background="@drawable/bg_bubble_peer"
         android:elevation="@dimen/tm_elev_card"
-        android:maxWidth="@dimen/tm_bubble_max_width"
         android:orientation="vertical"
         android:paddingStart="@dimen/tm_space_m"
         android:paddingEnd="@dimen/tm_space_m"
@@ -53,6 +52,7 @@
             android:id="@+id/text_body"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:maxWidth="@dimen/tm_bubble_max_width"
             android:textColor="?attr/tmBubbleTextPeer"
             android:textSize="15sp" />
 
