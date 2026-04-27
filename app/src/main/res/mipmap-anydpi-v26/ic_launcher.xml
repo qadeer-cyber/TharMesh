@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.1 — adaptive launcher icon (API 26+).
+
+  Background: solid deep navy/black extracted from the source TharMesh logo
+  (mean of corner samples = #000814). This matches the off-glow field of the
+  master image so the foreground glow blends seamlessly into the background
+  layer regardless of mask shape (square, round, squircle, teardrop).
+
+  Foreground: the mesh symbol with a luminance-based alpha ramp so the cyan
+  mesh + glow remain crisp while the near-black field becomes transparent
+  and lets the background layer show through. Logo is centred at ~85% of
+  the 108dp adaptive content size to keep the central node well inside the
+  72dp safe zone, so launchers using a circular mask never clip the node.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/tm_icon_bg" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
