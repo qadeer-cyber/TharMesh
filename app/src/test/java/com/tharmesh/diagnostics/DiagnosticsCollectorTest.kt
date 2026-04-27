@@ -235,6 +235,55 @@ class DiagnosticsCollectorTest {
     }
 
     @Test
+    fun `stage 7_4 routing record hooks each increment exactly one counter`() {
+        val c = DiagnosticsCollector(recentCapacity = 16)
+        c.recordDirectSendAttempt()
+        c.recordDirectSendAttempt()
+        c.recordQueuedOffline("b-1")
+        c.recordAutoDeliveredOnReconnect("b-1")
+        val s = c.snapshot()
+        assertEquals(2L, s.directSendAttempt)
+        assertEquals(1L, s.queuedOffline)
+        assertEquals(1L, s.autoDeliveredOnReconnect)
+        // All three append to the recent ring so field testers can
+        // correlate offline-queue → reconnect → flush in one timeline.
+        val kinds = c.recentEvents().map { it.kind }
+        assertEquals(
+            listOf("DirectSendAttempt", "DirectSendAttempt", "QueuedOffline", "AutoDeliveredOnReconnect"),
+            kinds
+        )
+    }
+
+    @Test
+    fun `stage 7_4 reset clears the routing counters`() {
+        val c = DiagnosticsCollector(recentCapacity = 16)
+        c.recordDirectSendAttempt()
+        c.recordQueuedOffline("b-1")
+        c.recordAutoDeliveredOnReconnect("b-1")
+        c.reset()
+        val s = c.snapshot()
+        assertEquals(0L, s.directSendAttempt)
+        assertEquals(0L, s.queuedOffline)
+        assertEquals(0L, s.autoDeliveredOnReconnect)
+    }
+
+    @Test
+    fun `exportJson exposes stage 7_4 routing counters`() {
+        val c = DiagnosticsCollector(recentCapacity = 16, now = { 4_000_000L })
+        c.recordDirectSendAttempt()
+        c.recordDirectSendAttempt()
+        c.recordDirectSendAttempt()
+        c.recordQueuedOffline("b-1")
+        c.recordQueuedOffline("b-2")
+        c.recordAutoDeliveredOnReconnect("b-1")
+        val json = JSONObject(c.exportJson())
+        val counters = json.getJSONObject("counters")
+        assertEquals(3L, counters.getLong("directSendAttempt"))
+        assertEquals(2L, counters.getLong("queuedOffline"))
+        assertEquals(1L, counters.getLong("autoDeliveredOnReconnect"))
+    }
+
+    @Test
     fun `reset clears per-peer relay bookkeeping`() {
         val c = DiagnosticsCollector(recentCapacity = 16)
         c.recordRelaySent("alice", "b1", bytes = 100)

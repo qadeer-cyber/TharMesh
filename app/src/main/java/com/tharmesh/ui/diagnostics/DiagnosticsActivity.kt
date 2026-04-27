@@ -111,6 +111,14 @@ class DiagnosticsActivity : AppCompatActivity() {
             append("ttl expired drops").append(' ').append(s.ttlExpiredDrops).append('\n')
             append("stuck SENDING rec").append(' ').append(s.stuckSendingRecovered).append('\n')
             append("retry supp (offline) ").append(s.retrySuppressedNoPeers).append('\n')
+            // Stage 7.4 — auto chat routing counters. Surface the three
+            // direct-send signals so field testers can confirm the
+            // device-picker-free send path is taking the offline-queue
+            // → reconnect → auto-flush path.
+            append("routing\n")
+            append("  direct send attempts   ").append(s.directSendAttempt).append('\n')
+            append("  queued offline         ").append(s.queuedOffline).append('\n')
+            append("  auto-delivered (recon.)").append(' ').append(s.autoDeliveredOnReconnect).append('\n')
             // Stage 7 PR E — local-only growth counters. Read from
             // SharedPreferences via [com.tharmesh.data.GrowthMetrics]; no
             // network or backend involvement.

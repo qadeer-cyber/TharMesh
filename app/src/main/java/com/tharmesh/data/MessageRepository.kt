@@ -102,6 +102,30 @@ class MessageRepository(
      */
     private val onFirstChatStarted: (peerUserId: String) -> Unit = { _ -> },
     /**
+     * Stage 7.4 — fired on every entry to [send]. Drives the
+     * `direct_send_attempt` diagnostic counter (one per send call,
+     * regardless of online/offline state, regardless of priority).
+     */
+    private val onDirectSendAttempt: () -> Unit = {},
+    /**
+     * Stage 7.4 — fired when [send] runs while [MeshEngine.hasConnectedPeers]
+     * is false (i.e. the bundle is going straight into the offline
+     * queue and will only flush after at least one peer connects).
+     * Drives the `queued_offline` counter. Receives the bundleId so
+     * the diagnostic ring buffer can correlate with the matching
+     * `auto_delivered_on_reconnect` event later.
+     */
+    private val onQueuedOffline: (bundleId: String) -> Unit = { _ -> },
+    /**
+     * Stage 7.4 — fired exactly once per bundleId when a bundle that
+     * was [onQueuedOffline] later transitions to SENT (i.e. after a
+     * peer reconnect / mesh tick). Drives the
+     * `auto_delivered_on_reconnect` counter and proves the
+     * store-and-forward queue is actually flushing. Bundles that were
+     * sent online or never queued offline never trigger this.
+     */
+    private val onAutoDeliveredOnReconnect: (bundleId: String) -> Unit = { _ -> },
+    /**
      * Stage 6.3 — gating predicate consulted on every [send] / [broadcastSos]
      * call. When true, every outgoing bundle is force-marked priority (SOS
      * retry curve + pacer bypass) and its body is wrapped with the SOS
@@ -152,6 +176,20 @@ class MessageRepository(
     private fun clearPriority(bundleId: String) {
         synchronized(priorityBundleIds) { priorityBundleIds.remove(bundleId) }
     }
+
+    /**
+     * Stage 7.4 — bundleIds that entered the queue while the mesh had
+     * zero connected peers. When [MeshEvent.BundleSent] later fires for
+     * one of these IDs we know the store-and-forward queue actually
+     * flushed after a reconnect, and we bump the
+     * `auto_delivered_on_reconnect` counter exactly once per bundle.
+     * Bundles sent while peers were already connected never enter this
+     * tracker, so they cannot inflate the counter. The tracker is a
+     * package-private helper class (see end of file) so unit tests can
+     * exercise the consume-once semantics without spinning up the full
+     * repository.
+     */
+    private val offlineQueuedTracker = OfflineQueuedBundleTracker()
 
     /**
      * Stage 5.2 — coalesce rapid `PeerConnected` triggers for the same peer into
@@ -357,6 +395,17 @@ class MessageRepository(
         val bundleId = UUID.randomUUID().toString()
         val ts = now()
         val me = myUserId()
+        // Stage 7.4 — every send call counts as one direct_send_attempt
+        // (the user tapped a contact and pressed send; the device picker
+        // is no longer in the loop for known contacts). When the mesh
+        // has no connected peers at this moment the bundle goes into
+        // the offline queue and we record it so we can detect the
+        // matching BundleSent on reconnect.
+        onDirectSendAttempt()
+        if (!mesh.hasConnectedPeers()) {
+            offlineQueuedTracker.markQueuedOffline(bundleId)
+            onQueuedOffline(bundleId)
+        }
         val replyPreview = replyToId?.let { runIo { db.messageDao().getById(it) }?.body }
         // Stage 6.3 — when disaster mode is on globally, force every outgoing
         // bundle onto the SOS retry curve + pacer-bypass + alert path.
@@ -534,6 +583,17 @@ class MessageRepository(
             is MeshEvent.BundleSent -> scope.launch(Dispatchers.IO) {
                 messagesSent++
                 advanceByBundleId(event.bundleId, MessageStatus.SENT)
+                // Stage 7.4 — if this bundle was queued while no peers
+                // were connected, we just proved the store-and-forward
+                // queue flushed after a reconnect. Remove-and-test so
+                // the counter fires exactly once even if BundleSent
+                // arrives twice for the same bundleId (defensive: the
+                // mesh layer dedupes by bundleId, but the set guards
+                // against any double-fire from re-tries hitting the
+                // same id).
+                if (offlineQueuedTracker.consumeOnSent(event.bundleId)) {
+                    onAutoDeliveredOnReconnect(event.bundleId)
+                }
             }
             is MeshEvent.BundleAcked -> scope.launch(Dispatchers.IO) {
                 messagesDelivered++
@@ -948,4 +1008,39 @@ internal fun runRetryTickStandalone(
         retryPolicy.recordAttempt(bid, nowMs, configFor(bid))
         onStatePersisted(bid)
     }
+}
+
+/**
+ * Stage 7.4 — pure thread-safe helper that records bundleIds queued
+ * while no peers were connected and reports exactly once when each is
+ * later observed delivered.
+ *
+ *  - [markQueuedOffline] is idempotent: calling it twice for the same
+ *    bundleId still produces only one [consumeOnSent] hit.
+ *  - [consumeOnSent] returns `true` the first time for a previously
+ *    [markQueuedOffline]-tracked id, and `false` thereafter (and for ids
+ *    that were never tracked). This guarantees the
+ *    `auto_delivered_on_reconnect` counter cannot double-fire even if
+ *    `BundleSent` arrives twice for the same id (e.g. a transport-side
+ *    retry replay).
+ *
+ * The implementation is a `HashSet` guarded by an intrinsic lock — the
+ * tracker is read on the IO-dispatcher coroutine that handles
+ * `MeshEvent.BundleSent` and written from the `send()` suspend
+ * function, so it must be safe under contention.
+ */
+internal class OfflineQueuedBundleTracker {
+    private val ids = HashSet<String>()
+    private val lock = Any()
+
+    fun markQueuedOffline(bundleId: String) {
+        synchronized(lock) { ids.add(bundleId) }
+    }
+
+    /** @return true the FIRST time after a [markQueuedOffline] for this id. */
+    fun consumeOnSent(bundleId: String): Boolean =
+        synchronized(lock) { ids.remove(bundleId) }
+
+    /** Test-only — current size of the in-memory queue. */
+    fun trackedCount(): Int = synchronized(lock) { ids.size }
 }

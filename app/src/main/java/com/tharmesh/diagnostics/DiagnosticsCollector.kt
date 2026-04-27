@@ -48,6 +48,18 @@ class DiagnosticsCollector(
     val stuckSendingRecovered = AtomicLong(0)
     val retrySuppressedNoPeers = AtomicLong(0)
 
+    // Stage 7.4 — auto chat routing diagnostics. These prove the
+    // device-picker-free send path (`MessageRepository.send` from a
+    // contact tap) is actually taking the offline-queue → reconnect
+    // → auto-flush path when a peer is unreachable.
+    //   directSendAttempt = every entry to send()
+    //   queuedOffline = send() ran while mesh had zero connected peers
+    //   autoDeliveredOnReconnect = a queuedOffline bundle later
+    //                              transitioned to SENT (proves S&F worked)
+    val directSendAttempt = AtomicLong(0)
+    val queuedOffline = AtomicLong(0)
+    val autoDeliveredOnReconnect = AtomicLong(0)
+
     // Cumulative bytes relayed through this device on behalf of every peer
     // we've forwarded to. The per-peer breakdown lives in [relayedBytesByPeer];
     // this is the rollup used by the Diagnostics Summary chip.
@@ -155,6 +167,9 @@ class DiagnosticsCollector(
         val ttlExpiredDrops: Long,
         val stuckSendingRecovered: Long,
         val retrySuppressedNoPeers: Long,
+        val directSendAttempt: Long,
+        val queuedOffline: Long,
+        val autoDeliveredOnReconnect: Long,
         val relayedBytesTotal: Long,
         val relayForwards: Long
     )
@@ -182,6 +197,9 @@ class DiagnosticsCollector(
             ttlExpiredDrops = ttlExpiredDrops.get(),
             stuckSendingRecovered = stuckSendingRecovered.get(),
             retrySuppressedNoPeers = retrySuppressedNoPeers.get(),
+            directSendAttempt = directSendAttempt.get(),
+            queuedOffline = queuedOffline.get(),
+            autoDeliveredOnReconnect = autoDeliveredOnReconnect.get(),
             relayedBytesTotal = relayedBytesTotal.get(),
             relayForwards = relayForwards.get()
         )
@@ -211,6 +229,9 @@ class DiagnosticsCollector(
             .put("ttlExpiredDrops", s.ttlExpiredDrops)
             .put("stuckSendingRecovered", s.stuckSendingRecovered)
             .put("retrySuppressedNoPeers", s.retrySuppressedNoPeers)
+            .put("directSendAttempt", s.directSendAttempt)
+            .put("queuedOffline", s.queuedOffline)
+            .put("autoDeliveredOnReconnect", s.autoDeliveredOnReconnect)
             .put("relayedBytesTotal", s.relayedBytesTotal)
             .put("relayForwards", s.relayForwards)
         val perPeer = JSONObject()
@@ -289,6 +310,24 @@ class DiagnosticsCollector(
         record("RetrySuppressedNoPeers", bundleId)
     }
 
+    fun recordDirectSendAttempt() {
+        directSendAttempt.incrementAndGet()
+        lastEventAt = now()
+        record("DirectSendAttempt", "")
+    }
+
+    fun recordQueuedOffline(bundleId: String) {
+        queuedOffline.incrementAndGet()
+        lastEventAt = now()
+        record("QueuedOffline", bundleId)
+    }
+
+    fun recordAutoDeliveredOnReconnect(bundleId: String) {
+        autoDeliveredOnReconnect.incrementAndGet()
+        lastEventAt = now()
+        record("AutoDeliveredOnReconnect", bundleId)
+    }
+
     /**
      * Called from [com.tharmesh.dtn.MeshEngine.forwardBundle] after a relay
      * forward was accepted by the transport. Increments both the rollup
@@ -329,6 +368,7 @@ class DiagnosticsCollector(
         sendRejected.set(0); sendPaced.set(0)
         ttlExpiredDrops.set(0); stuckSendingRecovered.set(0)
         retrySuppressedNoPeers.set(0)
+        directSendAttempt.set(0); queuedOffline.set(0); autoDeliveredOnReconnect.set(0)
         relayedBytesTotal.set(0); relayForwards.set(0)
         synchronized(relayedByPeerLock) {
             relayedBytesByPeer.clear()
