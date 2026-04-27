@@ -18,6 +18,16 @@
     <!-- ================================================================ -->
     <color name="tm_dark_bg">#0A0E1A</color>
     <color name="tm_dark_bg_2">#0F1524</color>
+
+    <!--
+      Stage 9.1 — solid background for the adaptive launcher icon.
+      Sampled (mean of 8 corner/edge pixels) from the master TharMesh logo
+      so the off-glow field of the foreground PNG blends seamlessly into
+      this background layer under any launcher mask (square, round,
+      squircle, teardrop). Referenced from
+      res/mipmap-anydpi-v26/ic_launcher.xml.
+    -->
+    <color name="tm_icon_bg">#000814</color>
     <color name="tm_dark_surface">#131A2B</color>
     <color name="tm_dark_surface_2">#1A2238</color>
     <color name="tm_dark_surface_glass">#1F2940</color>
