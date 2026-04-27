@@ -176,11 +176,20 @@ class MessageRepository(
      */
     private val isUserBlocked: (userId: String) -> Boolean = { _ -> false },
     /**
-     * Stage 8.3 — diagnostic hook fired when [handleIncomingBundle]
+     * Stage 8.3 \u2014 diagnostic hook fired when [handleIncomingBundle]
      * drops an inbound bundle because its `srcId` is on the local
-     * block list. Production wiring increments a Diagnostics counter;
-     * tests use the default no-op. The hook fires once per dropped
-     * bundle, including duplicates of an already-dropped bundle.
+     * block list. The hook fires once per dropped bundle, including
+     * duplicates of an already-dropped bundle, so future Diagnostics
+     * wiring will get an exact count.
+     *
+     * Production wiring is currently a no-op placeholder \u2014 the
+     * spec's "silent drop, no UI noise" requirement means we do not
+     * surface blocked-sender drops anywhere in the UI today, and
+     * [com.tharmesh.diag.DiagnosticsCollector] does not yet have a
+     * matching counter. A subsequent PR can add
+     * `recordBlockedSenderDropped(srcId, bundleId)` to the collector
+     * and wire this hook in [com.tharmesh.TharMeshApp.ensureMeshReady]
+     * without any change to this seam. Tests use the same default no-op.
      */
     private val onBlockedSenderDropped: (srcId: String, bundleId: String) -> Unit = { _, _ -> }
 ) {
