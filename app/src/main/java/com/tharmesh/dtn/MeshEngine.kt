@@ -315,6 +315,12 @@ class MeshEngine(
     /**
      * Queue outbound text. [bundleIdHint] is optional — if non-null it seeds [MeshBundle.bundleId],
      * which lets the repository map ACKs back to a local [MessageEntity] row.
+     *
+     * Convenience wrapper that combines [prepareOutbound] (sign + persist + cache)
+     * and [broadcastOutbound] (fan out on the wire). Most callers want both in
+     * one shot. Stage 7.9 callers that need a process-death-safe ordering
+     * (persist bundle BEFORE inserting the local message row, then broadcast
+     * AFTER the row is committed) call the two halves directly.
      */
     fun queueText(
         destId: String,
@@ -327,6 +333,45 @@ class MeshEngine(
          * resulting bundle bypasses [PerPeerSendPacer] in [broadcastBundle] /
          * [forwardBundle] / [handleGet]. Off-wire (see [MeshBundle.priority]).
          */
+        priority: Boolean = false
+    ): MeshBundle {
+        val bundle = prepareOutbound(
+            destId = destId,
+            payloadCiphertext = payloadCiphertext,
+            ttlMs = ttlMs,
+            hops = hops,
+            bundleIdHint = bundleIdHint,
+            priority = priority
+        )
+        broadcastOutbound(bundle)
+        return bundle
+    }
+
+    /**
+     * Stage 7.9 — sign + cache + persist an outbound bundle WITHOUT firing it on
+     * the wire. Returns the constructed [MeshBundle]. The bundle row in
+     * [BundleStore] is durable on return: a process kill after this call but
+     * before [broadcastOutbound] leaves an orphan bundle which the retry loop
+     * will pick up on the next launch as soon as the corresponding
+     * [com.tharmesh.db.entity.MessageEntity] row appears in `pendingOutbound`.
+     *
+     * Callers that need a process-death-safe send ordering use this pair:
+     *
+     *   1. `bundle = mesh.prepareOutbound(...)`     — bundle persisted, NOT broadcast
+     *   2. `db.runInTransaction { insert msg row }` — message row committed
+     *   3. `mesh.broadcastOutbound(bundle)`         — fan out on the wire
+     *
+     * If the process dies anywhere in this sequence the cold-start retry
+     * loop in [com.tharmesh.data.MessageRepository.startStoreAndForwardLoop]
+     * will reconcile: bundle without msg row → harmless (bundle ages out at
+     * TTL); msg row without bundle → impossible by construction.
+     */
+    fun prepareOutbound(
+        destId: String,
+        payloadCiphertext: String,
+        ttlMs: Long,
+        hops: Int,
+        bundleIdHint: String? = null,
         priority: Boolean = false
     ): MeshBundle {
         val bundleId = bundleIdHint ?: UUID.randomUUID().toString()
@@ -365,10 +410,17 @@ class MeshEngine(
             priority = priority
         )
         cachePut(bundle)
-        // Try to send immediately to every connected peer; routing decides if we actually do.
-        broadcastBundle(bundle)
         return bundle
     }
+
+    /** Stage 7.9 — fire a previously [prepareOutbound]-prepared bundle on the wire. */
+    fun broadcastOutbound(bundle: MeshBundle) {
+        broadcastBundle(bundle)
+    }
+
+    /** Stage 7.9 — true iff [bundleId] is currently resident in the in-memory cache. */
+    fun hasCachedBundle(bundleId: String): Boolean =
+        synchronized(cacheLock) { cache.containsKey(bundleId) }
 
     /** Non-bundle frame send — no BundleSent correlation needed. */
     private fun sendFrame(peerId: String, frame: ProtocolFrame) {
