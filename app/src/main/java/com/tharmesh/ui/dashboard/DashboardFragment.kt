@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.tharmesh.TharMeshApp
 import com.tharmesh.mesh.MeshNode
 import com.tharmesh.ui.widget.MeshGraphView
+import com.tharmesh.ui.widget.SignalBarsView
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tharmesh.app.R
@@ -38,6 +39,7 @@ class DashboardFragment : Fragment() {
         val recycler: RecyclerView = view.findViewById(R.id.recycler_nearby)
         val emptyView: View = view.findViewById(R.id.nearby_empty)
         val graph: MeshGraphView = view.findViewById(R.id.mesh_graph)
+        val signalBars: SignalBarsView? = view.findViewById(R.id.network_signal_bars)
         val statusTitle: TextView = view.findViewById(R.id.mesh_status_title)
         val statusSub: TextView = view.findViewById(R.id.mesh_status_sub)
         recycler.layoutManager = LinearLayoutManager(requireContext())
@@ -63,6 +65,11 @@ class DashboardFragment : Fragment() {
 
                 val onlineCount = nodes.count { it.online }
                 graph.setPeerCount(onlineCount)
+                // Stage 9.2 — feed the same online count into the signal-bars
+                // indicator so it actually animates instead of showing 4
+                // permanently-dim bars (the old self-animating implementation
+                // was replaced by a peer-count-driven one).
+                signalBars?.setPeerCount(onlineCount)
                 if (onlineCount == 0) {
                     statusTitle.setText(R.string.dash_searching_title)
                     statusSub.setText(R.string.dash_searching_sub)
