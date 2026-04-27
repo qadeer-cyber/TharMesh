@@ -12,6 +12,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="end"
         android:background="@drawable/bg_bubble_me"
+        android:elevation="1dp"
         android:orientation="vertical"
         android:paddingStart="14dp"
         android:paddingEnd="14dp"
@@ -58,7 +59,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal">
 
             <TextView
@@ -66,15 +67,16 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="?attr/tmTickDefault"
-                android:textSize="11sp" />
+                android:textSize="@dimen/tm_text_meta_s" />
 
             <TextView
                 android:id="@+id/text_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="6dp"
                 android:textColor="?attr/tmTickDefault"
-                android:textSize="11sp" />
+                android:textSize="@dimen/tm_text_meta_s"
+                android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 

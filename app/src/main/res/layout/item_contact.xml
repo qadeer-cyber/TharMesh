@@ -3,9 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="?attr/tmSurface"
+    android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
+    android:minHeight="@dimen/tm_row_min_height"
     android:orientation="horizontal"
-    android:padding="12dp">
+    android:paddingStart="@dimen/tm_space_l"
+    android:paddingEnd="@dimen/tm_space_l"
+    android:paddingTop="@dimen/tm_space_m"
+    android:paddingBottom="@dimen/tm_space_m">
 
     <FrameLayout
         android:layout_width="44dp"
@@ -38,18 +43,19 @@
 
         <TextView
             android:id="@+id/text_name"
+            style="@style/Text.Name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="?attr/tmTextPrimary"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:ellipsize="end"
+            android:maxLines="1" />
 
         <TextView
             android:id="@+id/text_userid"
+            style="@style/Text.Meta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="?attr/tmTextSecondary"
-            android:textSize="12sp" />
+            android:ellipsize="end"
+            android:maxLines="1" />
 
         <TextView
             android:id="@+id/text_fingerprint"

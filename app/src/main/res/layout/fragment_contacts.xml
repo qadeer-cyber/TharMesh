@@ -118,25 +118,24 @@
             android:layout_gravity="center"
             android:gravity="center"
             android:orientation="vertical"
-            android:padding="24dp"
+            android:padding="@dimen/tm_space_xxl"
             android:visibility="gone">
 
             <TextView
+                style="@style/Text.H2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/contacts_empty_title"
-                android:textColor="?attr/tmTextPrimary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:gravity="center"
+                android:text="@string/contacts_empty_title" />
 
             <TextView
+                style="@style/Text.Meta"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="@dimen/tm_space_s"
                 android:gravity="center"
-                android:text="@string/contacts_empty_subtitle"
-                android:textColor="?attr/tmTextSecondary"
-                android:textSize="13sp" />
+                android:lineSpacingExtra="2dp"
+                android:text="@string/contacts_empty_subtitle" />
         </LinearLayout>
     </FrameLayout>
 

@@ -3,14 +3,15 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_card_elevated"
+    android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
-    android:layout_marginTop="8dp"
+    android:layout_marginTop="@dimen/tm_space_s"
     android:minHeight="64dp"
     android:orientation="horizontal"
-    android:paddingStart="14dp"
-    android:paddingEnd="14dp"
-    android:paddingTop="10dp"
-    android:paddingBottom="10dp">
+    android:paddingStart="@dimen/tm_space_l"
+    android:paddingEnd="@dimen/tm_space_l"
+    android:paddingTop="@dimen/tm_space_m"
+    android:paddingBottom="@dimen/tm_space_m">
 
     <TextView
         android:id="@+id/device_avatar"
