@@ -298,6 +298,28 @@ class MessageRepository(
     @Volatile var messagesSent: Long = 0L
         private set
 
+    /**
+     * Stage 7.9 — fire-once-per-bundle tracking for the diagnostic counters.
+     *
+     * The legacy code did `messagesSent++` inside the `BundleSent` event
+     * handler, but the engine emits one `BundleSent` per peer that
+     * successfully completed `PayloadSent`. In a 5-peer broadcast a single
+     * outbound message therefore over-counted [messagesSent] by 5×.
+     * `BundleAcked` (delivered) and `BundleDelivered` (relayed) shared the
+     * same shape — duplicate ACKs from a relay chain or a peer redelivering
+     * the same bundle re-incremented the counters even though
+     * MeshEngine.handleAck is first-ACK-idempotent and would not actually
+     * re-emit. Defensive: make the counter increment idempotent at the
+     * repository layer too.
+     *
+     * These sets bound at [MAX_COUNTED_BUNDLES] entries with an LRU-style
+     * eviction (LinkedHashSet remove-oldest) so a long-running session does
+     * not leak unbounded memory.
+     */
+    private val countedSent = BoundedIdSet(MAX_COUNTED_BUNDLES)
+    private val countedDelivered = BoundedIdSet(MAX_COUNTED_BUNDLES)
+    private val countedRelayed = BoundedIdSet(MAX_COUNTED_BUNDLES)
+
     private var retryJob: Job? = null
 
     fun observeConversation(peerId: String): Flow<List<MessageEntity>> =
@@ -444,6 +466,39 @@ class MessageRepository(
             replyToId = replyToId,
             replyToPreview = replyPreview
         )
+
+        if (effectivePriority) {
+            synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
+        }
+
+        // Stage 7.9 — process-death-safe send ordering. We MUST guarantee
+        // that any QUEUED row in `messages` has a matching row in `bundles`,
+        // otherwise a cold-start retry tick would call mesh.retryBundle(bid),
+        // hit a cache miss, return false, and (under the legacy semantics)
+        // free the per-bundle policy state — leaving the message row stuck
+        // QUEUED forever. The legacy ordering was msg.insert → mesh.queueText,
+        // which left a window after the Room transaction commit but before
+        // the bundle was persisted via cachePut → BundleStore.upsert.
+        //
+        //   1. mesh.prepareOutbound(...)            — sign + cache + persist bundle (durable)
+        //   2. db.runInTransaction { insert msg }   — message row committed
+        //   3. mesh.broadcastOutbound(bundle)       — fan out on the wire
+        //
+        // A crash between #1 and #2 leaves an orphan bundle in BundleStore,
+        // which the retry loop never touches (pendingOutbound queries the
+        // messages table) and which ages out at TTL. A crash between #2 and
+        // #3 leaves the message row + bundle both durable; the next cold
+        // start's retry tick picks up the row, finds the bundle in cache
+        // (rehydrated by MeshEngine.start), and broadcasts it. Either way
+        // there is no stuck-QUEUED state.
+        val bundle = mesh.prepareOutbound(
+            destId = toUserId,
+            payloadCiphertext = wireBody,
+            ttlMs = DEFAULT_TTL_MS,
+            hops = DEFAULT_HOPS,
+            bundleIdHint = bundleId,
+            priority = effectivePriority
+        )
         val (messageId, isFirstChat) = runIo {
             // Stage 7 PR E — detect "first message ever sent to this
             // peer" before insert so the GrowthMetrics hook fires
@@ -466,20 +521,6 @@ class MessageRepository(
             id to first
         }
         if (isFirstChat) onFirstChatStarted(toUserId)
-
-        if (effectivePriority) {
-            synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
-        }
-        // See comment on markOriginated below for the ordering: we persist
-        // AFTER markOriginated so the row includes the seeded BundleState.
-        mesh.queueText(
-            destId = toUserId,
-            payloadCiphertext = wireBody,
-            ttlMs = DEFAULT_TTL_MS,
-            hops = DEFAULT_HOPS,
-            bundleIdHint = bundleId,
-            priority = effectivePriority
-        )
         // Seed an ack-grace window so the store-and-forward retry loop, which
         // ticks every RetryConfig.tickIntervalMs (1 s by default), does not
         // re-broadcast within ~1 s of the first send — the peer needs at
@@ -489,6 +530,10 @@ class MessageRepository(
         val cfg = if (effectivePriority) RetryConfig.SOS else null
         retryPolicy.markOriginated(bundleId, ts, cfg)
         persistRetryState(bundleId)
+        // Bundle + msg row both durable; safe to broadcast now. BundleSending
+        // events fire after this and the listener's advanceByBundleId finds
+        // the row.
+        mesh.broadcastOutbound(bundle)
         return SendResult(messageId, bundleId)
     }
 
@@ -515,8 +560,6 @@ class MessageRepository(
         scope.launch(Dispatchers.IO) {
             val me = myUserId()
             if (bundle.destId != me) return@launch
-            val existing = db.messageDao().getByBundleId(bundle.bundleId)
-            if (existing != null) return@launch
 
             // Unseal end-to-end envelope when present. Unknown prefix or a
             // decrypt failure falls back to the raw body — preserves the
@@ -535,14 +578,6 @@ class MessageRepository(
             }
             val decoded = com.tharmesh.disaster.SosPayload.decode(unsealed)
             val plaintext = decoded.body
-            if (decoded.isSos) {
-                // Fire the alert hook regardless of whether the local user is
-                // the bundle's intended destination — a relayed SOS that we
-                // happen to overhear should still alert if disaster mode is
-                // on. The hook itself is gated by the controller's enabled
-                // flag, so off-mode peers stay silent.
-                onSosReceived()
-            }
             val ts = now()
             val entity = MessageEntity(
                 fromUserId = bundle.srcId,
@@ -554,27 +589,81 @@ class MessageRepository(
                 bundleId = bundle.bundleId,
                 deliveredAt = ts
             )
-            db.messageDao().insert(entity)
-            db.contactDao().getByUserId(bundle.srcId) ?: db.contactDao().upsert(
-                ContactEntity(
-                    userId = bundle.srcId,
-                    displayName = bundle.srcId,
-                    publicKey = "",
-                    addedAt = ts,
-                    lastSeen = ts
-                )
-            )
-            db.conversationDao().getByUserId(bundle.srcId) ?: db.conversationDao().upsert(
-                ConversationEntity(
-                    userId = bundle.srcId,
-                    title = bundle.srcId,
-                    lastMessage = plaintext,
-                    lastTimestamp = ts,
-                    lastMessageStatus = "",
-                    unreadCount = 0
-                )
-            )
-            bumpConversation(bundle.srcId, plaintext, ts, "", incrementUnread = true)
+
+            // Stage 7.9 — atomic dedup + contact/conversation upsert. The
+            // legacy code did three independent reads and three independent
+            // writes outside any transaction, which leaks two TOCTOU races:
+            //
+            //  1. Duplicate message insert — two concurrent BundleDelivered
+            //     events for the same bundleId could both pass the
+            //     getByBundleId(bid) == null check and both insert. The
+            //     `messages.bundleId` index is non-unique so SQLite would
+            //     not catch it.
+            //  2. Contact / conversation clobber — two concurrent receives
+            //     from the same peer could each see no row and each insert,
+            //     with OnConflictStrategy.REPLACE silently overwriting a
+            //     human displayName already on file with the userId fallback.
+            //
+            // Wrapping the whole receive-side write batch in a single Room
+            // transaction serialises the read-then-write pair against any
+            // other Room-touching coroutine on the IO dispatcher, closes
+            // both races, and produces a single atomic commit so a process
+            // kill mid-batch leaves a fully-consistent state. SQLite's
+            // write lock serialises all transactions, so the existence
+            // check inside the transaction sees either zero rows OR the
+            // committed row from a now-finished concurrent transaction —
+            // there is no interleaving window.
+            //
+            // We also detect "this is a brand-new SOS receive" inside the
+            // transaction — an inbound bundle that arrives twice (once via
+            // direct delivery, once via a relay echo) must fire the alert
+            // hook ONCE, not on every duplicate. Serialising on the Room
+            // write connection gives us that guarantee for free.
+            var firstReceive = false
+            db.runInTransaction {
+                val existingMsg = db.messageDao().getByBundleId(bundle.bundleId)
+                if (existingMsg != null) return@runInTransaction
+                db.messageDao().insert(entity)
+                firstReceive = true
+                val existingContact = db.contactDao().getByUserId(bundle.srcId)
+                if (existingContact == null) {
+                    db.contactDao().upsert(
+                        ContactEntity(
+                            userId = bundle.srcId,
+                            displayName = bundle.srcId,
+                            publicKey = "",
+                            addedAt = ts,
+                            lastSeen = ts
+                        )
+                    )
+                }
+                val existingConv = db.conversationDao().getByUserId(bundle.srcId)
+                if (existingConv == null) {
+                    db.conversationDao().upsert(
+                        ConversationEntity(
+                            userId = bundle.srcId,
+                            title = bundle.srcId,
+                            lastMessage = plaintext,
+                            lastTimestamp = ts,
+                            lastMessageStatus = "",
+                            unreadCount = 0
+                        )
+                    )
+                }
+                bumpConversation(bundle.srcId, plaintext, ts, "", incrementUnread = true)
+            }
+            if (firstReceive && decoded.isSos) {
+                // Fire the alert hook regardless of whether the local user is
+                // the bundle's intended destination — a relayed SOS that we
+                // happen to overhear should still alert if disaster mode is
+                // on. The hook itself is gated by the controller's enabled
+                // flag, so off-mode peers stay silent.
+                //
+                // Stage 7.9 — moved from pre-insert to post-commit so a
+                // duplicate inbound (e.g. relay echo of a bundle we already
+                // delivered) does not re-fire the alert.
+                onSosReceived()
+            }
         }
     }
 
@@ -586,7 +675,14 @@ class MessageRepository(
                 advanceByBundleId(event.bundleId, MessageStatus.SENDING)
             }
             is MeshEvent.BundleSent -> scope.launch(Dispatchers.IO) {
-                messagesSent++
+                // Stage 7.9 — count exactly one [messagesSent] per
+                // bundleId regardless of how many peers each completed
+                // a PayloadSent. The engine emits one BundleSent event
+                // per successful per-peer payload; a 5-peer fanout
+                // would otherwise increment by 5.
+                if (countedSent.add(event.bundleId)) {
+                    messagesSent++
+                }
                 advanceByBundleId(event.bundleId, MessageStatus.SENT)
                 // Stage 7.4 — if this bundle was queued while no peers
                 // were connected, we just proved the store-and-forward
@@ -601,7 +697,14 @@ class MessageRepository(
                 }
             }
             is MeshEvent.BundleAcked -> scope.launch(Dispatchers.IO) {
-                messagesDelivered++
+                // Stage 7.9 — first-ACK-idempotent counter increment.
+                // MeshEngine.handleAck already filters duplicate ACKs at
+                // the cache layer, but defensive: any future relay chain
+                // or transport-level redelivery that produces a second
+                // BundleAcked must not double-count.
+                if (countedDelivered.add(event.bundleId)) {
+                    messagesDelivered++
+                }
                 advanceByBundleId(event.bundleId, MessageStatus.DELIVERED)
                 // Stage 5.2: drop retry state — the bundle is delivered.
                 retryPolicy.onDelivered(event.bundleId)
@@ -621,7 +724,13 @@ class MessageRepository(
                 persistRetryStateRemove(event.bundleId)
             }
             is MeshEvent.BundleDelivered -> {
-                messagesRelayed++
+                // Stage 7.9 — fire-once-per-bundleId. handleIncomingBundle
+                // already drops duplicate inbounds at the messages-table
+                // dedup check inside its transaction; the counter must
+                // mirror that "real new arrival" semantics.
+                if (countedRelayed.add(event.bundle.bundleId)) {
+                    messagesRelayed++
+                }
                 handleIncomingBundle(event.bundle)
             }
             is MeshEvent.BundleFailed -> scope.launch(Dispatchers.IO) {
@@ -840,7 +949,13 @@ class MessageRepository(
             hasConnectedPeers = { mesh.hasConnectedPeers() },
             onRetrySuppressedNoPeers = onRetrySuppressedNoPeers,
             onStatePersisted = { bid -> persistRetryState(bid) },
-            onStateForgotten = { bid -> persistRetryStateRemove(bid) }
+            onStateForgotten = { bid -> persistRetryStateRemove(bid) },
+            // Stage 7.9 — preserve per-bundle policy state when retryBundle
+            // returned false purely because the bundle is not currently in
+            // the in-memory cache (LRU eviction, or pre-rehydration cold
+            // start). The next tick re-issues without losing priority /
+            // offline-queue / backoff state.
+            hasCachedBundle = { bid -> mesh.hasCachedBundle(bid) }
         )
     }
 
@@ -914,6 +1029,17 @@ class MessageRepository(
          */
         @Deprecated("Stage 5.2 — retry tick is now driven by RetryConfig.tickIntervalMs.")
         const val STORE_AND_FORWARD_INTERVAL_MS: Long = 15_000L
+
+        /**
+         * Stage 7.9 — upper bound on the per-counter dedup sets. Bundles age out
+         * naturally as the bundleId moves through the per-counter set; the bound
+         * is purely a safety net so a long-running session that processes more
+         * than 4 096 bundles between restarts cannot leak memory in the
+         * fire-once-per-bundle tracking. The value is large enough that the
+         * eviction path is essentially never reached in normal use, and small
+         * enough that the worst-case set occupies a few hundred KB.
+         */
+        internal const val MAX_COUNTED_BUNDLES: Int = 4_096
     }
 }
 
@@ -1001,7 +1127,32 @@ internal fun runRetryTickStandalone(
      * this tick, so the caller can remove the corresponding persisted row.
      * Default: no-op.
      */
-    onStateForgotten: (String) -> Unit = { }
+    onStateForgotten: (String) -> Unit = { },
+    /**
+     * Stage 7.9 — distinguishes the two reasons [retryBundle] can return
+     * false:
+     *
+     *  - true  → bundle is in the in-memory cache (the failure was a
+     *            real terminal condition: TTL expired, or the bundle is
+     *            already DELIVERED_FINAL). It is safe to free policy state
+     *            and per-bundle bookkeeping.
+     *  - false → cache miss. The bundle is not currently resident, which
+     *            can happen if (a) the LRU eviction in MeshEngine threw
+     *            it out under cache pressure, or (b) a brand-new cold
+     *            start has not yet rehydrated the bundle from BundleStore
+     *            (the rehydration is synchronous in MeshEngine.start, so
+     *            this is exceedingly rare in practice but not impossible
+     *            under shutdown / resume races). In the cache-miss case
+     *            we MUST NOT free policy state — doing so would also
+     *            free the priority bit and the offline-queue tracker
+     *            entry, leaving the row stuck QUEUED with no way to
+     *            re-issue.
+     *
+     * Default: always returns true (preserves pre-7.9 callers that don't
+     * differentiate; the only on-tree caller is MessageRepository, which
+     * supplies MeshEngine.hasCachedBundle).
+     */
+    hasCachedBundle: (String) -> Boolean = { true }
 ) {
     // Check peers once per tick rather than per bundle — the set changes at
     // transport-event granularity, not within a single sweep. Avoids taking
@@ -1024,9 +1175,20 @@ internal fun runRetryTickStandalone(
         val wasStuckSending = msg.status == MessageStatus.SENDING
         val attempted = retryBundle(bid)
         if (!attempted) {
-            // No-op path — most commonly TTL expiry. Free per-bundle state to
-            // avoid unbounded growth in the policy map; do NOT increment retry
-            // counters, since no retry actually happened.
+            // Stage 7.9 — disambiguate cache-miss from terminal failure.
+            // [retryBundle] returns false on (a) cache miss, (b) DELIVERED_FINAL
+            // already, (c) TTL expired. Only the latter two are terminal; a
+            // cache miss is a transient condition and we must preserve policy
+            // state so the next tick (after the bundle is rehydrated) can
+            // re-issue. Without this guard, an LRU-evicted bundle would lose
+            // its priority bit, its offline-queue tracker entry, and its
+            // backoff state in one shot — leaving the QUEUED row stranded.
+            if (!hasCachedBundle(bid)) {
+                continue
+            }
+            // Real terminal: free per-bundle state to avoid unbounded growth
+            // in the policy map. Do NOT increment retry counters, since no
+            // retry actually happened.
             retryPolicy.onTtlExpired(bid)
             onTtlClear(bid)
             onStateForgotten(bid)
@@ -1074,6 +1236,43 @@ internal class OfflineQueuedBundleTracker {
 
     /** Test-only — current size of the in-memory queue. */
     fun trackedCount(): Int = synchronized(lock) { ids.size }
+}
+
+/**
+ * Stage 7.9 — bounded LinkedHashSet used by the per-counter "fire-once-per-
+ * bundleId" dedup logic in [MessageRepository.onMeshEvent]. Insertion-ordered
+ * so the eldest entry is dropped when the set exceeds [maxSize]; thread-safe
+ * via an intrinsic lock so it can be touched concurrently from the IO
+ * dispatcher coroutines that handle BundleSent / BundleAcked / BundleDelivered.
+ *
+ * The eviction policy is intentionally "drop oldest" rather than LRU-on-read:
+ * once a bundleId has fired its counter, subsequent events for the same id
+ * are no-ops, so the read path doesn't need to refresh recency. Producing a
+ * pure FIFO bound keeps the implementation small.
+ */
+internal class BoundedIdSet(private val maxSize: Int) {
+    private val ids = LinkedHashSet<String>()
+    private val lock = Any()
+
+    /**
+     * Insert [id]. Returns true iff this is the first time we've seen [id]
+     * since startup (or since it was evicted). When the set is at capacity
+     * and a new id is inserted, the eldest id is removed first.
+     */
+    fun add(id: String): Boolean = synchronized(lock) {
+        val added = ids.add(id)
+        if (added && ids.size > maxSize) {
+            val it = ids.iterator()
+            if (it.hasNext()) {
+                it.next()
+                it.remove()
+            }
+        }
+        added
+    }
+
+    /** Test-only — current set size. */
+    fun size(): Int = synchronized(lock) { ids.size }
 }
 
 /**
