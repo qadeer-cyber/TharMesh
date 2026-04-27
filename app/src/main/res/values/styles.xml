@@ -39,6 +39,22 @@
         <item name="android:textSize">14sp</item>
     </style>
 
+    <!-- Stage 7.5 — name row: 16sp medium per the polish brief.
+         Use for chat-list / contact-list / device-list primary lines. -->
+    <style name="Text.Name" parent="TextAppearance.AppCompat">
+        <item name="android:textColor">?attr/tmTextPrimary</item>
+        <item name="android:textSize">@dimen/tm_text_name</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- Stage 7.5 — meta line: 13sp on subtitles, last-message previews,
+         settings descriptions. Distinct from Caption (12sp) which is for
+         very small metadata like timestamps. -->
+    <style name="Text.Meta" parent="TextAppearance.AppCompat">
+        <item name="android:textColor">?attr/tmTextSecondary</item>
+        <item name="android:textSize">@dimen/tm_text_meta_l</item>
+    </style>
+
     <style name="Text.Caption" parent="TextAppearance.AppCompat">
         <item name="android:textColor">?attr/tmTextSecondary</item>
         <item name="android:textSize">12sp</item>

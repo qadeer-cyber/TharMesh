@@ -13,15 +13,15 @@
     android:background="@drawable/bg_chat_row"
     android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
-    android:layout_marginStart="8dp"
-    android:layout_marginEnd="8dp"
+    android:layout_marginStart="@dimen/tm_space_s"
+    android:layout_marginEnd="@dimen/tm_space_s"
     android:layout_marginBottom="2dp"
-    android:minHeight="72dp"
+    android:minHeight="@dimen/tm_row_min_height"
     android:orientation="horizontal"
-    android:paddingStart="12dp"
-    android:paddingEnd="12dp"
-    android:paddingTop="10dp"
-    android:paddingBottom="10dp">
+    android:paddingStart="@dimen/tm_space_m"
+    android:paddingEnd="@dimen/tm_space_m"
+    android:paddingTop="@dimen/tm_space_m"
+    android:paddingBottom="@dimen/tm_space_m">
 
     <TextView
         android:id="@+id/text_avatar"
@@ -48,7 +48,7 @@
 
             <TextView
                 android:id="@+id/text_title"
-                style="@style/Text.H3"
+                style="@style/Text.Name"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"

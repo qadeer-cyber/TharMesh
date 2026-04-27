@@ -81,14 +81,19 @@
     <color name="tm_light_danger_dim">#FBE9E7</color>
     <color name="tm_light_warning">#F09D38</color>
 
-    <color name="tm_light_bubble_me_start">#D9FDD3</color>
-    <color name="tm_light_bubble_me_end">#D9FDD3</color>
+    <!-- Stage 7.5 — outgoing bubble softened from #D9FDD3 to #DCF8C6
+         (canonical WhatsApp light green). Slightly more saturation +
+         warmth without going neon. -->
+    <color name="tm_light_bubble_me_start">#DCF8C6</color>
+    <color name="tm_light_bubble_me_end">#DCF8C6</color>
     <color name="tm_light_bubble_peer">#FFFFFF</color>
     <color name="tm_light_bubble_text_me">#111B21</color>
     <color name="tm_light_bubble_text_peer">#111B21</color>
 
-    <color name="tm_light_tick_read">#53BDEB</color>
-    <color name="tm_light_tick_default">#8696A0</color>
+    <!-- Stage 7.5 — tick gray darkened from #8696A0 to #667781 for
+         higher contrast against the pale green bubble. -->
+    <color name="tm_light_tick_read">#34B7F1</color>
+    <color name="tm_light_tick_default">#667781</color>
     <color name="tm_light_unread_badge">#25D366</color>
     <color name="tm_light_unread_badge_text">#FFFFFF</color>
 

@@ -314,12 +314,12 @@
                 android:layout_gravity="center"
                 android:gravity="center_horizontal"
                 android:orientation="vertical"
-                android:padding="32dp"
+                android:padding="@dimen/tm_space_xxl"
                 android:visibility="gone">
 
                 <FrameLayout
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
+                    android:layout_width="88dp"
+                    android:layout_height="88dp"
                     android:background="@drawable/bg_round_icon_green">
 
                     <ImageView
@@ -333,16 +333,17 @@
                     style="@style/Text.H2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
+                    android:layout_marginTop="@dimen/tm_space_xl"
+                    android:gravity="center"
                     android:text="@string/empty_chats" />
 
                 <TextView
-                    style="@style/Text.Caption"
+                    style="@style/Text.Meta"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="@dimen/tm_space_s"
                     android:gravity="center"
-                    android:textSize="15sp"
+                    android:lineSpacingExtra="2dp"
                     android:text="@string/empty_chats_hint" />
 
                 <Button
@@ -350,7 +351,7 @@
                     style="@style/TmButton.Primary"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="24dp"
+                    android:layout_marginTop="@dimen/tm_space_xxl"
                     android:minWidth="200dp"
                     android:text="@string/empty_chats_button" />
 
@@ -359,7 +360,7 @@
                     style="?android:attr/borderlessButtonStyle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="@dimen/tm_space_xs"
                     android:minWidth="200dp"
                     android:text="@string/empty_chats_invite" />
             </LinearLayout>
@@ -374,11 +375,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="20dp"
+        android:layout_margin="@dimen/tm_space_l"
         android:contentDescription="@string/new_chat"
         android:src="@drawable/ic_plus"
         app:backgroundTint="?attr/tmNeonGreen"
         app:tint="?attr/tmBg"
-        app:elevation="6dp" />
+        app:elevation="8dp"
+        app:pressedTranslationZ="2dp" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

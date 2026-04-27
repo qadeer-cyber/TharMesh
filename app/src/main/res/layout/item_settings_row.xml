@@ -3,11 +3,12 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_card_glass"
+    android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
-    android:layout_marginBottom="10dp"
-    android:minHeight="68dp"
+    android:layout_marginBottom="@dimen/tm_space_s"
+    android:minHeight="@dimen/tm_row_settings_min_height"
     android:orientation="horizontal"
-    android:padding="14dp">
+    android:padding="@dimen/tm_space_l">
 
     <FrameLayout
         android:id="@+id/row_icon_bg"

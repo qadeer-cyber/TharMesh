@@ -7,8 +7,8 @@
         android:startColor="?attr/tmBubbleMeStart"
         android:endColor="?attr/tmBubbleMeEnd" />
     <corners
-        android:topLeftRadius="18dp"
-        android:topRightRadius="18dp"
-        android:bottomLeftRadius="18dp"
-        android:bottomRightRadius="4dp" />
+        android:topLeftRadius="20dp"
+        android:topRightRadius="20dp"
+        android:bottomLeftRadius="20dp"
+        android:bottomRightRadius="6dp" />
 </shape>
