@@ -89,12 +89,15 @@ class StatusFragment : Fragment() {
                 meshStat.findViewById<TextView>(R.id.health_value).text =
                     if (online == 1) "1 node" else "$online nodes"
                 signalBars?.setPeerCount(online)
+                // Stage 9.2 — go through SystemStatus.resolveForUi so a
+                // perms-revoked-at-runtime state correctly flips the dot
+                // to Offline (otherwise isMeshStarted stays true after
+                // Bluetooth/Location are turned off).
                 brandDot?.setStatus(
-                    when {
-                        online > 0 -> com.tharmesh.ui.system.SystemStatus.Connected
-                        TharMeshApp.get().isMeshStarted() -> com.tharmesh.ui.system.SystemStatus.Searching
-                        else -> com.tharmesh.ui.system.SystemStatus.Offline
-                    }
+                    com.tharmesh.ui.system.SystemStatus.resolveForUi(
+                        requireContext(),
+                        peerCount = online
+                    )
                 )
             }
         }

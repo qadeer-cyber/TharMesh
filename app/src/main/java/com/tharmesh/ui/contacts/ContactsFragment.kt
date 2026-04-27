@@ -136,13 +136,13 @@ class ContactsFragment : Fragment() {
             viewLifecycleOwner.lifecycleScope.launch {
                 TharMeshApp.get().directory.nodes.collectLatest { nodes ->
                     val online = nodes.count { it.online }
+                    // Go through SystemStatus.resolveForUi so a perms-revoked-
+                    // at-runtime state correctly flips the dot to Offline.
                     brandDot.setStatus(
-                        when {
-                            online > 0 -> com.tharmesh.ui.system.SystemStatus.Connected
-                            TharMeshApp.get().isMeshStarted() ->
-                                com.tharmesh.ui.system.SystemStatus.Searching
-                            else -> com.tharmesh.ui.system.SystemStatus.Offline
-                        }
+                        com.tharmesh.ui.system.SystemStatus.resolveForUi(
+                            requireContext(),
+                            peerCount = online
+                        )
                     )
                 }
             }

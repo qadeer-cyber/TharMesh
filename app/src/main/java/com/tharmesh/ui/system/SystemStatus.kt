@@ -96,5 +96,37 @@ enum class SystemStatus {
             if (degraded) return Degraded
             return Connected
         }
+
+        /**
+         * Convenience overload for the common Fragment / Activity case:
+         * derives [permsReady] from [com.tharmesh.permissions.PermissionMonitor.snapshot]
+         * (matching the pattern in [com.tharmesh.ui.chat.ChatActivity.currentMeshState])
+         * and [transportRunning] from [com.tharmesh.TharMeshApp.isMeshStarted].
+         * The caller still passes [peerCount] from its own [com.tharmesh.mesh.NearbyDirectory]
+         * snapshot so the resolver doesn't pull on a global flow.
+         *
+         * Without this helper every fragment had to duplicate the
+         * `isMeshStarted ? Searching : Offline` shortcut, which incorrectly
+         * stayed on Searching after the user revoked Bluetooth/Location at
+         * runtime — `started` only flips on sign-out. Going through
+         * `PermissionMonitor.snapshot()` is the canonical perms check.
+         */
+        @JvmStatic
+        fun resolveForUi(
+            context: android.content.Context,
+            peerCount: Int,
+            connecting: Boolean = false,
+            degraded: Boolean = false
+        ): SystemStatus {
+            val app = com.tharmesh.TharMeshApp.get()
+            val perm = com.tharmesh.permissions.PermissionMonitor.snapshot(context)
+            return resolve(
+                permsReady = perm is com.tharmesh.permissions.PermissionStatus.Ready,
+                transportRunning = app.isMeshStarted(),
+                peerCount = peerCount,
+                connecting = connecting,
+                degraded = degraded
+            )
+        }
     }
 }

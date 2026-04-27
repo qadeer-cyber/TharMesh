@@ -64,13 +64,13 @@ class DevicesFragment : Fragment() {
                 )
                 adapter.submit(ranked)
                 val onlineCount = list.count { it.online }
+                // Go through SystemStatus.resolveForUi so a perms-revoked-
+                // at-runtime state correctly flips the dot to Offline.
                 brandDot?.setStatus(
-                    when {
-                        onlineCount > 0 -> com.tharmesh.ui.system.SystemStatus.Connected
-                        TharMeshApp.get().isMeshStarted() ->
-                            com.tharmesh.ui.system.SystemStatus.Searching
-                        else -> com.tharmesh.ui.system.SystemStatus.Offline
-                    }
+                    com.tharmesh.ui.system.SystemStatus.resolveForUi(
+                        requireContext(),
+                        peerCount = onlineCount
+                    )
                 )
             }
         }
