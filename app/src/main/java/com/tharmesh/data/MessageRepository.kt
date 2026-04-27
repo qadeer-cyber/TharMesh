@@ -332,12 +332,17 @@ class MessageRepository(
     suspend fun addContact(userId: String, displayName: String = userId): ContactEntity {
         return runIo {
             val existing = db.contactDao().getByUserId(userId)
+            val resolved = chooseContactDisplayName(
+                inputUserId = userId,
+                inputDisplayName = displayName,
+                existingDisplayName = existing?.displayName
+            )
             val entity = existing?.copy(
-                displayName = displayName.ifBlank { userId },
+                displayName = resolved,
                 lastSeen = now()
             ) ?: ContactEntity(
                 userId = userId,
-                displayName = displayName.ifBlank { userId },
+                displayName = resolved,
                 publicKey = "",
                 addedAt = now(),
                 lastSeen = now()
@@ -1069,4 +1074,49 @@ internal class OfflineQueuedBundleTracker {
 
     /** Test-only — current size of the in-memory queue. */
     fun trackedCount(): Int = synchronized(lock) { ids.size }
+}
+
+/**
+ * Pure helper used by [MessageRepository.addContact] to decide which
+ * displayName to write for a contact upsert. Lifted out so tests can
+ * exercise it without a Room database.
+ *
+ * Why this exists: the legacy `displayName.ifBlank { userId }` rule
+ * protected only against blank input. It silently allowed a previously
+ * human-named contact (e.g. one created from a QR scan with
+ * `displayName="Abdul Qadeer"`) to be downgraded to its raw userId
+ * (e.g. `user-54601948`) when the same contact was re-added through
+ * the nearby-picker path. The Nearby Connections transport advertises
+ * `endpointName = userId`, so `MeshNode.name` and `MeshNode.userId`
+ * are identical for any peer we discover, and feeding both into
+ * `addContact()` clobbered the friendly name the QR scan had captured.
+ *
+ * Resolution rules, in order:
+ *
+ *  1. If [inputDisplayName] is non-blank AND distinct from [inputUserId],
+ *     it is treated as an explicit human-supplied name and wins.
+ *     (QR scan, manual rename, etc.)
+ *  2. Otherwise — i.e. the caller passed the userId-as-fallback
+ *     displayName — and an existing human displayName is on file, the
+ *     existing name is preserved. (The nearby-picker / banner paths.)
+ *  3. Otherwise (no existing row, or existing was also userId-shaped),
+ *     fall back to [inputUserId].
+ *
+ * Pure / referentially transparent — safe to call from any thread.
+ */
+internal fun chooseContactDisplayName(
+    inputUserId: String,
+    inputDisplayName: String,
+    existingDisplayName: String?
+): String {
+    val cleanInput = inputDisplayName.ifBlank { inputUserId }
+    val inputIsHuman = cleanInput.isNotBlank() && cleanInput != inputUserId
+    if (inputIsHuman) return cleanInput
+
+    val existingIsHuman = existingDisplayName != null &&
+        existingDisplayName.isNotBlank() &&
+        existingDisplayName != inputUserId
+    if (existingIsHuman) return existingDisplayName!!
+
+    return inputUserId
 }
