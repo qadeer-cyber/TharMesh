@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.tharmesh.TharMeshApp
+import com.tharmesh.ui.widget.applyPremiumPress
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tharmesh.app.R
@@ -54,6 +55,27 @@ class StatusFragment : Fragment() {
 
         val sos: Button = view.findViewById(R.id.button_sos)
         sos.setOnClickListener { triggerSos() }
+        // Stage 9.2 — strong-press feedback on the SOS CTA.
+        sos.applyPremiumPress()
+
+        // Stage 9.2 — perception layer wiring: brand status dot, animated
+        // signal bars, and ambient breathing pulse on the SOS card glow
+        // wrapper. All driven from the same directory.nodes flow.
+        val brandDot = view.findViewById<com.tharmesh.ui.widget.PulsingDot>(R.id.dot_brand_status)
+        val signalBars = view.findViewById<com.tharmesh.ui.widget.SignalBarsView>(R.id.network_signal_bars)
+        val sosGlow = view.findViewById<View>(R.id.sos_card_glow_wrap)
+        sosGlow?.let { wrap ->
+            // Subtle breathing pulse on the red glow halo so the SOS surface
+            // reads as "armed and waiting" — independent of the
+            // post-broadcast result-card pulse below.
+            ObjectAnimator.ofFloat(wrap, "alpha", 0.55f, 1.0f).apply {
+                duration = 1800L
+                repeatMode = ObjectAnimator.REVERSE
+                repeatCount = ObjectAnimator.INFINITE
+                interpolator = AccelerateDecelerateInterpolator()
+                start()
+            }
+        }
 
         val directory = TharMeshApp.get().directory
         viewLifecycleOwner.lifecycleScope.launch {
@@ -61,6 +83,14 @@ class StatusFragment : Fragment() {
                 val online = nodes.count { it.online }
                 meshStat.findViewById<TextView>(R.id.health_value).text =
                     if (online == 1) "1 node" else "$online nodes"
+                signalBars?.setPeerCount(online)
+                brandDot?.setStatus(
+                    when {
+                        online > 0 -> com.tharmesh.ui.system.SystemStatus.Connected
+                        TharMeshApp.get().isMeshStarted() -> com.tharmesh.ui.system.SystemStatus.Searching
+                        else -> com.tharmesh.ui.system.SystemStatus.Offline
+                    }
+                )
             }
         }
     }

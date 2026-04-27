@@ -51,6 +51,11 @@ class DevicesFragment : Fragment() {
 
         val directory = TharMeshApp.get().directory
 
+        // Stage 9.2 — brand-header status dot. Connected when at least one
+        // peer is online; Searching when transport is up but the directory
+        // is empty; Offline otherwise.
+        val brandDot = view.findViewById<com.tharmesh.ui.widget.PulsingDot>(R.id.dot_brand_status)
+
         viewLifecycleOwner.lifecycleScope.launch {
             directory.nodes.collectLatest { list ->
                 val ranked = list.sortedWith(
@@ -58,6 +63,15 @@ class DevicesFragment : Fragment() {
                         .thenByDescending { it.score() }
                 )
                 adapter.submit(ranked)
+                val onlineCount = list.count { it.online }
+                brandDot?.setStatus(
+                    when {
+                        onlineCount > 0 -> com.tharmesh.ui.system.SystemStatus.Connected
+                        TharMeshApp.get().isMeshStarted() ->
+                            com.tharmesh.ui.system.SystemStatus.Searching
+                        else -> com.tharmesh.ui.system.SystemStatus.Offline
+                    }
+                )
             }
         }
 

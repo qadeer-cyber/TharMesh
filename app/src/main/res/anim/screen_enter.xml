@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — incoming screen enters with a subtle slide (10dp) + fade-in
+  over 220ms. Pairs with screen_exit.xml on the outgoing activity so the
+  two surfaces cross-fade rather than slamming.
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shareInterpolator="false">
+    <translate
+        android:fromXDelta="6%"
+        android:toXDelta="0"
+        android:duration="220"
+        android:interpolator="@android:anim/decelerate_interpolator" />
+    <alpha
+        android:fromAlpha="0.0"
+        android:toAlpha="1.0"
+        android:duration="220" />
+</set>

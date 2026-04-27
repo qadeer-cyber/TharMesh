@@ -164,14 +164,22 @@
             android:src="@drawable/ic_close" />
     </LinearLayout>
 
-    <!-- Composer -->
+    <!--
+      Composer. Stage 9.2 — bg_glass_floating gives the input bar a
+      translucent glass surface so it lifts off the chat history; the
+      send button uses a state-list selector that morphs between dim
+      (idle) and the cyan→green gradient (active) based on enabled state.
+    -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/tmBg2"
+        android:background="@drawable/bg_glass_floating"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:padding="10dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp">
 
         <ImageButton
             android:id="@+id/button_attach"
@@ -202,7 +210,7 @@
             android:id="@+id/button_send"
             android:layout_width="44dp"
             android:layout_height="44dp"
-            android:background="@drawable/bg_fab_gradient"
+            android:background="@drawable/bg_send_button"
             android:contentDescription="@string/chat_send"
             android:src="@drawable/ic_send" />
     </LinearLayout>

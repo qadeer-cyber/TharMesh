@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — chat input send button when the input is empty. Solid neon-dim
+  fill so the user sees a present button (no flicker when text starts to
+  appear). [bg_send_button_active] takes over via state-list animator on
+  enabled state.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="?attr/tmNeonGreenDim" />
+</shape>

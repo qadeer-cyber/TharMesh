@@ -84,11 +84,58 @@ class MeshGraphView @JvmOverloads constructor(
     private val peerRadii = floatArrayOf(0.82f, 0.95f, 0.70f, 0.88f, 0.75f, 0.92f)
     private var peerCount: Int = 0
 
+    /**
+     * Stage 9.2 — node-count change animator. When [setPeerCount] is called
+     * with a value different from the current [peerCount], we kick off a
+     * 320ms ValueAnimator that drives [countChangePhase] from 0 → 1. While
+     * this is running, the "newly-revealed" nodes (indices in
+     * [peerCount, prevPeerCount)) on shrink — or [prevPeerCount, peerCount)
+     * on grow — render at a scale that eases between 0 and full so the
+     * change reads as a soft "node joined / left the mesh", not a snap.
+     */
+    private var prevPeerCount: Int = 0
+    private var countChangePhase: Float = 1f
+    private var countAnimator: ValueAnimator? = null
+
     /** Sets how many peer nodes to draw in the orbit (clamped to 0..6). */
     fun setPeerCount(count: Int) {
         val clamped = count.coerceIn(0, peerAngles.size)
         if (clamped == peerCount) return
+        prevPeerCount = peerCount
         peerCount = clamped
+        countChangePhase = 0f
+        countAnimator?.cancel()
+        countAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 320L
+            interpolator = LinearInterpolator()
+            addUpdateListener {
+                countChangePhase = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+        invalidate()
+    }
+
+    /**
+     * Stage 9.2 — when set to a positive value, the edge index modulo
+     * peerCount is rendered with the hot paint regardless of the rotation
+     * cursor. Used to "flash" the edge along which the most recently
+     * relayed bundle travelled. Decays back to -1 after [highlightUntilMs].
+     */
+    private var highlightedEdgeIndex: Int = -1
+    private var highlightUntilMs: Long = 0L
+
+    /**
+     * Trigger an active-edge highlight for the next 4 seconds. Pure UX
+     * affordance — caller wires this up from
+     * [com.tharmesh.data.OnAutoDeliveredOnReconnect] or any other "we just
+     * relayed something" hook the host fragment knows about.
+     */
+    fun flashRelayActivity(peerIndex: Int) {
+        if (peerCount <= 0) return
+        highlightedEdgeIndex = peerIndex.coerceIn(0, peerCount - 1)
+        highlightUntilMs = System.currentTimeMillis() + 4000L
         invalidate()
     }
 
@@ -99,6 +146,8 @@ class MeshGraphView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         animator.cancel()
+        countAnimator?.cancel()
+        countAnimator = null
         super.onDetachedFromWindow()
     }
 
@@ -141,11 +190,22 @@ class MeshGraphView @JvmOverloads constructor(
             }
 
             // Lines from center to each visible peer, with one hot pulse highlight.
+            // Stage 9.2: when the host flashed relay activity recently, that
+            // specific peer's edge is forced hot — overrides the rotating
+            // pulse cursor for up to 4s after [flashRelayActivity] is called.
             val hotIndex = ((phase * drawCount) % drawCount).toInt()
+            val flashStillActive =
+                highlightedEdgeIndex >= 0 && System.currentTimeMillis() < highlightUntilMs
+            val effectiveHotIndex = if (flashStillActive) {
+                highlightedEdgeIndex.coerceIn(0, drawCount - 1)
+            } else {
+                if (highlightedEdgeIndex >= 0) highlightedEdgeIndex = -1
+                hotIndex
+            }
             for (i in 0 until drawCount) {
                 val px = peerPositions[i * 2]
                 val py = peerPositions[i * 2 + 1]
-                val paint = if (i == hotIndex) lineHotPaint else linePaint
+                val paint = if (i == effectiveHotIndex) lineHotPaint else linePaint
                 canvas.drawLine(cx, cy, px, py, paint)
             }
 
@@ -164,12 +224,21 @@ class MeshGraphView @JvmOverloads constructor(
                 }
             }
 
-            // Draw peer nodes
+            // Draw peer nodes. Stage 9.2 — each node breathes at a slightly
+            // staggered phase so the orbit doesn't pulse in unison (would
+            // read as machine rather than network). Newly-revealed nodes
+            // ease their radius from 0 → full over the count-change phase.
             for (i in 0 until drawCount) {
                 val px = peerPositions[i * 2]
                 val py = peerPositions[i * 2 + 1]
-                canvas.drawCircle(px, py, 10f, nodeFill)
-                canvas.drawCircle(px, py, 10f, if (i % 2 == 0) nodeStroke else nodeStrokeGreen)
+                val nodePhase = (phase + i * 0.18f) % 1f
+                val nodeBreath = 1f + 0.18f * sin(nodePhase * 2 * Math.PI).toFloat()
+                // Scale-in for nodes that weren't there before the latest count change.
+                val isNewNode = i >= prevPeerCount
+                val growth = if (isNewNode && countChangePhase < 1f) countChangePhase else 1f
+                val r = 10f * nodeBreath * growth
+                canvas.drawCircle(px, py, r, nodeFill)
+                canvas.drawCircle(px, py, r, if (i % 2 == 0) nodeStroke else nodeStrokeGreen)
             }
         }
 

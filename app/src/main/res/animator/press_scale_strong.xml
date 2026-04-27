@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — primary press feedback for premium CTAs (FABs, primary
+  buttons, list rows). Scales 1.0 → 0.96 in 110ms on press, then settles
+  back to 1.0 over 220ms with a slight overshoot (bounce) on release.
+
+  Property-only, no layout pass. Applied via [View.applyPremiumPress] in
+  [com.tharmesh.ui.widget.PremiumMotion] across the app for system-level
+  consistency. Stage 7.6's [press_scale.xml] (0.97 / no-bounce) is kept
+  for backwards compatibility with views that already opt into it.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <set>
+            <objectAnimator
+                android:propertyName="scaleX"
+                android:duration="110"
+                android:valueTo="0.96"
+                android:valueType="floatType" />
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:duration="110"
+                android:valueTo="0.96"
+                android:valueType="floatType" />
+        </set>
+    </item>
+    <item>
+        <set>
+            <objectAnimator
+                android:propertyName="scaleX"
+                android:duration="220"
+                android:valueTo="1.0"
+                android:valueType="floatType"
+                android:interpolator="@android:anim/overshoot_interpolator" />
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:duration="220"
+                android:valueTo="1.0"
+                android:valueType="floatType"
+                android:interpolator="@android:anim/overshoot_interpolator" />
+        </set>
+    </item>
+</selector>

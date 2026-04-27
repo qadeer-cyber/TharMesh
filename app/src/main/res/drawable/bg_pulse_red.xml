@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — soft red glow halo for the SOS card. Static drawable; the
+  breathing animation is driven by an [ObjectAnimator] in code that animates
+  the host card's alpha. We deliberately do not use [AnimatedVectorDrawable]
+  here because (a) it's overkill for a 2-property animation and (b) ObjectAnimator
+  composes cleanly with the same press-feedback animator on the same surface.
+
+  Used as the BACKGROUND of the SOS card so it bleeds outside the card edges
+  via the parent's clipChildren=false to give the "breathing" feel.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="radial"
+        android:gradientRadius="80%p"
+        android:startColor="?attr/tmGlowDanger20"
+        android:endColor="@android:color/transparent" />
+    <corners android:radius="24dp" />
+</shape>

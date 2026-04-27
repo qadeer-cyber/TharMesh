@@ -23,16 +23,38 @@
     android:paddingTop="@dimen/tm_space_m"
     android:paddingBottom="@dimen/tm_space_m">
 
-    <TextView
-        android:id="@+id/text_avatar"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:background="@drawable/bg_avatar"
-        android:gravity="center"
-        android:text="A"
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
-        android:textStyle="bold" />
+    <!--
+      Stage 9.2 — avatar wrapped in a GlowingAvatarFrameLayout that toggles
+      a soft online halo (bg_avatar_glow_online) when the contact is online.
+      Per-row PulsingDot overlay surfaces the per-chat connection state for
+      additional system-feedback signal.
+    -->
+    <com.tharmesh.ui.widget.GlowingAvatarFrameLayout
+        android:id="@+id/avatar_frame"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:padding="4dp">
+
+        <TextView
+            android:id="@+id/text_avatar"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_avatar"
+            android:gravity="center"
+            android:text="A"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.tharmesh.ui.widget.PulsingDot
+            android:id="@+id/dot_status"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="2dp"
+            android:layout_marginBottom="2dp" />
+    </com.tharmesh.ui.widget.GlowingAvatarFrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"

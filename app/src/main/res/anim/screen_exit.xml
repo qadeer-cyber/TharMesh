@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — outgoing screen fades out over 180ms. No translation on the
+  outgoing screen so the user perceives the new screen "sliding over" the
+  old one rather than both sliding together.
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <alpha
+        android:fromAlpha="1.0"
+        android:toAlpha="0.0"
+        android:duration="180" />
+</set>

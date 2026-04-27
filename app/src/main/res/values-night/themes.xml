@@ -63,5 +63,17 @@
         <item name="tmGlowDanger20">@color/tm_dark_glow_danger_20</item>
 
         <item name="tmSearchFill">@color/tm_dark_search_fill</item>
+
+        <!-- Stage 9.2 — perception layer (dark bindings). -->
+        <item name="tmSurfaceGlassRaised">@color/tm_dark_surface_glass_raised</item>
+        <item name="tmSurfaceGlassFloating">@color/tm_dark_surface_glass_floating</item>
+        <item name="tmGlassHighlight">@color/tm_dark_glass_highlight</item>
+        <item name="tmGradientAccentStart">@color/tm_dark_gradient_accent_start</item>
+        <item name="tmGradientAccentEnd">@color/tm_dark_gradient_accent_end</item>
+        <item name="tmShadowSoft">@color/tm_dark_shadow_soft</item>
+        <item name="tmDotConnected">@color/tm_dark_dot_connected</item>
+        <item name="tmDotSearching">@color/tm_dark_dot_searching</item>
+        <item name="tmDotOffline">@color/tm_dark_dot_offline</item>
+        <item name="tmDotDegraded">@color/tm_dark_dot_degraded</item>
     </style>
 </resources>
