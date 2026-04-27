@@ -137,6 +137,31 @@
                 android:gravity="center"
                 android:lineSpacingExtra="2dp"
                 android:text="@string/contacts_empty_subtitle" />
+
+            <!-- Stage 8.0 — actionable empty state. Pre-8.0 the empty state
+                 was just text + subtitle, leaving a brand-new user with no
+                 obvious next step. Two primary CTAs match the spec exactly:
+                 Scan QR (start ScanQrActivity) and Find nearby (open the
+                 DevicePickerSheet). Both buttons reuse the existing handlers
+                 in [ContactsFragment]; no new logic, just direct entry
+                 points from the empty state body. -->
+            <Button
+                android:id="@+id/empty_btn_scan_qr"
+                style="@style/TmButton.Primary"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/tm_space_l"
+                android:minWidth="200dp"
+                android:text="@string/contacts_scan_qr" />
+
+            <Button
+                android:id="@+id/empty_btn_find_nearby"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/tm_space_s"
+                android:minWidth="200dp"
+                android:text="@string/new_chat_action_find_nearby" />
         </LinearLayout>
     </FrameLayout>
 

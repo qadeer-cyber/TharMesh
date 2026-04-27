@@ -78,7 +78,7 @@ class ContactsActivity : AppCompatActivity() {
             .setPositiveButton(R.string.dialog_start) { _, _ ->
                 val code = input.text?.toString()?.trim().orEmpty()
                 if (code.isEmpty()) return@setPositiveButton
-                addContact(code, code)
+                addContactAndOpenChat(code, code)
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
@@ -87,6 +87,24 @@ class ContactsActivity : AppCompatActivity() {
     private fun addContact(userId: String, displayName: String) {
         lifecycleScope.launch(Dispatchers.IO) {
             repository.addContact(userId, displayName)
+        }
+    }
+
+    /**
+     * Stage 8.0 — single-step add-then-chat. Pre-8.0, after a successful
+     * add (QR scan or manual invite) the user landed back here and had to
+     * tap the new contact row to open chat. The spec requires that the
+     * "add" action funnels straight into a chat. The repository.addContact
+     * call is idempotent, so re-issuing it here is safe.
+     */
+    private fun addContactAndOpenChat(userId: String, displayName: String) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { repository.addContact(userId, displayName) }
+            if (isFinishing || isDestroyed) return@launch
+            val next = Intent(this@ContactsActivity, ChatActivity::class.java)
+            next.putExtra(ChatActivity.EXTRA_TO_USER_ID, userId)
+            next.putExtra(ChatActivity.EXTRA_TITLE, displayName)
+            startActivity(next)
         }
     }
 
@@ -103,7 +121,9 @@ class ContactsActivity : AppCompatActivity() {
             // is the same "invite accepted" event as the equivalent path
             // in NewChatSheet / ContactsFragment / OnboardingActivity.
             com.tharmesh.data.GrowthMetrics.recordInviteAccepted(this)
-            addContact(code, displayName)
+            // Stage 8.0 — auto-open the chat after the add commits, in
+            // parallel with the trust-verify branch below.
+            addContactAndOpenChat(code, displayName)
             if (pubKey != null) {
                 // Stage 6.2 — out-of-band verify the peer's TOFU pin against the
                 // QR-encoded public key. If the QR's key differs from a key we

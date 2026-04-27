@@ -1,10 +1,12 @@
 package com.tharmesh.ui.chat
 
+import android.content.Context
 import android.os.Bundle
 import android.text.format.DateFormat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -22,6 +24,8 @@ import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.MessageStatus
 import com.tharmesh.db.entity.MessageEntity
+import com.tharmesh.permissions.PermissionMonitor
+import com.tharmesh.permissions.PermissionStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -61,6 +65,15 @@ class ChatActivity : AppCompatActivity() {
     private var myUserId: String = ""
     private var toUserId: String = ""
     private var replyingTo: MessageEntity? = null
+
+    /**
+     * Stage 8.0 — last-known message status used by [updateTopStatus] when
+     * a mesh-state emission lands without a new message-list emission. The
+     * formatter combines this with the live mesh state to produce the
+     * subtitle, so we cache the last computed value here.
+     */
+    private var lastOutgoingStatus: String? = null
+    private lateinit var statusStrings: ChatStatusFormatter.Strings
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,7 +137,47 @@ class ChatActivity : AppCompatActivity() {
         if (providedAvatarBg != 0) {
             chatAvatar.setBackgroundResource(providedAvatarBg)
         }
+
+        // Stage 8.0 — bundle of strings the pure formatter needs. Built
+        // once so the per-emission update path stays Android-resource free.
+        statusStrings = buildStatusStrings()
+
         start()
+
+        // Stage 8.0 — auto-focus the message input + show the keyboard so
+        // the user can start typing the second the chat opens. This matches
+        // WhatsApp / Telegram behaviour and removes a redundant tap. The
+        // explicit focus + showSoftInput pair works on API 19+ which is
+        // well below the project's minSdk (and obviously below AGP 4.1.3's
+        // compileSdk 30 ceiling). Posting via the input view's own handler
+        // ensures the call runs after the activity window has been
+        // attached, which is required for showSoftInput to actually pop
+        // the IME on most OEM Android builds.
+        input.requestFocus()
+        input.post {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    /**
+     * Stage 8.0 — read the chat-header subtitle strings out of resources
+     * once and hand them to [ChatStatusFormatter]. Centralised here so the
+     * formatter call site stays terse and the strings travel together.
+     */
+    private fun buildStatusStrings(): ChatStatusFormatter.Strings {
+        return ChatStatusFormatter.Strings(
+            online1Fmt = getString(R.string.chat_status_online_one),
+            onlineNFmt = getString(R.string.chat_status_online_n_fmt),
+            searching = getString(R.string.chat_status_searching),
+            offline = getString(R.string.chat_status_offline),
+            msgQueued = getString(R.string.chat_status_msg_queued),
+            msgSending = getString(R.string.chat_status_msg_sending),
+            msgSent = getString(R.string.chat_status_msg_sent),
+            msgDelivered = getString(R.string.chat_status_msg_delivered),
+            msgRead = getString(R.string.chat_status_msg_read),
+            msgFailed = getString(R.string.chat_status_msg_failed)
+        )
     }
 
     override fun onResume() {
@@ -135,6 +188,11 @@ class ChatActivity : AppCompatActivity() {
             // updated (e.g. user came back from ContactsActivity after a QR
             // verification).
             refreshTrustShield()
+            // Stage 8.0 — refresh the header subtitle in case Bluetooth or
+            // Location were toggled in Settings while we were paused. The
+            // directory.nodes flow already covers connect / disconnect, but
+            // permission-state transitions don't push through that flow.
+            if (::statusStrings.isInitialized) renderTopStatus()
         }
     }
 
@@ -177,25 +235,41 @@ class ChatActivity : AppCompatActivity() {
             repository.observeConversation(toUserId).collectLatest { msgs ->
                 adapter.submitList(msgs)
                 if (msgs.isNotEmpty()) recycler.scrollToPosition(msgs.size - 1)
-                updateTopStatus(msgs)
+                lastOutgoingStatus = msgs.lastOrNull { it.fromUserId == myUserId }?.status
+                renderTopStatus()
             }
+        }
+        // Stage 8.0 — repaint the header subtitle whenever the mesh's
+        // online-peer set changes. The directory's StateFlow re-emits on
+        // every connect / disconnect / advert tick, so this is the right
+        // primitive to track "are we online right now". onResume already
+        // covers the permission-state transition (Bluetooth / Location
+        // toggled in Settings) by calling renderTopStatus directly.
+        lifecycleScope.launch {
+            TharMeshApp.get().directory.nodes.collectLatest { renderTopStatus() }
         }
     }
 
-    private fun updateTopStatus(msgs: List<MessageEntity>) {
-        val lastMine = msgs.lastOrNull { it.fromUserId == myUserId }
-        topStatus.text = when (lastMine?.status) {
-            // SENDING renders the same as QUEUED intentionally — the UI contract is
-            // "no tick until bytes are on the wire". SENDING is an internal correctness
-            // state (transport accepted, PayloadSent pending) that users don't need to
-            // see separately. Keeping both branches here preserves the exhaustive when.
-            MessageStatus.QUEUED,
-            MessageStatus.SENDING -> getString(R.string.chat_header_offline) + " · ⏳"
-            MessageStatus.SENT -> "✓ sent"
-            MessageStatus.DELIVERED -> "✓✓ delivered"
-            MessageStatus.READ -> "✓✓ read"
-            MessageStatus.FAILED -> "! failed"
-            else -> getString(R.string.chat_header_offline)
+    /**
+     * Stage 8.0 — derive the subtitle from the live mesh state + cached
+     * last-outgoing message status, then hand off to the pure formatter.
+     * The mesh-state derivation is the same shape as the chat-list
+     * mesh-warning-dot (PermissionMonitor.snapshot + directory.nodes), so
+     * the two surfaces never disagree.
+     */
+    private fun renderTopStatus() {
+        val mesh = currentMeshState()
+        topStatus.text = ChatStatusFormatter.format(mesh, lastOutgoingStatus, statusStrings)
+    }
+
+    private fun currentMeshState(): ChatStatusFormatter.MeshState {
+        val perm = PermissionMonitor.snapshot(this)
+        if (perm !is PermissionStatus.Ready) return ChatStatusFormatter.MeshState.Offline
+        val online = TharMeshApp.get().directory.nodes.value.count { it.online }
+        return if (online > 0) {
+            ChatStatusFormatter.MeshState.Online(online)
+        } else {
+            ChatStatusFormatter.MeshState.Searching
         }
     }
 
