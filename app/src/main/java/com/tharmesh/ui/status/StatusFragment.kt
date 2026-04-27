@@ -28,6 +28,10 @@ import tharmesh.app.R
 class StatusFragment : Fragment() {
 
     private var pulseAnim: ObjectAnimator? = null
+    // Stage 9.2 — held so onDestroyView can cancel; the animator runs with
+    // repeatCount=INFINITE on the SOS glow halo and would otherwise leak
+    // the destroyed view + activity through the Choreographer callback.
+    private var sosGlowAnim: ObjectAnimator? = null
     private lateinit var sosResult: TextView
     private lateinit var sosResultCard: View
 
@@ -67,8 +71,9 @@ class StatusFragment : Fragment() {
         sosGlow?.let { wrap ->
             // Subtle breathing pulse on the red glow halo so the SOS surface
             // reads as "armed and waiting" — independent of the
-            // post-broadcast result-card pulse below.
-            ObjectAnimator.ofFloat(wrap, "alpha", 0.55f, 1.0f).apply {
+            // post-broadcast result-card pulse below. Held in [sosGlowAnim]
+            // and cancelled in onDestroyView.
+            sosGlowAnim = ObjectAnimator.ofFloat(wrap, "alpha", 0.55f, 1.0f).apply {
                 duration = 1800L
                 repeatMode = ObjectAnimator.REVERSE
                 repeatCount = ObjectAnimator.INFINITE
@@ -131,6 +136,8 @@ class StatusFragment : Fragment() {
     override fun onDestroyView() {
         pulseAnim?.cancel()
         pulseAnim = null
+        sosGlowAnim?.cancel()
+        sosGlowAnim = null
         super.onDestroyView()
     }
 
