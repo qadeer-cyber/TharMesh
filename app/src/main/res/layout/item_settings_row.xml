@@ -48,7 +48,7 @@
     </LinearLayout>
 
     <ImageView
-        android:layout_width="22dp"
-        android:layout_height="22dp"
+        android:layout_width="@dimen/tm_icon"
+        android:layout_height="@dimen/tm_icon"
         android:src="@drawable/ic_chevron_right" />
 </LinearLayout>

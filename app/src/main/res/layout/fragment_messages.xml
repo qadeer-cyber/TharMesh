@@ -304,6 +304,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
+                android:layoutAnimation="@anim/layout_animation_fade_in"
                 android:paddingTop="2dp"
                 android:paddingBottom="120dp" />
 
@@ -380,7 +381,7 @@
         android:src="@drawable/ic_plus"
         app:backgroundTint="?attr/tmNeonGreen"
         app:tint="?attr/tmBg"
-        app:elevation="8dp"
-        app:pressedTranslationZ="2dp" />
+        app:elevation="@dimen/tm_elev_fab"
+        app:pressedTranslationZ="@dimen/tm_elev_fab_pressed_translation" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
