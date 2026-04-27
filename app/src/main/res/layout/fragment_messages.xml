@@ -375,7 +375,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="@dimen/tm_space_l"
+        android:layout_margin="@dimen/tm_space_xl"
         android:contentDescription="@string/new_chat"
         android:src="@drawable/ic_plus"
         app:backgroundTint="?attr/tmNeonGreen"

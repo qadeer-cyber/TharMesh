@@ -17,8 +17,9 @@
     <dimen name="tm_space_xxl">24dp</dimen>
 
     <!-- Typography scale per Stage 7.5 brief.
-         meta_xs (11sp) — kept for the bubble timestamp + tick row only;
-                          everywhere else should be meta_s or meta_l. -->
+         Bubble timestamps + ticks intentionally use meta_s (12sp) for
+         contrast against the new pale green; meta_xs (11sp) is reserved
+         for very dense secondary metadata (badges, tags). -->
     <dimen name="tm_text_meta_xs">11sp</dimen>
     <dimen name="tm_text_meta_s">12sp</dimen>
     <dimen name="tm_text_meta_l">13sp</dimen>
