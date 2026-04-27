@@ -37,6 +37,14 @@ class MyQrActivity : AppCompatActivity() {
         setContentView(R.layout.activity_my_qr)
         title = getString(R.string.my_qr_title)
 
+        // Stage 7 PR E — count "showed my invite to someone". Bumped
+        // once per Activity instance (i.e. once per user-initiated open
+        // of the screen), not on configuration changes — savedInstanceState
+        // null means a fresh launch.
+        if (savedInstanceState == null) {
+            com.tharmesh.data.GrowthMetrics.recordInviteSent(this)
+        }
+
         val identity = loadIdentitySafe()
         val qrPayload = QrCodec.encode(
             IdentityQrPayload(

@@ -301,6 +301,9 @@ class OnboardingActivity : AppCompatActivity() {
                 ?: return
             val pubKey = data.getStringExtra(ScanQrActivity.RESULT_PUB_KEY)
             val name = data.getStringExtra(ScanQrActivity.RESULT_DISPLAY_NAME) ?: userId
+            // Stage 7 PR E — first contact added during onboarding via QR is
+            // a textbook "invite accepted" event.
+            com.tharmesh.data.GrowthMetrics.recordInviteAccepted(this)
             ioScope.launch {
                 val app = TharMeshApp.get()
                 app.repository.addContact(userId, name)

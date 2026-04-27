@@ -101,6 +101,36 @@ class MessagesFragment : Fragment() {
         view?.let {
             renderProfileAvatar(it)
             refreshMeshWarningDot()
+            maybeShowGrowthPrompt(it)
+        }
+    }
+
+    /**
+     * Stage 7 PR E — surface a one-shot viral nudge after key
+     * milestones. The two prompts are mutually exclusive on a single
+     * resume; if both are pending we show the first-chat one (it
+     * happens earlier in the user's lifecycle and is the bigger lift
+     * for retention). [GrowthMetrics] guarantees each prompt fires
+     * at most once across the install via SharedPreferences flags.
+     */
+    private fun maybeShowGrowthPrompt(root: View) {
+        val ctx = requireContext()
+        if (com.tharmesh.data.GrowthMetrics.consumeFirstChatPrompt(ctx)) {
+            com.google.android.material.snackbar.Snackbar.make(
+                root,
+                R.string.growth_prompt_after_first_chat,
+                com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+            ).setAction(R.string.growth_prompt_invite_action) {
+                com.tharmesh.ui.invite.InviteSharer.share(ctx)
+            }.show()
+            return
+        }
+        if (com.tharmesh.data.GrowthMetrics.consumeThreeContactsPrompt(ctx)) {
+            com.google.android.material.snackbar.Snackbar.make(
+                root,
+                R.string.growth_prompt_after_three_contacts,
+                com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+            ).show()
         }
     }
 

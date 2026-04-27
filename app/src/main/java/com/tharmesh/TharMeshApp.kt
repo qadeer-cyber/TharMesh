@@ -188,6 +188,13 @@ class TharMeshApp : Application() {
             // payloads so the controller can vibrate + ring (it is itself
             // gated by the persisted toggle, so off-mode peers stay silent).
             onSosReceived = { DisasterModeController.onSosReceived(this) },
+            // Stage 7 PR E — feed growth-metric counters from the repo
+            // so every code path that adds a contact / starts a chat
+            // updates a single source of truth (no risk of forgetting
+            // a call site). [GrowthMetrics] is process-state-free,
+            // SharedPreferences-backed, and fully offline.
+            onContactAdded = { _ -> com.tharmesh.data.GrowthMetrics.recordContactAdded(this) },
+            onFirstChatStarted = { _ -> com.tharmesh.data.GrowthMetrics.recordChatStarted(this) },
             isDisasterModeEnabled = { DisasterModeController.shouldForcePriority() },
             peerKeyRing = keyRing,
             // Persist retry-curve state + SOS priority bit so a forced

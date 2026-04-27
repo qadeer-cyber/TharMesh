@@ -167,6 +167,18 @@
     <string name="invite_share_no_profile">Set up your profile first</string>
     <string name="invite_chat_menu">Invite to TharMesh</string>
 
+    <!-- Growth viral prompts (Stage 7 PR E) -->
+    <string name="growth_prompt_after_first_chat">Invite more people to strengthen your mesh</string>
+    <string name="growth_prompt_after_three_contacts">You\'re building a local network 🔥</string>
+    <string name="growth_prompt_invite_action">Invite</string>
+
+    <!-- Diagnostics → Growth section (Stage 7 PR E) -->
+    <string name="diagnostics_growth_header">growth</string>
+    <string name="diagnostics_growth_contacts_added">contacts added</string>
+    <string name="diagnostics_growth_invites_sent">invites sent</string>
+    <string name="diagnostics_growth_invites_accepted">invites accepted</string>
+    <string name="diagnostics_growth_chats_started">chats started</string>
+
     <!-- Onboarding (Stage 7 PR C) -->
     <string name="onb_continue">Continue</string>
     <string name="onb_skip_for_now">Skip for now</string>

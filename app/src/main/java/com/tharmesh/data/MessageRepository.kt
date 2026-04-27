@@ -84,6 +84,24 @@ class MessageRepository(
      */
     private val onSosReceived: () -> Unit = {},
     /**
+     * Stage 7 PR E — fired after a contact has been upserted. Production
+     * wiring increments [GrowthMetrics.recordContactAdded]; tests use the
+     * default no-op. The hook fires for every successful upsert,
+     * including re-adds (the existing call sites tolerate re-adding an
+     * existing contact, so this is intentionally non-deduplicated — a
+     * contact going from removed → re-added is a fresh acquisition for
+     * growth purposes).
+     */
+    private val onContactAdded: (userId: String) -> Unit = { _ -> },
+    /**
+     * Stage 7 PR E — fired exactly once per `(myUserId, peerUserId)`
+     * pair, the first time the user sends a message to that peer. Used
+     * to drive [GrowthMetrics.recordChatStarted] + the post-first-chat
+     * viral prompt. The repository checks the message DAO under the
+     * IO dispatcher to ensure idempotency across process restarts.
+     */
+    private val onFirstChatStarted: (peerUserId: String) -> Unit = { _ -> },
+    /**
      * Stage 6.3 — gating predicate consulted on every [send] / [broadcastSos]
      * call. When true, every outgoing bundle is force-marked priority (SOS
      * retry curve + pacer bypass) and its body is wrapped with the SOS
@@ -289,7 +307,7 @@ class MessageRepository(
             db.contactDao().upsert(entity)
             ensureConversationBlocking(userId, entity.displayName)
             entity
-        }
+        }.also { onContactAdded(userId) }
     }
 
     /**
@@ -372,11 +390,28 @@ class MessageRepository(
             replyToId = replyToId,
             replyToPreview = replyPreview
         )
-        val messageId = runIo {
-            val id = db.messageDao().insert(entity)
-            bumpConversation(toUserId, body, ts, MessageStatus.QUEUED, incrementUnread = false)
-            id
+        val (messageId, isFirstChat) = runIo {
+            // Stage 7 PR E — detect "first message ever sent to this
+            // peer" before insert so the GrowthMetrics hook fires
+            // exactly once per peer across the lifetime of the install.
+            //
+            // The count-then-insert pair runs inside a single Room
+            // transaction so two concurrent send() calls for the same
+            // peer (rapid double-tap, or a user send racing
+            // [broadcastSos]) cannot both observe count == 0 and both
+            // fire the hook. SQLite serialises transactions on the
+            // write connection, so the second send always sees count
+            // >= 1 and skips the hook.
+            var first = false
+            var id = 0L
+            db.runInTransaction {
+                first = db.messageDao().countOutgoingTo(me, toUserId) == 0
+                id = db.messageDao().insert(entity)
+                bumpConversation(toUserId, body, ts, MessageStatus.QUEUED, incrementUnread = false)
+            }
+            id to first
         }
+        if (isFirstChat) onFirstChatStarted(toUserId)
 
         if (effectivePriority) {
             synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
