@@ -131,7 +131,7 @@ class SignalBarsView @JvmOverloads constructor(
             // four-bar group reads as a wave moving left → right.
             val phaseOffset = (phase + i * 0.25f) % 1f
             val breathing = if (isLit) {
-                baseHeight * (0.92f + 0.10f * kotlin.math.sin(phaseOffset * 2 * Math.PI).toFloat())
+                baseHeight * (1.0f + 0.10f * kotlin.math.sin(phaseOffset * 2 * Math.PI).toFloat())
             } else {
                 baseHeight
             }
