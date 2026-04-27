@@ -133,9 +133,14 @@
     <!-- Login screen. -->
     <string name="login_tagline">Offline mesh messaging — sign in once over internet.</string>
     <string name="login_continue_with_google">Continue with Google</string>
-    <string name="login_continue_anonymously">Continue anonymously</string>
+    <!-- Stage 8.4 — Pakistan compliance audit: "anonymously" rewritten -->
+    <!-- to "without an account" so the app no longer markets anonymity. -->
+    <!-- The flow is identical — the user just skips the Google sign-in -->
+    <!-- step — but the visible identity (their chosen display name) is -->
+    <!-- still required during onboarding and is visible to peers.       -->
+    <string name="login_continue_anonymously">Continue without an account</string>
     <string name="login_ready">Tap Continue with Google to create your profile.</string>
-    <string name="login_missing_oauth">Google sign-in not configured in this build — use Continue anonymously.</string>
+    <string name="login_missing_oauth">Google sign-in not configured in this build — use Continue without an account.</string>
     <string name="login_failed_fmt">Sign-in failed: %1$s</string>
 
     <!-- Contacts. -->
@@ -370,7 +375,10 @@
     <string name="profile_back">Back</string>
     <string name="profile_show_qr">Show my QR</string>
     <string name="profile_search">Search</string>
-    <string name="profile_anonymous">Anonymous</string>
+    <!-- Stage 8.4 — "Anonymous" rewritten to "Guest" so the app does -->
+    <!-- not market anonymity. The string is only used as a fallback   -->
+    <!-- display-name for users who sign in without setting a name.    -->
+    <string name="profile_anonymous">Guest</string>
     <string name="profile_status_placeholder">What\'s happening?</string>
     <string name="profile_status_hint">Add a short status</string>
     <string name="profile_avatar_cd">Profile photo</string>
@@ -454,4 +462,86 @@
     <string name="settings_help_contact_sub">Send an email to the maintainer</string>
     <string name="settings_help_contact_subject">TharMesh feedback</string>
     <string name="settings_help_no_mail_client">No email app installed</string>
+
+    <!-- =============================================================== -->
+    <!-- Stage 8.4 — Pakistan legal defensibility hardening               -->
+    <!-- =============================================================== -->
+    <!--                                                                  -->
+    <!-- Drafting principles applied to every body string in this block: -->
+    <!--   1. Plain language. No legalese, no mesh jargon.                -->
+    <!--   2. Generic compliance reference ("applicable laws of           -->
+    <!--      Pakistan"). Specific statutes are intentionally NOT named   -->
+    <!--      to avoid stale or out-of-date references.                   -->
+    <!--   3. Simple liability — "users are responsible for their         -->
+    <!--      actions".                                                   -->
+    <!--   4. Neutral tone. No anti-government, no "uncensorable", no     -->
+    <!--      "bypass", no claim of anonymity / untraceability.           -->
+    <!--   5. No claim TharMesh complies with any specific regulator —    -->
+    <!--      the app positions the user as responsible, not the app.    -->
+    <!--   6. Bumping LEGAL_TERMS_VERSION_CURRENT in UserPrefs whenever   -->
+    <!--      legal_doc_terms_body changes will re-prompt the user.       -->
+    <!-- =============================================================== -->
+
+    <!-- Terms acceptance gate (TermsActivity). Acceptance is required to -->
+    <!-- use the app at all; Disclaimer is informational only and is NOT -->
+    <!-- part of the acceptance gate.                                      -->
+    <string name="legal_terms_gate_title">Terms of Use</string>
+    <string name="legal_terms_gate_subtitle">Please read and accept before continuing.</string>
+    <string name="legal_terms_gate_accept">Accept and continue</string>
+    <string name="legal_terms_gate_decline">Decline and exit</string>
+    <string name="legal_terms_gate_decline_toast">You must accept the Terms of Use to use TharMesh.</string>
+
+    <!-- Settings → Legal section -->
+    <string name="settings_section_legal">Legal</string>
+    <string name="settings_section_legal_sub">Terms of Use, Privacy, Disclaimer</string>
+    <string name="settings_legal_terms">Terms of Use</string>
+    <string name="settings_legal_terms_sub">Lawful use and your responsibilities</string>
+    <string name="settings_legal_privacy">Privacy Policy</string>
+    <string name="settings_legal_privacy_sub">No central server. Messages stay on your device.</string>
+    <string name="settings_legal_disclaimer">Disclaimer</string>
+    <string name="settings_legal_disclaimer_sub">Not a telecom service. Not for emergencies.</string>
+
+    <!-- LegalDocActivity titles -->
+    <string name="legal_doc_terms_title">Terms of Use</string>
+    <string name="legal_doc_privacy_title">Privacy Policy</string>
+    <string name="legal_doc_disclaimer_title">Disclaimer</string>
+    <string name="legal_doc_close">Close</string>
+    <string name="legal_doc_terms_accepted_at_fmt">Terms accepted on %1$s</string>
+    <string name="legal_doc_terms_not_yet_accepted">Terms not yet accepted on this device.</string>
+
+    <!-- ============================================================ -->
+    <!-- TERMS OF USE — acceptance gate body                          -->
+    <!-- ============================================================ -->
+    <string name="legal_doc_terms_body">Welcome to TharMesh.\n\nTharMesh is intended for lawful personal communication. By using the app you agree to the terms below. If you do not agree, please do not use the app.\n\n1. Lawful use\nYou will use TharMesh only for lawful purposes. You will comply with all applicable laws of Pakistan, and any other laws that apply where you use the app. You are solely responsible for the content you create, send, forward, or display, and for the consequences of your communications.\n\n2. Prohibited use\nYou will not use TharMesh to:\n• plan, coordinate, or carry out any illegal activity;\n• harass, threaten, intimidate, defame, or abuse any person;\n• commit fraud, deceive, or impersonate any person or organisation;\n• create or distribute false information likely to cause public harm;\n• share content that is unlawful, obscene, or harmful to children;\n• violate the rights or privacy of any person; or\n• circumvent restrictions placed on you by law or by a court of competent jurisdiction.\n\n3. Your responsibility\nUsers are responsible for their own actions. The developer is not responsible for the content of any communication sent through TharMesh, and is not responsible for any misuse of the app by you or any other person. You agree to indemnify the developer for any claim arising from your use of the app to the maximum extent permitted by law.\n\n4. No guarantee of delivery\nTharMesh communicates over short-range Bluetooth and Wi-Fi between nearby devices. There is no central server and no internet relay. The app cannot guarantee that any message will be delivered, will be delivered on time, will reach the intended recipient, or will remain confidential outside the device-to-device link.\n\n5. Experimental software, no warranty\nTharMesh is experimental software provided \"as-is\", without warranty of any kind, express or implied. To the maximum extent permitted by law, the developer disclaims all warranties (including merchantability, fitness for a particular purpose, and non-infringement) and disclaims liability for any direct, indirect, incidental, consequential, or special damages arising from use of the app.\n\n6. No telecom service, no emergency service\nTharMesh is not a telecommunications service, is not affiliated with any telecommunications operator or regulator, and is not a substitute for emergency services. In an emergency, use a regulated communication channel (call, SMS, or licensed radio).\n\n7. Identity\nEach user has a visible identity (a name) so that recipients can recognise who is contacting them. TharMesh is not marketed as anonymous and is not designed to provide anonymity or untraceability.\n\n8. Changes\nIf these terms change, you will be asked to accept the updated version on the next launch.\n\n9. Contact\nFor questions about these terms, use the \"Contact developer\" link in Settings → Help.</string>
+
+    <!-- ============================================================ -->
+    <!-- PRIVACY POLICY — informational                               -->
+    <!-- ============================================================ -->
+    <string name="legal_doc_privacy_body">TharMesh is built so that your data stays on your own device.\n\n1. No central server\nTharMesh does not connect to any backend operated by the developer. There is no account, no cloud sync, and no internet relay. Messages, contacts, and settings live on your device only.\n\n2. No central data collection\nThe developer does not receive your messages, your contact list, your usage analytics, your IP address, your device identifiers, or any other personal data. Nothing about your use of the app is sent off your device by the developer.\n\n3. No tracking\nTharMesh does not include third-party analytics, advertising, or tracking SDKs.\n\n4. Peer-to-peer communication only\nThe app communicates over your device\'s Bluetooth and Wi-Fi radios to other nearby devices that are also running TharMesh. It does not use mobile data or a home Wi-Fi router to reach the internet.\n\n5. On-device storage\nMessages, your contact list, your block list, and your settings are stored on your device. Uninstalling the app removes all of your TharMesh data. There is no cloud copy.\n\n6. Diagnostics\nThe app records technical counters (for example, number of messages sent, number of retry attempts, transport errors) so you can troubleshoot connectivity. These counters are stored on your device and shown only to you. They never include the body of any message and are not sent off the device.\n\n7. Permissions\nBluetooth permission is required to communicate with nearby devices. Location permission is required by Android in order to scan for Bluetooth devices — TharMesh does not read your GPS coordinates and does not store your location.\n\n8. Encryption\nMessages exchanged with a contact whose key you have verified (by scanning their QR code) are end-to-end encrypted with a per-peer key derived from each side\'s long-term identity. The developer does not have access to your keys and cannot decrypt your messages.\n\n9. Identity visibility\nThe name you choose during onboarding is visible to peers you connect with. TharMesh is not marketed as anonymous.</string>
+
+    <!-- ============================================================ -->
+    <!-- DISCLAIMER — informational only, NOT part of acceptance gate -->
+    <!-- ============================================================ -->
+    <string name="legal_doc_disclaimer_body">Important things to know about TharMesh before you rely on it.\n\n1. Not a telecommunications service\nTharMesh is not a telephone company and is not a telecommunications service. The app does not connect to the public mobile network. It cannot make voice calls, cannot send SMS, and is not a replacement for your regular messaging app or carrier.\n\n2. Not affiliated with any operator or regulator\nTharMesh is independent software. It is not affiliated with, endorsed by, or operated by any telecommunications provider, regulator, or government agency in any country, including Pakistan.\n\n3. Not for emergency services\nTharMesh is not a substitute for emergency services. In a life-threatening or urgent situation, contact local emergency services using a regulated communication channel: call, SMS, or licensed radio. Do not rely on TharMesh to reach emergency responders.\n\n4. May fail in real conditions\nTharMesh works only between nearby devices that are running the app, with Bluetooth and Wi-Fi enabled. Range is short and depends on the environment, device hardware, walls, interference, and battery state. Delivery is best-effort: messages may be delayed, may not arrive, or may arrive out of order.\n\n5. Experimental software\nTharMesh is experimental and is provided \"as-is\". Functionality and reliability may change between releases. Do not rely on TharMesh as the only communication channel for important or time-critical messages.</string>
+
+    <!-- ============================================================ -->
+    <!-- Block / unblock contact (ContactProfileActivity)             -->
+    <!-- ============================================================ -->
+    <string name="contact_block">Block contact</string>
+    <string name="contact_unblock">Unblock contact</string>
+    <string name="contact_block_confirm_title">Block this contact?</string>
+    <string name="contact_block_confirm_message">You will not receive messages from this contact and they will not appear when you scan a QR code or pick a nearby device. Existing chat history stays on your phone.</string>
+    <string name="contact_block_confirm_button">Block</string>
+    <string name="contact_unblock_confirm_title">Unblock this contact?</string>
+    <string name="contact_unblock_confirm_message">You will start receiving messages from this contact again.</string>
+    <string name="contact_unblock_confirm_button">Unblock</string>
+    <string name="contact_blocked_toast">Contact blocked.</string>
+    <string name="contact_unblocked_toast">Contact unblocked.</string>
+
+    <!-- Blocked-contacts settings sub-screen -->
+    <string name="settings_blocked_contacts_title">Blocked contacts</string>
+    <string name="settings_blocked_contacts_empty_title">No blocked contacts</string>
+    <string name="settings_blocked_contacts_empty_subtitle">When you block someone they will appear here. You can unblock them at any time.</string>
+    <string name="settings_blocked_contacts_count_fmt">%1$d blocked</string>
+    <string name="settings_blocked_contacts_unblock">Unblock</string>
 </resources>

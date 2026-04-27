@@ -193,17 +193,29 @@ class ContactsFragment : Fragment() {
         // Stage 8.0 — auto-open the chat after a successful add. Pre-8.0 the
         // user landed back on the Contacts list and had to tap the new row
         // to start chatting; the spec is "QR scan → auto add → auto open
-        // chat". The trust verify still runs in the background and toasts
-        // its result; landing on the chat doesn't block on it.
+        // chat". The trust verify runs INDEPENDENTLY in the background and
+        // toasts its result; landing on the chat does not block on it.
+        //
+        // Stage 8.3 — Devin Review on PR #43 noted that the previous
+        // implementation chained addContact + markVerified + openChatById
+        // inside a single withContext(Dispatchers.IO) block, which forced
+        // the chat open to wait for the trust-verify DB/crypto round-trip
+        // to finish. Split into two independent coroutines so the
+        // navigation lands as soon as addContact returns and the verify
+        // runs in parallel.
         viewLifecycleOwner.lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 repository.addContact(code, displayName)
-                if (pubKey != null) {
-                    val res = TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
-                    withContext(Dispatchers.Main) { surfaceVerifyResult(displayName, res) }
-                }
             }
             openChatById(code, displayName)
+        }
+        if (pubKey != null) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                val res = withContext(Dispatchers.IO) {
+                    TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
+                }
+                surfaceVerifyResult(displayName, res)
+            }
         }
     }
 

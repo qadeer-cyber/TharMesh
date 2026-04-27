@@ -110,10 +110,19 @@ class LoginActivity : AppCompatActivity() {
      * [UserPrefs.shouldShowOnboarding].
      */
     private fun goToNext() {
-        val target = if (UserPrefs.shouldShowOnboarding(this)) {
-            OnboardingActivity::class.java
-        } else {
-            MainActivity::class.java
+        // Stage 8.3 — Pakistan compliance Terms-of-Use gate. Every fresh
+        // install AND every existing install on the first launch after
+        // upgrade lands on TermsActivity until the user explicitly
+        // accepts. Onward routing (Onboarding vs. Main) happens inside
+        // TermsActivity so the gate is the single chokepoint and we can
+        // trust hasAcceptedCurrentTerms == true everywhere downstream.
+        val target = when {
+            !UserPrefs.hasAcceptedCurrentTerms(this) ->
+                com.tharmesh.ui.legal.TermsActivity::class.java
+            UserPrefs.shouldShowOnboarding(this) ->
+                OnboardingActivity::class.java
+            else ->
+                MainActivity::class.java
         }
         val next = Intent(this, target)
         next.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK

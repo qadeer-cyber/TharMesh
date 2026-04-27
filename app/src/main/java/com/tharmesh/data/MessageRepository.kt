@@ -154,7 +154,35 @@ class MessageRepository(
      * don't care about persistence; the plain in-memory behaviour is
      * preserved in that case.
      */
-    private val retryStatePersistence: RetryStatePersistence? = null
+    private val retryStatePersistence: RetryStatePersistence? = null,
+    /**
+     * Stage 8.3 — Pakistan compliance gate. Returns `true` when the
+     * given peer userId has been blocked by the local user, so the
+     * repository must:
+     *
+     *  1. Refuse to (re-)create a [ContactEntity] for the blocked
+     *     userId in [addContact]. Removed-then-rediscovered blocked
+     *     peers must NOT silently re-appear via QR scan, manual
+     *     invite, nearby pick, or any other add path.
+     *  2. Drop inbound bundles from the blocked userId in
+     *     [handleIncomingBundle] BEFORE any Room transaction, so
+     *     no message row, contact row, conversation row, or SOS
+     *     hook is created for traffic from a blocked peer.
+     *
+     * Production wiring delegates to
+     * [com.tharmesh.data.BlockedContacts.isBlocked]; tests pass a
+     * deterministic predicate to lock in expected behaviour without
+     * spinning up a SharedPreferences instance.
+     */
+    private val isUserBlocked: (userId: String) -> Boolean = { _ -> false },
+    /**
+     * Stage 8.3 — diagnostic hook fired when [handleIncomingBundle]
+     * drops an inbound bundle because its `srcId` is on the local
+     * block list. Production wiring increments a Diagnostics counter;
+     * tests use the default no-op. The hook fires once per dropped
+     * bundle, including duplicates of an already-dropped bundle.
+     */
+    private val onBlockedSenderDropped: (srcId: String, bundleId: String) -> Unit = { _, _ -> }
 ) {
 
     /**
@@ -352,6 +380,24 @@ class MessageRepository(
     }
 
     suspend fun addContact(userId: String, displayName: String = userId): ContactEntity {
+        // Stage 8.3 — refuse to (re-)create a contact row for a blocked
+        // peer. This covers QR scan, manual invite, nearby pick, and
+        // NewChatSheet — all of which funnel through this single entry
+        // point. We return a sentinel ContactEntity that mirrors what
+        // would have been written so callers that ignore the return
+        // value (the common case) cannot crash; the entity is NOT
+        // persisted and no conversation row is created. The
+        // onContactAdded growth hook is intentionally skipped — a
+        // blocked re-add is not an acquisition.
+        if (isUserBlocked(userId)) {
+            return ContactEntity(
+                userId = userId,
+                displayName = displayName,
+                publicKey = "",
+                addedAt = 0L,
+                lastSeen = 0L
+            )
+        }
         return runIo {
             val existing = db.contactDao().getByUserId(userId)
             val resolved = chooseContactDisplayName(
@@ -560,6 +606,20 @@ class MessageRepository(
         scope.launch(Dispatchers.IO) {
             val me = myUserId()
             if (bundle.destId != me) return@launch
+
+            // Stage 8.3 — Pakistan compliance: silently drop traffic from
+            // blocked peers BEFORE any Room write, BEFORE any envelope
+            // unsealing, BEFORE the SOS hook. Lower transport layers have
+            // already ACK'd the bundle so retry doesn't pile up; the user
+            // simply never sees the message, the contact row, or the
+            // SOS alert. This must run before the Room transaction
+            // (rather than as a row-level filter inside it) so a blocked
+            // peer cannot resurrect a conversation thread by sending us
+            // a single bundle.
+            if (isUserBlocked(bundle.srcId)) {
+                onBlockedSenderDropped(bundle.srcId, bundle.bundleId)
+                return@launch
+            }
 
             // Unseal end-to-end envelope when present. Unknown prefix or a
             // decrypt failure falls back to the raw body — preserves the

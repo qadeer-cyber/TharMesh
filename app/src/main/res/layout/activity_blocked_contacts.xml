@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Stage 8.4 \u2014 Pakistan compliance: blocked-contacts management screen.
+    Reachable from Settings \u2192 Privacy \u2192 Blocked contacts. Lists every
+    blocked userId with an "Unblock" button per row. Empty-state text
+    when no contact is blocked.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/tmBg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageView
+            android:id="@+id/blocked_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/profile_back"
+            android:padding="10dp"
+            android:rotation="180"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/tmTextPrimary" />
+
+        <TextView
+            android:id="@+id/blocked_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textColor="?attr/tmTextPrimary"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:text="@string/settings_blocked_contacts_title" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/blocked_empty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/tmTextPrimary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:text="@string/settings_blocked_contacts_empty_title" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:textColor="?attr/tmTextSecondary"
+            android:textSize="14sp"
+            android:text="@string/settings_blocked_contacts_empty_subtitle" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/blocked_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/blocked_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="8dp"
+            android:paddingBottom="32dp" />
+    </ScrollView>
+</LinearLayout>

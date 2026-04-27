@@ -90,6 +90,7 @@ class SettingsSectionActivity : AppCompatActivity() {
             SettingsSections.Key.ACCESSIBILITY -> renderAccessibility()
             SettingsSections.Key.LANGUAGE -> renderLanguage()
             SettingsSections.Key.HELP -> renderHelp()
+            SettingsSections.Key.LEGAL -> renderLegal()
         }
     }
 
@@ -140,16 +141,74 @@ class SettingsSectionActivity : AppCompatActivity() {
 
     private fun renderPrivacy() {
         titleView.setText(R.string.settings_section_privacy)
-        addInfoRow(
+        // Stage 8.4 — Pakistan compliance: replace the placeholder info
+        // row with a real Blocked-contacts entry. The subtitle reflects
+        // the current count so a glance at Settings tells the user
+        // whether they have an active block list.
+        val blockedCount = com.tharmesh.data.BlockedContacts.snapshot(this).size
+        val blockedSubtitle = if (blockedCount == 0) {
+            getString(R.string.settings_privacy_blocked_sub_placeholder)
+        } else {
+            getString(R.string.settings_blocked_contacts_count_fmt, blockedCount)
+        }
+        addClickRow(
             R.drawable.ic_shield_outline,
             getString(R.string.settings_privacy_blocked),
-            getString(R.string.settings_privacy_blocked_sub_placeholder)
-        )
+            blockedSubtitle
+        ) {
+            startActivity(
+                Intent(this, com.tharmesh.ui.legal.BlockedContactsActivity::class.java)
+            )
+        }
         addInfoRow(
             R.drawable.ic_lock,
             getString(R.string.settings_privacy_disappearing),
             getString(R.string.settings_coming_soon)
         )
+    }
+
+    /**
+     * Stage 8.4 \u2014 Pakistan legal defensibility hardening. Dedicated
+     * Settings \u2192 Legal section. Every row opens [LegalDocActivity]
+     * with the matching [com.tharmesh.ui.legal.LegalDocBodies] key, so
+     * the body text is a single source of truth shared with the
+     * first-launch acceptance gate.
+     */
+    private fun renderLegal() {
+        titleView.setText(R.string.settings_section_legal)
+        addClickRow(
+            R.drawable.ic_lock,
+            getString(R.string.settings_legal_terms),
+            getString(R.string.settings_legal_terms_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.legal.LegalDocActivity.intent(
+                    this, com.tharmesh.ui.legal.LegalDocBodies.TERMS
+                )
+            )
+        }
+        addClickRow(
+            R.drawable.ic_shield_outline,
+            getString(R.string.settings_legal_privacy),
+            getString(R.string.settings_legal_privacy_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.legal.LegalDocActivity.intent(
+                    this, com.tharmesh.ui.legal.LegalDocBodies.PRIVACY
+                )
+            )
+        }
+        addClickRow(
+            R.drawable.ic_help,
+            getString(R.string.settings_legal_disclaimer),
+            getString(R.string.settings_legal_disclaimer_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.legal.LegalDocActivity.intent(
+                    this, com.tharmesh.ui.legal.LegalDocBodies.DISCLAIMER
+                )
+            )
+        }
     }
 
     private fun renderLists() {

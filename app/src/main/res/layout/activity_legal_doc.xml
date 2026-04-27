@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Stage 8.3 — read-only legal-document viewer. Used for Terms of Use,
+    Privacy Policy, and About / Disclaimer screens. The activity decides
+    title + body based on the EXTRA_DOC_KEY intent extra.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/tmBg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageView
+            android:id="@+id/legal_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/profile_back"
+            android:padding="10dp"
+            android:rotation="180"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/tmTextPrimary" />
+
+        <TextView
+            android:id="@+id/legal_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textColor="?attr/tmTextPrimary"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:text="@string/legal_doc_terms_title" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/legal_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="24dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/legal_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="?attr/tmTextPrimary"
+                android:textSize="15sp"
+                android:lineSpacingMultiplier="1.25"
+                android:text="@string/legal_doc_terms_body" />
+
+            <TextView
+                android:id="@+id/legal_accepted_at"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:textColor="?attr/tmTextSecondary"
+                android:textSize="13sp"
+                android:visibility="gone"
+                android:text="@string/legal_doc_terms_not_yet_accepted" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
