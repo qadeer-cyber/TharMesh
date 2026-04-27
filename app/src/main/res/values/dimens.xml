@@ -56,8 +56,10 @@
     <dimen name="tm_elev_fab_pressed_translation">4dp</dimen>
 
     <!-- Stage 7.6 — bubble max width (75% of typical 360dp viewport).
-         Applied on the inner LinearLayout of item_msg_me / item_msg_peer
-         so very long messages wrap into multi-line columns instead of
-         dragging the bubble across the entire screen. -->
+         Applied on the text_body TextView in item_msg_me / item_msg_peer
+         (LinearLayout silently ignores android:maxWidth, so the cap lives
+         on the TextView and the wrap_content bubble parent collapses
+         around it). Long messages wrap into multi-line columns instead
+         of dragging the bubble across the entire screen. -->
     <dimen name="tm_bubble_max_width">270dp</dimen>
 </resources>
