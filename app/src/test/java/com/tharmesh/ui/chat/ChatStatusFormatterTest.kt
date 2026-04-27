@@ -160,17 +160,28 @@ class ChatStatusFormatterTest {
     }
 
     @Test
-    fun zeroPeersFallsBackToSingularPath_notNegativeFormat() {
+    fun zeroPeersFallsBackToSearching_notMisleadingSingularLabel() {
         // Defensive: an empty-list count of 0 should never reach the
-        // formatter (caller would emit Searching), but if it does, the
-        // singular fallback prevents any "Online · 0 devices nearby"
-        // from leaking through. This is the same guard the production
-        // mesh-warning code uses.
+        // formatter (the production caller in ChatActivity.currentMeshState
+        // emits Searching instead), but if it does, the formatter must NOT
+        // render "Online · 1 device nearby" — that would lie about the
+        // peer count. Falling back to the Searching string keeps the
+        // contract truthful regardless of the caller's behaviour.
         val out = ChatStatusFormatter.format(
             mesh = MeshState.Online(nearbyOnline = 0),
             lastOutgoingStatus = null,
             strings = s
         )
-        assertEquals("Online · 1 device nearby", out)
+        assertEquals("Searching for nearby devices…", out)
+    }
+
+    @Test
+    fun negativePeerCountFallsBackToSearching_notNegativeFormat() {
+        val out = ChatStatusFormatter.format(
+            mesh = MeshState.Online(nearbyOnline = -1),
+            lastOutgoingStatus = null,
+            strings = s
+        )
+        assertEquals("Searching for nearby devices…", out)
     }
 }

@@ -49,7 +49,13 @@ internal object ChatStatusFormatter {
     sealed class MeshState {
         /** Permissions granted, BT + Location on, but no nearby peers in range yet. */
         object Searching : MeshState()
-        /** Permissions granted, BT + Location on, [nearbyOnline] peers currently connected. */
+        /**
+         * Permissions granted, BT + Location on, [nearbyOnline] peers currently
+         * connected. Callers are expected to emit [Searching] instead of
+         * `Online(0)` — the formatter defensively maps `nearbyOnline <= 0` to
+         * the searching string so a buggy caller can never produce a
+         * misleading "Online · 0 devices nearby" subtitle.
+         */
         data class Online(val nearbyOnline: Int) : MeshState()
         /** Bluetooth or Location is off, or runtime perms denied — mesh cannot deliver. */
         object Offline : MeshState()
@@ -120,7 +126,14 @@ internal object ChatStatusFormatter {
             is MeshState.Searching -> strings.searching
             is MeshState.Offline -> strings.offline
             is MeshState.Online -> when {
-                mesh.nearbyOnline <= 1 -> strings.online1Fmt
+                // Defensive: a count of 0 (or anything negative) is
+                // semantically "no peers connected", which is exactly
+                // what Searching means. Falling back to the searching
+                // string keeps the formatter's contract truthful even
+                // if a future caller forgets the Online(0) → Searching
+                // guard ChatActivity.currentMeshState() already does.
+                mesh.nearbyOnline <= 0 -> strings.searching
+                mesh.nearbyOnline == 1 -> strings.online1Fmt
                 else -> String.format(strings.onlineNFmt, mesh.nearbyOnline)
             }
         }
