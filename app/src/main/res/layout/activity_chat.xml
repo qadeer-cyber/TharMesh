@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/tmBg2"
-        android:elevation="2dp"
+        android:elevation="@dimen/tm_elev_top_bar"
         android:gravity="center_vertical"
         android:minHeight="56dp"
         android:orientation="horizontal"
@@ -57,8 +57,8 @@
 
         <ImageView
             android:id="@+id/icon_chat_shield"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="@dimen/tm_icon"
+            android:layout_height="@dimen/tm_icon"
             android:src="@drawable/ic_shield_outline"
             android:contentDescription="@string/cd_shield_tofu" />
     </LinearLayout>

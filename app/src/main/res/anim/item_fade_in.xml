@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 7.6 — single-row fade-in used by layout_animation_fade_in.xml.
+  150ms is inside the brief's 120–180ms window. Decelerate so the row
+  settles instead of slamming. No scale, no translate — pure alpha.
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:interpolator/decelerate_quad">
+    <alpha
+        android:duration="150"
+        android:fromAlpha="0.0"
+        android:toAlpha="1.0" />
+</set>

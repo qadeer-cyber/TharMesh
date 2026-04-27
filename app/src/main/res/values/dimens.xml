@@ -39,4 +39,27 @@
     <!-- Chat row + list row baseline heights. -->
     <dimen name="tm_row_min_height">72dp</dimen>
     <dimen name="tm_row_settings_min_height">68dp</dimen>
+
+    <!--
+      Stage 7.6 — three-level depth system.
+        Level 0: screen background (no elevation)
+        Level 1: cards / list rows / message bubbles
+        Level 2: active elements (FAB resting, top bar shadow seam)
+        Level 2 pressed: FAB / button press
+      Used consistently so depth reads coherent across the app.
+    -->
+    <dimen name="tm_elev_card">2dp</dimen>
+    <dimen name="tm_elev_top_bar">2dp</dimen>
+    <dimen name="tm_elev_fab">6dp</dimen>
+    <!-- Note: pressedTranslationZ is the *additional* Z on press, so this
+         gives a total pressed elevation of tm_elev_fab + this value. -->
+    <dimen name="tm_elev_fab_pressed_translation">4dp</dimen>
+
+    <!-- Stage 7.6 — bubble max width (75% of typical 360dp viewport).
+         Applied on the text_body TextView in item_msg_me / item_msg_peer
+         (LinearLayout silently ignores android:maxWidth, so the cap lives
+         on the TextView and the wrap_content bubble parent collapses
+         around it). Long messages wrap into multi-line columns instead
+         of dragging the bubble across the entire screen. -->
+    <dimen name="tm_bubble_max_width">270dp</dimen>
 </resources>
