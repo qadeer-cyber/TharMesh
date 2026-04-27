@@ -602,12 +602,17 @@ class MessageRepository(
                 retryPolicy.onDelivered(event.bundleId)
                 // Stage 5.3: drop SOS priority tracking too.
                 synchronized(priorityBundleIds) { priorityBundleIds.remove(event.bundleId) }
+                // Stage 7.4: drop offline-queue tracking. ACK is a
+                // terminal state, no further BundleSent will fire,
+                // so the entry would otherwise leak.
+                offlineQueuedTracker.consumeOnSent(event.bundleId)
                 persistRetryStateRemove(event.bundleId)
             }
             is MeshEvent.BundleRead -> scope.launch(Dispatchers.IO) {
                 advanceByBundleId(event.bundleId, MessageStatus.READ)
                 retryPolicy.onDelivered(event.bundleId)
                 synchronized(priorityBundleIds) { priorityBundleIds.remove(event.bundleId) }
+                offlineQueuedTracker.consumeOnSent(event.bundleId)
                 persistRetryStateRemove(event.bundleId)
             }
             is MeshEvent.BundleDelivered -> {
@@ -615,6 +620,14 @@ class MessageRepository(
                 handleIncomingBundle(event.bundle)
             }
             is MeshEvent.BundleFailed -> scope.launch(Dispatchers.IO) {
+                // Stage 7.4: drop the offline-queue tracker entry. A
+                // FAILED bundle will not produce a BundleSent, so the
+                // tracker would otherwise retain the id indefinitely.
+                // Note that the row may still be retried later (manual
+                // retry / restart) — that path goes through send() which
+                // mints a new bundleId, so re-tracking will happen with
+                // the new id and not collide with this stale entry.
+                offlineQueuedTracker.consumeOnSent(event.bundleId)
                 // Only flip rows that are still in-flight (QUEUED or SENDING). A late
                 // Error arriving after the message already advanced to SENT/DELIVERED/READ
                 // must not regress it — the retry loop promoted it forward correctly.
@@ -803,7 +816,14 @@ class MessageRepository(
             // Stage 5.3 — drop SOS priority tracking on TTL expiry too, not
             // just on DELIVERED / READ. Without this the priority set leaks
             // one UUID per SOS target whose TTL eventually elapses.
-            onTtlClear = { bid -> clearPriority(bid) },
+            // Stage 7.4 — also drop the offline-queue tracker entry on
+            // TTL expiry. A bundle that expires before any peer connects
+            // will never produce BundleSent, so without this the tracker
+            // would retain the id for the lifetime of the process.
+            onTtlClear = { bid ->
+                clearPriority(bid)
+                offlineQueuedTracker.consumeOnSent(bid)
+            },
             // Skip retry work when no peers are connected — prevents the
             // RetryPolicy backoff curve from being consumed during outages.
             hasConnectedPeers = { mesh.hasConnectedPeers() },
