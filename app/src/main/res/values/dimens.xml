@@ -15,6 +15,7 @@
     <dimen name="tm_space_l">16dp</dimen>
     <dimen name="tm_space_xl">20dp</dimen>
     <dimen name="tm_space_xxl">24dp</dimen>
+    <dimen name="tm_space_xxxl">32dp</dimen>
 
     <!-- Typography scale per Stage 7.5 brief.
          Bubble timestamps + ticks intentionally use meta_s (12sp) for

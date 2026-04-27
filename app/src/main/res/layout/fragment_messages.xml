@@ -314,7 +314,7 @@
                 android:layout_gravity="center"
                 android:gravity="center_horizontal"
                 android:orientation="vertical"
-                android:padding="@dimen/tm_space_xxl"
+                android:padding="@dimen/tm_space_xxxl"
                 android:visibility="gone">
 
                 <FrameLayout
