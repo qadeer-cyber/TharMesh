@@ -152,19 +152,23 @@ object BlockedContacts {
     }
 
     /**
-     * Test-only: drop both the in-memory cache and the persisted set.
-     * Production code never needs this — the cache lives for the life
-     * of the process and the persisted set is the source of truth.
+     * Stage 8.4 \u2014 invalidate the in-memory cache. Call this from the
+     * sign-out path: [com.tharmesh.data.UserPrefs.signOut] clears the
+     * shared `tharmesh_user_prefs` file (which includes
+     * [KEY_BLOCKED_USER_IDS]), but the singleton cache and `loaded`
+     * flag would otherwise survive into the next sign-in within the
+     * same process \u2014 leaking the previous user's block list into
+     * the new account. After this call, the next [isBlocked] / [block]
+     * / [unblock] / [snapshot] reads back from SharedPreferences
+     * (which sign-out has already cleared), so the new account starts
+     * with an empty block set.
      */
-    @androidx.annotation.VisibleForTesting
     @JvmStatic
-    fun resetForTests(context: Context) {
+    fun onSignOut() {
         synchronized(this) {
-            val prefs = context.applicationContext
-                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            prefs.edit().remove(KEY_BLOCKED_USER_IDS).apply()
             state.value = emptySet()
             loaded = false
         }
     }
+
 }

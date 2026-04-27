@@ -129,6 +129,12 @@ class SettingsSectionActivity : AppCompatActivity() {
                     GoogleAuthService(this).signOut()
                     TharMeshApp.get().stopMesh()
                     UserPrefs.signOut(this)
+                    // Stage 8.4 \u2014 sign-out wipes the prefs file (which
+                    // includes the persisted block list) but the
+                    // BlockedContacts singleton would otherwise carry the
+                    // previous account's in-memory cache into the next
+                    // sign-in. Invalidate it so the new account starts clean.
+                    com.tharmesh.data.BlockedContacts.onSignOut()
                     val intent = Intent(this, LoginActivity::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
                     startActivity(intent)

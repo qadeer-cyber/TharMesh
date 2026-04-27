@@ -131,4 +131,26 @@ class BlockedContactsTest {
         assertTrue(BlockedContacts.isBlocked(ctx, "user-c"))
         assertEquals(listOf("user-a", "user-c"), BlockedContacts.snapshot(ctx))
     }
+
+    @Test
+    fun `onSignOut invalidates the in-memory cache so the next account starts clean`() {
+        // Account A: block one user, then "sign out" \u2014 the production
+        // sign-out flow wipes SharedPreferences via UserPrefs.signOut, then
+        // calls BlockedContacts.onSignOut to drop the in-memory cache.
+        val (ctxA, storeA) = fakeContextWithPrefs()
+        BlockedContacts.block(ctxA, "user-from-account-a")
+        assertTrue(BlockedContacts.isBlocked(ctxA, "user-from-account-a"))
+
+        // Simulate the sign-out: prefs file cleared (we drop the store
+        // entry directly to mirror UserPrefs.signOut's `prefs.clear()`).
+        storeA.clear()
+        BlockedContacts.onSignOut()
+
+        // Account B: a fresh fake-prefs context with an empty store.
+        // Without onSignOut, isBlocked would still return true for
+        // user-from-account-a because the singleton cache survived.
+        val (ctxB, _) = fakeContextWithPrefs()
+        assertFalse(BlockedContacts.isBlocked(ctxB, "user-from-account-a"))
+        assertTrue(BlockedContacts.snapshot(ctxB).isEmpty())
+    }
 }

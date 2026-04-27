@@ -97,7 +97,14 @@ class LoginActivity : AppCompatActivity() {
 
     private fun finishWith(profile: UserProfile) {
         UserPrefs.saveProfile(this, profile)
-        TharMeshApp.get().ensureMeshStarted()
+        // Stage 8.4 \u2014 do NOT start the mesh engine here. If a returning
+        // user has Nearby permissions already granted but has not yet
+        // accepted the current Terms version, starting the mesh would
+        // mean we begin advertising / discovering / processing inbound
+        // bundles before the compliance gate. The mesh is now started
+        // exclusively in [TermsActivity.onAccepted] and
+        // [MainActivity.onCreate], both of which can only run once
+        // [UserPrefs.hasAcceptedCurrentTerms] is true.
         goToNext()
     }
 
