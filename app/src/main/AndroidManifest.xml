@@ -62,6 +62,7 @@
         <activity android:name="com.tharmesh.ui.diagnostics.DiagnosticsActivity" />
         <activity android:name="com.tharmesh.ui.profile.ProfileActivity" />
         <activity android:name="com.tharmesh.ui.settings.SettingsSectionActivity" />
+        <activity android:name="com.tharmesh.ui.about.AboutActivity" />
         <!-- Stage 8.4 — Pakistan legal defensibility hardening. -->
         <activity android:name="com.tharmesh.ui.legal.TermsActivity" />
         <activity android:name="com.tharmesh.ui.legal.LegalDocActivity" />
