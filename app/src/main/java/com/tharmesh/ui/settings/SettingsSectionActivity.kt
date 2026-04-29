@@ -91,6 +91,16 @@ class SettingsSectionActivity : AppCompatActivity() {
             SettingsSections.Key.LANGUAGE -> renderLanguage()
             SettingsSections.Key.HELP -> renderHelp()
             SettingsSections.Key.LEGAL -> renderLegal()
+            // Stage 10.1 — ABOUT is normally launched directly from the
+            // settings list (see [SettingsSections.addAboutRow]), so this
+            // branch is only hit if a stale deep-link arrives. Forward
+            // to the dedicated activity and finish this host.
+            SettingsSections.Key.ABOUT -> {
+                startActivity(
+                    android.content.Intent(this, com.tharmesh.ui.about.AboutActivity::class.java)
+                )
+                finish()
+            }
         }
     }
 

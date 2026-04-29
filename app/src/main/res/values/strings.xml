@@ -319,7 +319,7 @@
     <string name="settings_battery">Battery saver mode</string>
     <string name="settings_battery_sub">Throttle scanning when battery is low</string>
     <string name="settings_about">About TharMesh</string>
-    <string name="settings_about_sub">Version, open-source credits</string>
+    <string name="settings_about_sub">Version, founder, links</string>
     <string name="settings_sign_out">Sign out</string>
 
     <!-- Stage 6.3 — Disaster Mode -->
@@ -563,4 +563,27 @@
     <string name="settings_blocked_contacts_empty_subtitle">When you block someone they will appear here. You can unblock them at any time.</string>
     <string name="settings_blocked_contacts_count_fmt">%1$d blocked</string>
     <string name="settings_blocked_contacts_unblock">Unblock</string>
+
+    <!-- Stage 10.1 — About / Founder Signature screen -->
+    <string name="about_screen_title">About TharMesh</string>
+    <string name="about_built_by_kicker">Built by</string>
+    <string name="about_founder_name">Abdul Qadeer</string>
+    <string name="about_founder_brand">Qadeer Cyber</string>
+    <string name="about_founder_origin">Tharparkar, Sindh, Pakistan</string>
+    <string name="about_founder_microline">Built for real-world communication without internet.</string>
+    <string name="about_story_title">What is TharMesh?</string>
+    <string name="about_story_body">TharMesh is an offline mesh communication system designed for areas with low or no internet connectivity. It enables device-to-device messaging using nearby connections.</string>
+    <string name="about_system_title">System info</string>
+    <string name="about_system_version_label">Version</string>
+    <string name="about_system_buildtype_label">Build type</string>
+    <string name="about_system_commit_label">Commit</string>
+    <string name="about_links_title">Links</string>
+    <string name="about_link_github">GitHub</string>
+    <string name="about_link_telegram">Telegram</string>
+    <string name="about_link_whatsapp">WhatsApp Channel</string>
+    <string name="about_link_url_github" translatable="false">https://github.com/qadeer-cyber/TharMesh</string>
+    <string name="about_link_url_telegram" translatable="false">https://t.me/nohriqadeer</string>
+    <string name="about_link_url_whatsapp" translatable="false">https://whatsapp.com/channel/0029Vb7JXorLikg9Msl6qB2B</string>
+    <string name="about_link_no_handler">No app to open this link</string>
+    <string name="about_avatar_cd">Founder portrait</string>
 </resources>

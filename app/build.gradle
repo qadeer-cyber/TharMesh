@@ -11,6 +11,25 @@ def googleWebClientId = (localProps.getProperty("GOOGLE_WEB_CLIENT_ID")
         ?: project.findProperty("GOOGLE_WEB_CLIENT_ID")
         ?: "").toString()
 
+// Stage 10.1 — short commit hash exposed via BuildConfig.GIT_COMMIT_HASH and
+// rendered on the About screen. Defensive: silently falls back to "—" when
+// git is unavailable (CI environments without a .git checkout, source-only
+// builds) so the build never breaks. No new dependencies — uses the JDK's
+// process executor.
+def gitCommitHash = "—"
+try {
+    def proc = "git rev-parse --short HEAD".execute(null, rootProject.projectDir)
+    proc.waitFor()
+    if (proc.exitValue() == 0) {
+        def out = proc.text.trim()
+        if (!out.isEmpty()) {
+            gitCommitHash = out
+        }
+    }
+} catch (Exception ignored) {
+    // Keep fallback.
+}
+
 android {
     compileSdkVersion 30
     buildToolsVersion "30.0.3"
@@ -25,6 +44,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${googleWebClientId}\""
+        buildConfigField "String", "GIT_COMMIT_HASH", "\"${gitCommitHash}\""
     }
 
     buildTypes {

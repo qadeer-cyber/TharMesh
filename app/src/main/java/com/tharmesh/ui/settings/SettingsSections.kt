@@ -46,7 +46,15 @@ object SettingsSections {
         // section (not nested inside Help) so Terms / Privacy /
         // Disclaimer are always one tap away from Settings root, and
         // are easy to find for any reviewer.
-        LEGAL
+        LEGAL,
+        // Stage 10.1 — About / Founder Signature. Renders the founder
+        // identity, app version, build type, commit hash, and external
+        // links. Unlike every other key, this one launches its own
+        // dedicated activity ([com.tharmesh.ui.about.AboutActivity])
+        // rather than [SettingsSectionActivity], because the screen
+        // needs a hero region + multiple distinct cards that the
+        // generic single-list section host cannot render.
+        ABOUT
     }
 
     fun render(context: Context, container: LinearLayout) {
@@ -105,6 +113,11 @@ object SettingsSections {
             Key.LEGAL, R.drawable.ic_shield_outline,
             R.string.settings_section_legal, R.string.settings_section_legal_sub
         )
+        // Stage 10.1 — About TharMesh. Sits between Legal and Invite so
+        // it is the last "informational" entry before the share-the-app
+        // CTA. Tapping launches [AboutActivity] directly (not a section
+        // inside [SettingsSectionActivity]).
+        addAboutRow(context, container)
         addInviteRow(context, container)
     }
 
@@ -125,6 +138,26 @@ object SettingsSections {
             val intent = Intent(context, SettingsSectionActivity::class.java)
             intent.putExtra(SettingsSectionActivity.EXTRA_SECTION, key.name)
             context.startActivity(intent)
+        }
+        container.addView(row)
+    }
+
+    /**
+     * Stage 10.1 — render the About row. Visually identical to the other
+     * settings rows but launches [com.tharmesh.ui.about.AboutActivity]
+     * directly so the dedicated hero / founder / story / system / links
+     * layout is shown.
+     */
+    private fun addAboutRow(context: Context, container: LinearLayout) {
+        val row = LayoutInflater.from(context)
+            .inflate(R.layout.item_settings_section_row, container, false)
+        row.findViewById<ImageView>(R.id.row_icon).setImageResource(R.drawable.ic_help)
+        row.findViewById<TextView>(R.id.row_title).setText(R.string.settings_about)
+        row.findViewById<TextView>(R.id.row_subtitle).setText(R.string.settings_about_sub)
+        row.setOnClickListener {
+            context.startActivity(
+                Intent(context, com.tharmesh.ui.about.AboutActivity::class.java)
+            )
         }
         container.addView(row)
     }
