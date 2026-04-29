@@ -48,28 +48,42 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="?attr/tmStrokeSoft" />
-
     <!--
       Stage 6.1 — WhatsApp-style bottom nav. itemBackground paints a soft
       green pill behind the active tab (state_checked=true, see
       drawable/bg_nav_pill.xml); inactive tabs render flat. The pill is
       themed so it appears as the WhatsApp green tint in light mode and the
       neon-green-dim glow in dark mode, preserving the pre-6.1 cyber look.
+
+      Stage 9.2 — wrapped in a floating glass MaterialCardView so the nav
+      bar reads as "lifted above" the screen surface (depth Layer 3). The
+      legacy 1dp top divider is removed — the glass card's stroke handles
+      the surface separation now.
     -->
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottom_nav"
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/tmBg"
-        android:minHeight="64dp"
-        app:itemBackground="@drawable/bg_nav_pill"
-        app:itemIconTint="@color/nav_item_color"
-        app:itemTextColor="@color/nav_item_color"
-        app:labelVisibilityMode="labeled"
-        app:menu="@menu/bottom_nav" />
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="10dp"
+        app:cardBackgroundColor="?attr/tmSurfaceGlassFloating"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="8dp"
+        app:strokeColor="?attr/tmStrokeSoft"
+        app:strokeWidth="1dp">
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_nav"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
+            android:minHeight="64dp"
+            app:itemBackground="@drawable/bg_nav_pill"
+            app:itemIconTint="@color/nav_item_color"
+            app:itemTextColor="@color/nav_item_color"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/bottom_nav" />
+    </com.google.android.material.card.MaterialCardView>
 
 </LinearLayout>

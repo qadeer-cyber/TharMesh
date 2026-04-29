@@ -6,6 +6,10 @@
     android:orientation="vertical"
     android:padding="16dp">
 
+    <!-- Stage 9.2 — brand presence header (matches alerts/contacts):
+         title + global system-status dot in the top row, scan CTA on the
+         right, tagline + accent underline below. Reads as part of the
+         same system rather than an isolated tab. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -18,11 +22,31 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                style="@style/Text.H1"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/devices_title" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/Text.H1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/devices_title" />
+
+                <com.tharmesh.ui.widget.PulsingDot
+                    android:id="@+id/dot_brand_status"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_marginStart="10dp" />
+            </LinearLayout>
+
+            <TextView
+                style="@style/Text.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/app_subtagline" />
 
             <TextView
                 style="@style/Text.Caption"
@@ -42,6 +66,12 @@
             android:text="@string/devices_scan"
             android:textSize="13sp" />
     </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_brand_accent_underline" />
 
     <FrameLayout
         android:layout_width="match_parent"

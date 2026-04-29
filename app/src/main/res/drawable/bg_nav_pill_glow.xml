@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — active-tab pill with a soft outer glow. Stacks the existing
+  [bg_nav_pill] on top of a low-alpha radial-gradient halo so the active tab
+  feels lifted above the floating-glass nav bar without pulling focus.
+
+  Order matters: glow drawn first (under the pill), then the solid pill on
+  top so the icon + label still render against a stable surface.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="50%p"
+                android:startColor="?attr/tmGlowGreen20"
+                android:endColor="@android:color/transparent" />
+            <corners android:radius="100dp" />
+        </shape>
+    </item>
+    <item android:left="2dp" android:right="2dp" android:top="2dp" android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/tmNeonGreenDim" />
+            <corners android:radius="100dp" />
+        </shape>
+    </item>
+</layer-list>

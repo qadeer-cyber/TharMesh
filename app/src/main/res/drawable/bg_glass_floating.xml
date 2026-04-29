@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — floating glass surface used for cards that "hover" above the
+  background gradient (chat list rows, alerts cards, the bottom-nav wrapper,
+  the chat input bar). Multi-layer composition gives the depth we'd otherwise
+  need real RenderEffect blur (API 31+) for:
+
+    layer 0 — translucent fill (~80% opacity) over the screen gradient
+    layer 1 — soft inner highlight at the top edge (1dp ring)
+    layer 2 — 1px hairline stroke for crispness
+
+  Property-only at draw time (just shape + gradient + stroke), so it's
+  cheap on minSdk 24.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/tmSurfaceGlassFloating" />
+            <corners android:radius="24dp" />
+            <stroke android:width="1dp" android:color="?attr/tmStrokeSoft" />
+        </shape>
+    </item>
+</layer-list>

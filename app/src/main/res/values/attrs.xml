@@ -56,4 +56,21 @@
 
     <!-- Search field fill (rounded-pill input on the chats home). -->
     <attr name="tmSearchFill" format="color" />
+
+    <!-- ================================================================ -->
+    <!-- Stage 9.2 — perception layer attrs. Extend the Stage 6.1 token    -->
+    <!-- system with the depth + glow pieces needed for faux-glass + status -->
+    <!-- dot widgets. Resolved per theme in values/themes.xml +            -->
+    <!-- values-night/themes.xml.                                          -->
+    <!-- ================================================================ -->
+    <attr name="tmSurfaceGlassRaised" format="color" />
+    <attr name="tmSurfaceGlassFloating" format="color" />
+    <attr name="tmGlassHighlight" format="color" />
+    <attr name="tmGradientAccentStart" format="color" />
+    <attr name="tmGradientAccentEnd" format="color" />
+    <attr name="tmShadowSoft" format="color" />
+    <attr name="tmDotConnected" format="color" />
+    <attr name="tmDotSearching" format="color" />
+    <attr name="tmDotOffline" format="color" />
+    <attr name="tmDotDegraded" format="color" />
 </resources>

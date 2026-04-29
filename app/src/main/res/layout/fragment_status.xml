@@ -16,18 +16,57 @@
         android:paddingEnd="16dp"
         android:paddingTop="20dp">
 
+        <!-- Stage 9.2 — brand presence row: title + global system-status dot.
+             The dot reads from the live SystemStatus and pulses on Searching/
+             Connecting/Degraded so the user perceives the mesh as alive
+             without any extra UI elements. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                style="@style/Text.H1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/status_title" />
+
+            <com.tharmesh.ui.widget.PulsingDot
+                android:id="@+id/dot_brand_status"
+                android:layout_width="12dp"
+                android:layout_height="12dp" />
+        </LinearLayout>
+
         <TextView
-            style="@style/Text.H1"
+            style="@style/Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/status_title" />
+            android:layout_marginTop="2dp"
+            android:text="@string/app_subtagline" />
 
-        <!-- Emergency broadcast card -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_brand_accent_underline" />
+
+        <!-- Emergency broadcast card. Stage 9.2 wrapped in a parent FrameLayout
+             with bg_pulse_red so the soft red halo bleeds beyond the card
+             edges; ObjectAnimator alpha pulse driven from StatusFragment. -->
+        <FrameLayout
+            android:id="@+id/sos_card_glow_wrap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_pulse_red"
+            android:padding="4dp">
+
         <LinearLayout
             style="@style/TmCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
             android:orientation="vertical">
 
             <LinearLayout
@@ -115,6 +154,7 @@
                     android:text="@string/status_sos_sending" />
             </LinearLayout>
         </LinearLayout>
+        </FrameLayout>
 
         <!-- Alerts card -->
         <LinearLayout
@@ -182,11 +222,28 @@
             android:layout_marginTop="12dp"
             android:orientation="vertical">
 
-            <TextView
-                style="@style/Text.H3"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/status_health_title" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/Text.H3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/status_health_title" />
+
+                <!-- Stage 9.2 — animated signal bars driven from peer count
+                     in [com.tharmesh.ui.status.StatusFragment]. Lit count
+                     follows the live directory; the breathing wave gives
+                     the card a "live data" feel without flashing. -->
+                <com.tharmesh.ui.widget.SignalBarsView
+                    android:id="@+id/network_signal_bars"
+                    android:layout_width="44dp"
+                    android:layout_height="20dp" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"

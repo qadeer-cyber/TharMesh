@@ -319,6 +319,17 @@ class MessagesFragment : Fragment() {
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
+        // Stage 9.2 — feed the adapter the live online-peer set so each row
+        // can light its avatar halo + per-row status dot. Mirrors the same
+        // directory.nodes flow already collected for warning-dot updates.
+        viewLifecycleOwner.lifecycleScope.launch {
+            TharMeshApp.get().directory.nodes.collectLatest { nodes ->
+                adapter.setOnlineUserIds(
+                    nodes.asSequence().filter { it.online }.map { it.userId }.toHashSet()
+                )
+            }
+        }
+
         view.findViewById<Button>(R.id.button_empty_start_chat).setOnClickListener { showNewChatSheet() }
         view.findViewById<Button>(R.id.button_empty_invite).setOnClickListener { shareInvite() }
     }
@@ -498,6 +509,7 @@ class MessagesFragment : Fragment() {
     ) : RecyclerView.Adapter<ChatsAdapter.VH>() {
 
         private val items: MutableList<ConversationEntity> = mutableListOf()
+        private var onlineUserIds: Set<String> = emptySet()
         private val avatars = intArrayOf(
             R.drawable.bg_avatar,
             R.drawable.bg_avatar_green,
@@ -507,6 +519,19 @@ class MessagesFragment : Fragment() {
         fun submitList(list: List<ConversationEntity>) {
             items.clear()
             items.addAll(list)
+            notifyDataSetChanged()
+        }
+
+        /**
+         * Stage 9.2 — feed the adapter the live set of currently-online peer
+         * userIds so each row can light its avatar halo + per-row status
+         * dot. Caller pulls this from `directory.nodes.value` and refreshes
+         * whenever the online set changes (cheap — onBindViewHolder reads
+         * a HashSet).
+         */
+        fun setOnlineUserIds(ids: Set<String>) {
+            if (ids == onlineUserIds) return
+            onlineUserIds = ids
             notifyDataSetChanged()
         }
 
@@ -541,13 +566,27 @@ class MessagesFragment : Fragment() {
             } else {
                 holder.unread.visibility = View.GONE
             }
+            // Stage 9.2 — per-row online halo + status dot. Conversations are
+            // keyed by peerId; we light the halo when that peerId is in the
+            // online set and feed the dot the same status (Connected when
+            // online, Offline otherwise).
+            val isOnline = onlineUserIds.contains(conv.userId)
+            holder.avatarFrame.setOnline(isOnline)
+            holder.statusDot.setStatus(
+                if (isOnline) com.tharmesh.ui.system.SystemStatus.Connected
+                else com.tharmesh.ui.system.SystemStatus.Offline
+            )
             holder.itemView.setOnClickListener { onClick(conv) }
         }
 
         override fun getItemCount(): Int = items.size
 
         class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val avatarFrame: com.tharmesh.ui.widget.GlowingAvatarFrameLayout =
+                itemView.findViewById(R.id.avatar_frame)
             val avatar: TextView = itemView.findViewById(R.id.text_avatar)
+            val statusDot: com.tharmesh.ui.widget.PulsingDot =
+                itemView.findViewById(R.id.dot_status)
             val title: TextView = itemView.findViewById(R.id.text_title)
             val preview: TextView = itemView.findViewById(R.id.text_preview)
             val time: TextView = itemView.findViewById(R.id.text_time)

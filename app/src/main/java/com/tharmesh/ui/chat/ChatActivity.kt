@@ -26,6 +26,9 @@ import com.tharmesh.db.MessageStatus
 import com.tharmesh.db.entity.MessageEntity
 import com.tharmesh.permissions.PermissionMonitor
 import com.tharmesh.permissions.PermissionStatus
+import com.tharmesh.ui.widget.applyPremiumPress
+import com.tharmesh.ui.widget.applyPremiumEnterTransition
+import com.tharmesh.ui.widget.applyPremiumPopTransition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -78,6 +81,10 @@ class ChatActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
+        // Stage 9.2 — premium enter transition. Applied after super.onCreate
+        // because overridePendingTransition only takes effect on the most
+        // recent activity transition.
+        applyPremiumEnterTransition()
 
         val app = TharMeshApp.get()
         app.ensureMeshStarted()
@@ -119,9 +126,30 @@ class ChatActivity : AppCompatActivity() {
         lm.stackFromEnd = true
         recycler.layoutManager = lm
         recycler.adapter = adapter
+        // Stage 9.2 — bubble appear animation. The DefaultItemAnimator
+        // already handles change/move; this overlays the bubble_appear
+        // scale+fade for first-paint and re-attach via layoutAnimation.
+        recycler.layoutAnimation = android.view.animation.AnimationUtils.loadLayoutAnimation(
+            this, R.anim.layout_animation_bubble_appear
+        )
 
         sendButton.setOnClickListener { onSendClicked() }
         replyBarClose.setOnClickListener { cancelReply() }
+
+        // Stage 9.2 — send button morphs idle ↔ active via state-list
+        // (drawable/bg_send_button). Mirror enabled-state with the input's
+        // text presence so the gradient only shows when there's something
+        // to send. Press feedback applied via the unified premium-press
+        // helper for system-level motion consistency.
+        sendButton.isEnabled = false
+        sendButton.applyPremiumPress()
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                sendButton.isEnabled = !s.isNullOrBlank()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
 
         if (provided.isEmpty()) {
             // A ChatActivity should always be launched from a picker / conversation row

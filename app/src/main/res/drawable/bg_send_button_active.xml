@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — chat input send button when there's text to send. Uses the
+  brand cyan→green accent gradient so the affordance reads as "primary action"
+  without dominating the input bar.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:type="linear"
+        android:angle="135"
+        android:startColor="?attr/tmGradientAccentStart"
+        android:endColor="?attr/tmGradientAccentEnd" />
+</shape>

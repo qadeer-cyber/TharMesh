@@ -143,6 +143,7 @@
             </LinearLayout>
 
             <com.tharmesh.ui.widget.SignalBarsView
+                android:id="@+id/network_signal_bars"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:layout_marginTop="12dp" />

@@ -96,6 +96,25 @@
     <string name="chat_status_searching">Searching for nearby devices…</string>
     <string name="chat_status_offline">Offline · messages will send when connected</string>
 
+    <!-- Stage 9.2 — short brand-header status labels. The same SystemStatus
+         enum drives the chat header subtitle (above), the brand-header
+         dot in [com.tharmesh.ui.widget.PulsingDot], and the per-row
+         connection dot in the chats list. The short form is used inside the
+         brand header to keep it visually quiet; the long form lives in
+         chat_status_* above. -->
+    <string name="system_status_short_searching">Searching</string>
+    <string name="system_status_short_connecting">Connecting</string>
+    <string name="system_status_short_connected">Connected</string>
+    <string name="system_status_short_offline">Offline</string>
+    <string name="system_status_short_degraded">Degraded</string>
+
+    <!-- Content descriptions for accessibility / TalkBack on PulsingDot. -->
+    <string name="system_status_dot_cd_searching">Searching for nearby devices</string>
+    <string name="system_status_dot_cd_connecting">Connecting to mesh</string>
+    <string name="system_status_dot_cd_connected">Connected to mesh</string>
+    <string name="system_status_dot_cd_offline">Mesh offline</string>
+    <string name="system_status_dot_cd_degraded">Mesh degraded</string>
+
     <!-- Stage 8.0 — per-message status used in the chat header subtitle.
          These supersede the inline English literals previously hard-coded
          in ChatActivity.updateTopStatus. -->

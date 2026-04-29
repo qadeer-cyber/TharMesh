@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — radial-gradient halo placed BEHIND the avatar in chat list /
+  contacts rows when the contact is currently online. Drawn by
+  [com.tharmesh.ui.widget.GlowingAvatarFrameLayout.setOnline] (toggles this
+  drawable in/out as background). The gradient fades from a low-alpha
+  neon-green centred behind the avatar to fully transparent at the outer
+  edge — soft halo, not an outline.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:type="radial"
+        android:gradientRadius="60%p"
+        android:startColor="?attr/tmGlowGreen20"
+        android:endColor="@android:color/transparent" />
+</shape>

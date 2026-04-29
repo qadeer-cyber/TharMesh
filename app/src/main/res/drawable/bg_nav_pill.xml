@@ -3,14 +3,12 @@
   Stage 6.1 — bottom-nav active-tab pill. Light mode: soft WhatsApp-green
   fill behind the icon when checked. Dark mode: subtle cyan-glow tint so
   the pre-6.1 neon look is preserved.
+
+  Stage 9.2 — checked state now points at [bg_nav_pill_glow] so the active
+  tab gets a soft outer halo on top of the existing pill fill.
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_checked="true">
-        <shape android:shape="rectangle">
-            <solid android:color="?attr/tmNeonGreenDim" />
-            <corners android:radius="100dp" />
-        </shape>
-    </item>
+    <item android:state_checked="true" android:drawable="@drawable/bg_nav_pill_glow" />
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@android:color/transparent" />

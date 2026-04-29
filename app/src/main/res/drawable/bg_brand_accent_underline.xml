@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — thin cyan→green accent gradient used as a 2dp divider under
+  the brand header (and under the alerts top bar). Repeats the brand
+  identity at the top of every primary screen so the user feels they're
+  "inside" a system rather than on isolated pages.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="linear"
+        android:angle="0"
+        android:startColor="?attr/tmGradientAccentStart"
+        android:endColor="?attr/tmGradientAccentEnd" />
+    <size android:height="2dp" />
+</shape>

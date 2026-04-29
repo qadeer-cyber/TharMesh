@@ -127,6 +127,27 @@ class ContactsFragment : Fragment() {
                 applyFilter()
             }
 
+        // Stage 9.2 — brand-header status dot. Same flow as the alerts/
+        // devices fragments — Connected when at least one online peer,
+        // Searching when transport is up but the directory is empty,
+        // Offline otherwise. Pure perception layer, no behaviour change.
+        val brandDot = view.findViewById<com.tharmesh.ui.widget.PulsingDot>(R.id.dot_brand_status)
+        if (brandDot != null) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                TharMeshApp.get().directory.nodes.collectLatest { nodes ->
+                    val online = nodes.count { it.online }
+                    // Go through SystemStatus.resolveForUi so a perms-revoked-
+                    // at-runtime state correctly flips the dot to Offline.
+                    brandDot.setStatus(
+                        com.tharmesh.ui.system.SystemStatus.resolveForUi(
+                            requireContext(),
+                            peerCount = online
+                        )
+                    )
+                }
+            }
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             // Combine the two flows on the default dispatcher (no DAO reads),
             // then hop to IO once per emission to pre-compute the trust

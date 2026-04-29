@@ -160,6 +160,48 @@
     <color name="tm_glow_green_20">#3300E676</color>
     <color name="tm_glow_danger_20">#33FF4E6A</color>
 
+    <!-- ================================================================ -->
+    <!-- Stage 9.2 — perception layer tokens.                               -->
+    <!--                                                                    -->
+    <!-- These extend the Stage 6.1 palette with the depth + glow + shadow  -->
+    <!-- pieces needed for the "ultra-premium" pass without changing any    -->
+    <!-- existing token. New code must reference ?attr/tmX (see attrs.xml)  -->
+    <!-- so light + dark stay in lockstep.                                  -->
+    <!-- ================================================================ -->
+
+    <!-- DARK palette additions -->
+    <!-- Translucent surfaces for faux-glass cards. ~88% opaque base over
+         the screen gradient gives the layered "glass over background" feel
+         without needing real RenderEffect blur (API 31+, unavailable at
+         minSdk 24). -->
+    <color name="tm_dark_surface_glass_raised">#E0131A2B</color>
+    <color name="tm_dark_surface_glass_floating">#CC0F1524</color>
+    <!-- 1-px highlight at the top edge of glass cards (subtle inner glow). -->
+    <color name="tm_dark_glass_highlight">#33FFFFFF</color>
+    <!-- Two-tone accent gradient (cyan → green) for the brand identity. -->
+    <color name="tm_dark_gradient_accent_start">#00E5FF</color>
+    <color name="tm_dark_gradient_accent_end">#00E676</color>
+    <!-- Drop-shadow tint for elevated surfaces (used as an outer stroke
+         layer in faux-glass; real elevation only renders on MaterialCardView). -->
+    <color name="tm_dark_shadow_soft">#66000000</color>
+    <!-- Status dot palettes — picked up by [com.tharmesh.ui.widget.PulsingDot]. -->
+    <color name="tm_dark_dot_connected">#00E676</color>
+    <color name="tm_dark_dot_searching">#00E5FF</color>
+    <color name="tm_dark_dot_offline">#5E6B87</color>
+    <color name="tm_dark_dot_degraded">#F0B070</color>
+
+    <!-- LIGHT palette additions -->
+    <color name="tm_light_surface_glass_raised">#F2FFFFFF</color>
+    <color name="tm_light_surface_glass_floating">#E6FFFFFF</color>
+    <color name="tm_light_glass_highlight">#33FFFFFF</color>
+    <color name="tm_light_gradient_accent_start">#1FA2FF</color>
+    <color name="tm_light_gradient_accent_end">#25D366</color>
+    <color name="tm_light_shadow_soft">#26000000</color>
+    <color name="tm_light_dot_connected">#25D366</color>
+    <color name="tm_light_dot_searching">#1FA2FF</color>
+    <color name="tm_light_dot_offline">#8696A0</color>
+    <color name="tm_light_dot_degraded">#F09D38</color>
+
     <!-- Material defaults kept so generated code still compiles. -->
     <color name="purple_500">#6200EE</color>
     <color name="purple_700">#3700B3</color>

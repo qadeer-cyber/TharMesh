@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stage 9.2 — layout-animation wrapper that applies the [bubble_appear]
+  animation to each child as it enters the RecyclerView. Cheap to wire
+  via [android:layoutAnimation] on a RecyclerView.
+-->
+<layoutAnimation xmlns:android="http://schemas.android.com/apk/res/android"
+    android:animation="@anim/bubble_appear"
+    android:animationOrder="normal"
+    android:delay="6%" />
