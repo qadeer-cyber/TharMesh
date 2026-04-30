@@ -10,6 +10,7 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.tharmesh.data.UserPrefs
+import com.tharmesh.diagnostics.CrashReporter
 import com.tharmesh.ui.auth.LoginActivity
 import com.tharmesh.ui.main.MainActivity
 import com.tharmesh.ui.onboarding.OnboardingActivity
@@ -41,7 +42,17 @@ class TermsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (CrashReporter.hasPendingCrash(this)) {
+            startActivity(
+                Intent(this, com.tharmesh.diagnostics.CrashViewerActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            finish()
+            return
+        }
+        CrashReporter.checkpoint("terms.onCreate.start")
         setContentView(R.layout.activity_terms_gate)
+        CrashReporter.checkpoint("terms.onCreate.contentSet")
 
         findViewById<Button>(R.id.terms_gate_accept).setOnClickListener {
             UserPrefs.markTermsAccepted(this)
@@ -61,6 +72,7 @@ class TermsActivity : AppCompatActivity() {
     }
 
     private fun routeOnward() {
+        CrashReporter.checkpoint("terms.routeOnward.start")
         // Stage 8.4 \u2014 belt-and-suspenders: make sure the mesh graph
         // (engine, repository, etc.) is constructed before any
         // downstream screen accesses [com.tharmesh.TharMeshApp.repository].
@@ -71,11 +83,13 @@ class TermsActivity : AppCompatActivity() {
         // cannot rely on Login having run in that path. ensureMeshReady
         // is idempotent and starts no transport \u2014 safe to call here.
         com.tharmesh.TharMeshApp.get().ensureMeshReady()
+        CrashReporter.checkpoint("terms.routeOnward.meshReady")
         val target = if (UserPrefs.shouldShowOnboarding(this)) {
             OnboardingActivity::class.java
         } else {
             MainActivity::class.java
         }
+        CrashReporter.checkpoint("terms.routeOnward -> " + target.simpleName)
         val next = Intent(this, target)
         next.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(next)

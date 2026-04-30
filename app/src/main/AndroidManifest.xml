@@ -46,6 +46,13 @@
         android:theme="@style/Theme.TharMesh"
         tools:ignore="UnusedAttribute">
 
+        <!-- Diagnostic crash viewer. Uses the platform default theme
+             (android:theme="@android:style/Theme.Material") so it can
+             be shown even if the app's own theme is what's crashing. -->
+        <activity
+            android:name="com.tharmesh.diagnostics.CrashViewerActivity"
+            android:theme="@android:style/Theme.Material"
+            android:exported="false" />
         <activity android:name="com.tharmesh.ui.auth.LoginActivity" />
         <activity android:name="com.tharmesh.ui.status.StatusActivity" />
         <activity android:name="com.tharmesh.ui.groups.GroupsActivity" />

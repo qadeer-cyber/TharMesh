@@ -9,12 +9,19 @@
   Used as the BACKGROUND of the SOS card so it bleeds outside the card edges
   via the parent's clipChildren=false to give the "breathing" feel.
 -->
+<!--
+  See [drawable/bg_nav_pill_glow.xml] for why `<gradient>` uses a direct
+  `@color/` reference instead of `?attr/...` — the API 28 theme-apply
+  path strips `gradientRadius` from radial gradients that reference
+  themed colors, crashing inflation. Dark-mode override lives in
+  `drawable-night/bg_pulse_red.xml`.
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <gradient
         android:type="radial"
         android:gradientRadius="80%p"
-        android:startColor="?attr/tmGlowDanger20"
+        android:startColor="@color/tm_light_glow_danger_20"
         android:endColor="@android:color/transparent" />
     <corners android:radius="24dp" />
 </shape>
