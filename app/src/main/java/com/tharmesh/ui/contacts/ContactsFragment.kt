@@ -224,11 +224,21 @@ class ContactsFragment : Fragment() {
         // to finish. Split into two independent coroutines so the
         // navigation lands as soon as addContact returns and the verify
         // runs in parallel.
+        // Stage 11.1 — QR scan on the Contacts tab goes through the
+        // canonical add/merge path with the scanned publicKey so a QR for
+        // a device already present (from a prior nearby discovery) merges
+        // into the existing row instead of creating a duplicate.
         viewLifecycleOwner.lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.addContact(code, displayName)
+            val result = withContext(Dispatchers.IO) {
+                repository.addOrMergeContact(code, displayName, publicKeyBase64 = pubKey)
             }
-            openChatById(code, displayName)
+            val ctx = context ?: return@launch
+            if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(ctx, result)) return@launch
+            val canonicalUserId = com.tharmesh.ui.common.AddContactUx
+                .canonicalUserIdOrNull(result) ?: return@launch
+            val canonicalName = com.tharmesh.ui.common.AddContactUx
+                .canonicalDisplayNameOrNull(result) ?: displayName
+            openChatById(canonicalUserId, canonicalName)
         }
         if (pubKey != null) {
             viewLifecycleOwner.lifecycleScope.launch {
@@ -265,9 +275,21 @@ class ContactsFragment : Fragment() {
                 // Stage 8.0 — auto-open chat after manual add for parity
                 // with QR + nearby paths. The repository.addContact call is
                 // idempotent on userId so re-adds are safe.
+                // Stage 11.1 — routed through addOrMergeContact so invalid /
+                // truncated entries get rejected with the standard toast.
                 viewLifecycleOwner.lifecycleScope.launch {
-                    withContext(Dispatchers.IO) { repository.addContact(userId) }
-                    openChatById(userId, userId)
+                    val result = withContext(Dispatchers.IO) {
+                        repository.addOrMergeContact(userId, userId)
+                    }
+                    val ctx = context ?: return@launch
+                    if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(ctx, result)) {
+                        return@launch
+                    }
+                    val canonicalUserId = com.tharmesh.ui.common.AddContactUx
+                        .canonicalUserIdOrNull(result) ?: return@launch
+                    val canonicalName = com.tharmesh.ui.common.AddContactUx
+                        .canonicalDisplayNameOrNull(result) ?: userId
+                    openChatById(canonicalUserId, canonicalName)
                 }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
@@ -292,8 +314,17 @@ class ContactsFragment : Fragment() {
 
     private fun addNearbyAndOpenChat(node: MeshNode) {
         viewLifecycleOwner.lifecycleScope.launch {
-            withContext(Dispatchers.IO) { repository.addContact(node.userId, node.name) }
-            openChatById(node.userId, node.name)
+            // Stage 11.1 — nearby picker on Contacts tab → canonical path.
+            val result = withContext(Dispatchers.IO) {
+                repository.addOrMergeContact(node.userId, node.name)
+            }
+            val ctx = context ?: return@launch
+            if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(ctx, result)) return@launch
+            val canonicalUserId = com.tharmesh.ui.common.AddContactUx
+                .canonicalUserIdOrNull(result) ?: return@launch
+            val canonicalName = com.tharmesh.ui.common.AddContactUx
+                .canonicalDisplayNameOrNull(result) ?: node.name
+            openChatById(canonicalUserId, canonicalName)
         }
     }
 

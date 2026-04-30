@@ -59,4 +59,21 @@ interface PeerIdentityDao {
      */
     @Query("SELECT userId FROM peer_identity")
     fun getAllUserIds(): List<String>
+
+    /**
+     * Stage 11.1 — full row dump, used by
+     * [com.tharmesh.data.IdentityDedupMigration] when grouping existing
+     * `contacts` rows by fingerprint to detect pre-migration duplicates.
+     */
+    @Query("SELECT * FROM peer_identity")
+    fun getAll(): List<PeerIdentityEntity>
+
+    /**
+     * Stage 11.1 — remove the TOFU pin for [userId] once its contact has
+     * been merged into a canonical row under a different userId. Safe to
+     * call when no row exists (returns 0). Never called on a userId
+     * whose contact row is still live.
+     */
+    @Query("DELETE FROM peer_identity WHERE userId = :userId")
+    fun deleteByUserId(userId: String): Int
 }

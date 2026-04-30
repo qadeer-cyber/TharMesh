@@ -212,6 +212,16 @@
     <string name="nearby_banner_dismiss_desc">Dismiss</string>
     <string name="nearby_banner_add">Add</string>
     <string name="nearby_banner_text_fmt">User nearby: %1$s</string>
+    <!-- Stage 11.1 — shown when any add-contact path receives an invalid,
+         truncated, or otherwise unusable identity (e.g. "user-" with no
+         suffix from a corrupted nearby advertise, or a QR payload that
+         failed to parse). Contact/conversation are NOT created. -->
+    <string name="identity_invalid_toast">Could not identify this device. Please scan QR or try again.</string>
+    <!-- Stage 11.1 — shown after a nearby-tap / QR-scan merged the new
+         discovery into an existing contact (same device reached under a
+         different advertised userId). %1$s = the canonical contact's
+         display name. -->
+    <string name="identity_merged_toast">%1$s is already in your contacts — opened existing chat.</string>
     <string name="invite_share_subject">Add me on TharMesh</string>
     <string name="invite_share_body">Add me on TharMesh — %1$s\n\nScan or open this invite:\n%2$s</string>
     <string name="invite_share_chooser">Share invite</string>

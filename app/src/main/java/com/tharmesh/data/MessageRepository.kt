@@ -10,12 +10,15 @@ import com.tharmesh.db.MessageStatus
 import com.tharmesh.db.entity.ContactEntity
 import com.tharmesh.db.entity.ConversationEntity
 import com.tharmesh.db.entity.MessageEntity
+import com.tharmesh.db.entity.PeerIdentityEntity
 import com.tharmesh.dtn.MeshBundle
 import com.tharmesh.dtn.MeshEngine
 import com.tharmesh.dtn.MeshEvent
 import com.tharmesh.dtn.PeerChurnDebouncer
 import com.tharmesh.dtn.RetryConfig
 import com.tharmesh.dtn.RetryPolicy
+import com.tharmesh.identity.CryptoIdentity
+import com.tharmesh.identity.IdentityValidator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -388,46 +391,240 @@ class MessageRepository(
         }
     }
 
+    /**
+     * Stage 11.1 — back-compat shim. Prefer [addOrMergeContact] at new call
+     * sites so invalid-identity rejection and fingerprint-based merge both
+     * take effect. This overload has no public-key information, so it can
+     * never merge across userIds — callers that have the peer's public key
+     * (QR scan, post-TOFU receive path) MUST use [addOrMergeContact].
+     */
     suspend fun addContact(userId: String, displayName: String = userId): ContactEntity {
-        // Stage 8.3 — refuse to (re-)create a contact row for a blocked
-        // peer. This covers QR scan, manual invite, nearby pick, and
-        // NewChatSheet — all of which funnel through this single entry
-        // point. We return a sentinel ContactEntity that mirrors what
-        // would have been written so callers that ignore the return
-        // value (the common case) cannot crash; the entity is NOT
-        // persisted and no conversation row is created. The
-        // onContactAdded growth hook is intentionally skipped — a
-        // blocked re-add is not an acquisition.
-        if (isUserBlocked(userId)) {
-            return ContactEntity(
-                userId = userId,
-                displayName = displayName,
-                publicKey = "",
-                addedAt = 0L,
-                lastSeen = 0L
+        val result = addOrMergeContact(userId, displayName, publicKeyBase64 = null)
+        return result.contact ?: ContactEntity(
+            userId = userId,
+            displayName = displayName,
+            publicKey = "",
+            addedAt = 0L,
+            lastSeen = 0L
+        )
+    }
+
+    /**
+     * Stage 11.1 — single entry point for every add-contact code path
+     * (nearby banner popup, nearby picker in NewChatSheet / Contacts, QR
+     * scan, manual invite-code dialog, onboarding first-contact). Enforces
+     * the three invariants that the pre-11.1 [addContact] violated:
+     *
+     *  1. **Identity validation.** Rejects blank / whitespace / truncated
+     *     (`"user-"`) / too-short / control-char-infested input via
+     *     [IdentityValidator.isValidUserId]. A rejected add returns
+     *     [AddContactResult.Invalid]; the UI shows a toast and does NOT
+     *     open a chat.
+     *  2. **Fingerprint-based merge.** If [publicKeyBase64] is supplied
+     *     (QR path) and another contact already pins the same fingerprint
+     *     under a DIFFERENT userId, this call merges: the existing
+     *     (canonical) contact row is updated with the best display name
+     *     (human > userId-shaped), messages + conversation belonging to
+     *     [userId] are re-parented via [mergeConversations], and the
+     *     source `contacts` / `conversations` / `peer_identity` rows are
+     *     deleted. The returned [AddContactResult.Merged.canonical]
+     *     carries the canonical userId the caller should navigate to.
+     *  3. **One conversation per identity.** The canonical conversation
+     *     row is ensured; the source row is never left behind.
+     *
+     * Blocked peers still short-circuit at the top, consistent with
+     * pre-11.1 behavior.
+     */
+    suspend fun addOrMergeContact(
+        userId: String,
+        displayName: String = userId,
+        publicKeyBase64: String? = null
+    ): AddContactResult {
+        if (!IdentityValidator.isValidUserId(userId)) {
+            return AddContactResult.Invalid
+        }
+        val trimmedUserId = userId.trim()
+        if (isUserBlocked(trimmedUserId)) {
+            return AddContactResult.Blocked(
+                ContactEntity(
+                    userId = trimmedUserId,
+                    displayName = displayName,
+                    publicKey = "",
+                    addedAt = 0L,
+                    lastSeen = 0L
+                )
             )
         }
-        return runIo {
-            val existing = db.contactDao().getByUserId(userId)
-            val resolved = chooseContactDisplayName(
-                inputUserId = userId,
+        val fingerprint = publicKeyBase64
+            ?.takeIf { it.isNotBlank() }
+            ?.let { CryptoIdentity.fingerprintOf(it) }
+            ?.takeIf { it != "invalid" }
+
+        val outcome = runIo {
+            val contactDao = db.contactDao()
+            val existingByUserId = contactDao.getByUserId(trimmedUserId)
+            val existingByFingerprint = fingerprint?.let { contactDao.findByFingerprint(it) }
+
+            val decision = resolveContactAddition(
+                inputUserId = trimmedUserId,
                 inputDisplayName = displayName,
-                existingDisplayName = existing?.displayName
+                existingByUserId = existingByUserId?.let { ContactRef(it.userId, it.displayName) },
+                existingByFingerprint = existingByFingerprint?.let {
+                    ContactRef(it.userId, it.displayName)
+                }
             )
-            val entity = existing?.copy(
-                displayName = resolved,
-                lastSeen = now()
-            ) ?: ContactEntity(
-                userId = userId,
-                displayName = resolved,
-                publicKey = "",
-                addedAt = now(),
-                lastSeen = now()
+
+            when (decision) {
+                ContactDecision.Invalid -> AddContactResult.Invalid
+                is ContactDecision.CreateNew -> {
+                    val created = ContactEntity(
+                        userId = decision.userId,
+                        displayName = decision.displayName,
+                        publicKey = publicKeyBase64 ?: "",
+                        addedAt = now(),
+                        lastSeen = now()
+                    )
+                    contactDao.upsert(created)
+                    pinFingerprintBlocking(decision.userId, publicKeyBase64, fingerprint)
+                    ensureConversationBlocking(decision.userId, created.displayName)
+                    AddContactResult.Created(created)
+                }
+                is ContactDecision.UpdateExisting -> {
+                    val base = existingByUserId!!
+                    val updated = base.copy(
+                        displayName = decision.displayName,
+                        publicKey = if (base.publicKey.isBlank() && !publicKeyBase64.isNullOrBlank()) {
+                            publicKeyBase64
+                        } else {
+                            base.publicKey
+                        },
+                        lastSeen = now()
+                    )
+                    contactDao.upsert(updated)
+                    pinFingerprintBlocking(decision.userId, publicKeyBase64, fingerprint)
+                    ensureConversationBlocking(decision.userId, updated.displayName)
+                    AddContactResult.Updated(updated)
+                }
+                is ContactDecision.MergeInto -> {
+                    val canonical = existingByFingerprint!!
+                    // Write the best display name onto the canonical row
+                    // and refresh lastSeen.
+                    val merged = canonical.copy(
+                        displayName = decision.displayName,
+                        publicKey = if (canonical.publicKey.isBlank() && !publicKeyBase64.isNullOrBlank()) {
+                            publicKeyBase64
+                        } else {
+                            canonical.publicKey
+                        },
+                        lastSeen = now()
+                    )
+                    contactDao.upsert(merged)
+                    ensureConversationBlocking(canonical.userId, merged.displayName)
+                    mergeConversationsBlocking(
+                        sourceUserId = decision.sourceUserId,
+                        destUserId = canonical.userId
+                    )
+                    AddContactResult.Merged(canonical = merged, mergedFrom = decision.sourceUserId)
+                }
+            }
+        }
+        when (outcome) {
+            is AddContactResult.Created -> onContactAdded(outcome.contact.userId)
+            is AddContactResult.Merged -> onContactAdded(outcome.contact.userId)
+            else -> Unit
+        }
+        return outcome
+    }
+
+    /**
+     * Stage 11.1 — merge the conversation + messages for [sourceUserId]
+     * into [destUserId]. Exposed as `suspend` so callers (e.g. the one-shot
+     * [IdentityDedupMigration]) can invoke it directly; internal use goes
+     * through [mergeConversationsBlocking] on the Room IO context.
+     *
+     * Effects:
+     *  - Every `messages` row keyed on [sourceUserId] is re-parented to
+     *    [destUserId] (see [com.tharmesh.db.dao.MessageDao.reassignPeer]).
+     *  - The destination `conversations` row's `lastMessage`,
+     *    `lastTimestamp`, `unreadCount` are refreshed from the re-parented
+     *    messages (picks the newest across both sides).
+     *  - The `conversations`, `contacts`, and `peer_identity` rows for
+     *    [sourceUserId] are deleted. Deleting the `peer_identity` row is
+     *    safe here because the fingerprint is already bound to
+     *    [destUserId] and the source userId is no longer a valid peer.
+     *
+     * No-op when [sourceUserId] == [destUserId]. Idempotent.
+     */
+    suspend fun mergeConversations(sourceUserId: String, destUserId: String): Int {
+        if (sourceUserId == destUserId) return 0
+        return runIo { mergeConversationsBlocking(sourceUserId, destUserId) }
+    }
+
+    /**
+     * Stage 11.1 — exposed to [IdentityDedupMigration] so the one-shot
+     * cleanup can reuse the same merge plumbing without going through
+     * the `suspend` surface. External code must NOT call this —
+     * [addOrMergeContact] / [mergeConversations] are the supported
+     * entry points.
+     */
+    internal fun mergeConversationsBlockingForMigration(
+        sourceUserId: String,
+        destUserId: String
+    ): Int = mergeConversationsBlocking(sourceUserId, destUserId)
+
+    /**
+     * Stage 11.1 — read-only view of the backing Room database, used by
+     * [IdentityDedupMigration] to walk `contacts` / `peer_identity` /
+     * `conversations` / `messages` during the one-shot cleanup. Public
+     * callers must not hold onto this; it is a migration hook.
+     */
+    internal val database: AppDatabase get() = db
+
+    private fun mergeConversationsBlocking(sourceUserId: String, destUserId: String): Int {
+        if (sourceUserId == destUserId) return 0
+        val messageDao = db.messageDao()
+        val convDao = db.conversationDao()
+        val contactDao = db.contactDao()
+        val peerIdentityDao = db.peerIdentityDao()
+
+        val reassigned = messageDao.reassignPeer(sourceUserId, destUserId)
+        // Recompute the destination conversation's last-message summary
+        // from the now-unified message list.
+        val unifiedMessages = messageDao.getForConversation(destUserId)
+        val newest = unifiedMessages.maxByOrNull { it.timestamp }
+        if (newest != null) {
+            convDao.setLastMessage(
+                userId = destUserId,
+                lastMessage = newest.body,
+                lastTimestamp = newest.timestamp,
+                lastStatus = newest.status
             )
-            db.contactDao().upsert(entity)
-            ensureConversationBlocking(userId, entity.displayName)
-            entity
-        }.also { onContactAdded(userId) }
+        }
+        convDao.deleteByUserId(sourceUserId)
+        contactDao.deleteByUserId(sourceUserId)
+        peerIdentityDao.deleteByUserId(sourceUserId)
+        return reassigned
+    }
+
+    private fun pinFingerprintBlocking(
+        userId: String,
+        publicKeyBase64: String?,
+        fingerprint: String?
+    ) {
+        if (publicKeyBase64.isNullOrBlank() || fingerprint.isNullOrBlank()) return
+        val dao = db.peerIdentityDao()
+        if (dao.findByUserId(userId) == null) {
+            dao.insertIfAbsent(
+                PeerIdentityEntity(
+                    userId = userId,
+                    publicKeyBase64 = publicKeyBase64,
+                    fingerprint = fingerprint,
+                    firstSeenMs = now(),
+                    verified = false,
+                    verifiedAtMs = null
+                )
+            )
+        }
     }
 
     /**
@@ -1387,4 +1584,159 @@ internal fun chooseContactDisplayName(
     if (existingIsHuman) return existingDisplayName!!
 
     return inputUserId
+}
+
+/**
+ * Stage 11.1 — light DB-free view of a [ContactEntity] for the pure
+ * dedup-decision path. Carries only the fields the decision function
+ * inspects so unit tests don't have to fabricate full Room entities.
+ */
+internal data class ContactRef(
+    val userId: String,
+    val displayName: String
+)
+
+/**
+ * Stage 11.1 — outcome of [resolveContactAddition], converted by
+ * [MessageRepository.addOrMergeContact] into DB writes.
+ */
+internal sealed class ContactDecision {
+    /** Input failed [IdentityValidator.isValidUserId]; no DB write. */
+    object Invalid : ContactDecision()
+
+    /** No existing row under userId or fingerprint → INSERT. */
+    data class CreateNew(val userId: String, val displayName: String) : ContactDecision()
+
+    /** Existing row under the same userId → upsert with (possibly better) name. */
+    data class UpdateExisting(val userId: String, val displayName: String) : ContactDecision()
+
+    /**
+     * A different contact already pins the same fingerprint — merge
+     * [sourceUserId] INTO the canonical userId, writing [displayName] to
+     * the canonical row. The source row's messages / conversation are
+     * re-parented; the source contact row is deleted.
+     */
+    data class MergeInto(
+        val canonicalUserId: String,
+        val sourceUserId: String,
+        val displayName: String
+    ) : ContactDecision()
+}
+
+/**
+ * Stage 11.1 — public outcome of [MessageRepository.addOrMergeContact].
+ * The UI uses this to decide whether to open a chat, which userId to
+ * navigate to, and whether to show the invalid-identity toast.
+ */
+sealed class AddContactResult {
+    /** The contact that was written (or the canonical one after a merge). */
+    abstract val contact: ContactEntity?
+
+    /** Fresh INSERT into `contacts`. */
+    data class Created(val entity: ContactEntity) : AddContactResult() {
+        override val contact: ContactEntity get() = entity
+    }
+
+    /** Existing row updated in place (same userId). */
+    data class Updated(val entity: ContactEntity) : AddContactResult() {
+        override val contact: ContactEntity get() = entity
+    }
+
+    /**
+     * Merged: the input userId was a duplicate of an existing identity
+     * by fingerprint. [canonical] is the winning row; [mergedFrom] is
+     * the userId whose contact / conversation / TOFU pin were removed.
+     * UI must route navigation (open chat) to [canonical.userId], NOT
+     * to the input userId.
+     */
+    data class Merged(val canonical: ContactEntity, val mergedFrom: String) : AddContactResult() {
+        override val contact: ContactEntity get() = canonical
+    }
+
+    /**
+     * Input failed identity validation (blank, `"user-"`, too short, …).
+     * UI must show the invalid-identity toast and NOT open a chat.
+     */
+    object Invalid : AddContactResult() {
+        override val contact: ContactEntity? get() = null
+    }
+
+    /**
+     * Peer is in the user's blocklist — pre-11.1 behavior preserved.
+     * [entity] mirrors what would have been written but is NOT persisted.
+     */
+    data class Blocked(val entity: ContactEntity) : AddContactResult() {
+        override val contact: ContactEntity? get() = null
+    }
+}
+
+/**
+ * Stage 11.1 — pure decision function called by
+ * [MessageRepository.addOrMergeContact]. Extracted so every branch can be
+ * unit-tested on the JVM without a Room database. The function performs
+ * NO I/O; callers are responsible for loading [existingByUserId] and
+ * [existingByFingerprint] and applying the returned [ContactDecision].
+ *
+ * Precedence:
+ *  1. Invalid input → [ContactDecision.Invalid] (no DB write).
+ *  2. A fingerprint hit under a DIFFERENT userId → merge (the existing
+ *     fingerprint-matched row is canonical; the input userId becomes
+ *     the source).
+ *  3. An existing row under the same userId → update-in-place.
+ *  4. No existing row anywhere → create.
+ *
+ * Display-name selection:
+ *  - For CreateNew / UpdateExisting: defers to [chooseContactDisplayName]
+ *    (human input > human existing > userId fallback).
+ *  - For MergeInto: picks the first non-blank candidate that is NOT any
+ *    known userId for this identity. If every candidate is a userId,
+ *    falls back to the canonical userId. This preserves `"Abdul"` across
+ *    a nearby+QR merge even when the nearby side wrote `"user-a416834d"`
+ *    as both userId and displayName.
+ */
+internal fun resolveContactAddition(
+    inputUserId: String,
+    inputDisplayName: String,
+    existingByUserId: ContactRef?,
+    existingByFingerprint: ContactRef?
+): ContactDecision {
+    if (!IdentityValidator.isValidUserId(inputUserId)) return ContactDecision.Invalid
+
+    val trimmedInput = inputUserId.trim()
+
+    // Merge takes priority: the fingerprint already belongs to a
+    // canonical row under a different userId. Fold this input INTO it.
+    if (existingByFingerprint != null && existingByFingerprint.userId != trimmedInput) {
+        val canonical = existingByFingerprint
+        val syntheticIds = setOf(
+            canonical.userId,
+            trimmedInput,
+            existingByUserId?.userId
+        ).filterNotNull().toSet()
+        val candidates = listOf(
+            inputDisplayName,
+            canonical.displayName,
+            existingByUserId?.displayName
+        )
+        val best = candidates.firstOrNull { dn ->
+            !dn.isNullOrBlank() && dn !in syntheticIds
+        } ?: canonical.userId
+        return ContactDecision.MergeInto(
+            canonicalUserId = canonical.userId,
+            sourceUserId = trimmedInput,
+            displayName = best
+        )
+    }
+
+    // No cross-userId merge — plain add / update under the input userId.
+    val resolvedName = chooseContactDisplayName(
+        inputUserId = trimmedInput,
+        inputDisplayName = inputDisplayName,
+        existingDisplayName = existingByUserId?.displayName
+    )
+    return if (existingByUserId != null) {
+        ContactDecision.UpdateExisting(trimmedInput, resolvedName)
+    } else {
+        ContactDecision.CreateNew(trimmedInput, resolvedName)
+    }
 }

@@ -44,4 +44,16 @@ interface ConversationDao {
 
     @Query("UPDATE conversations SET unreadCount = 0 WHERE userId = :userId")
     fun resetUnread(userId: String): Int
+
+    /**
+     * Stage 11.1 — delete the conversation row for [userId]. Used during
+     * identity-dedup merges (see
+     * [com.tharmesh.data.MessageRepository.mergeConversations]) to drop
+     * the orphan/source row AFTER its messages have been re-parented to
+     * the canonical conversation. The `messages` table is NOT cascaded
+     * from here — the caller is responsible for reassigning or deleting
+     * rows first.
+     */
+    @Query("DELETE FROM conversations WHERE userId = :userId")
+    fun deleteByUserId(userId: String): Int
 }
