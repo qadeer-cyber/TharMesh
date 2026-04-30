@@ -20,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.tharmesh.TharMeshApp
 import com.tharmesh.data.UserPrefs
+import com.tharmesh.diagnostics.CrashReporter
 import com.tharmesh.disaster.DisasterModeController
 import kotlinx.coroutines.flow.combine
 import com.tharmesh.permissions.NearbyPermissions
@@ -48,6 +49,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // If the previous run crashed, route to the theme-free
+        // CrashViewerActivity. That activity reads the trace, offers
+        // Copy/Share/Dismiss, and never touches mesh/Room/Theme.TharMesh
+        // — critical because the Application.onCreate init is skipped on
+        // crash-pending launches to keep them alive.
+        if (CrashReporter.hasPendingCrash(this)) {
+            startActivity(
+                Intent(this, com.tharmesh.diagnostics.CrashViewerActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            finish()
+            return
+        }
         if (!UserPrefs.hasProfile(this)) {
             startActivity(Intent(this, LoginActivity::class.java))
             finish()

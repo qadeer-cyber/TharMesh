@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Dark-mode variant of [drawable/bg_nav_pill_glow.xml]. See the light
+  copy for the Android 9 compat note — we cannot use `?attr/` theme
+  references inside `<gradient>`, so night-mode is served via a
+  drawable-night override.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="50%p"
+                android:startColor="@color/tm_dark_glow_green_20"
+                android:endColor="@android:color/transparent" />
+            <corners android:radius="100dp" />
+        </shape>
+    </item>
+    <item android:left="2dp" android:right="2dp" android:top="2dp" android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/tm_dark_neon_green_dim" />
+            <corners android:radius="100dp" />
+        </shape>
+    </item>
+</layer-list>

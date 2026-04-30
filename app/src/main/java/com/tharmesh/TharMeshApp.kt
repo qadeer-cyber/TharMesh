@@ -11,6 +11,7 @@ import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.AppDatabase
 import com.tharmesh.disaster.DisasterModeController
 import com.tharmesh.db.RoomBundleStore
+import com.tharmesh.diagnostics.CrashReporter
 import com.tharmesh.diagnostics.DiagnosticsCollector
 import com.tharmesh.diagnostics.FieldTestMode
 import com.tharmesh.dtn.MeshEngine
@@ -89,29 +90,52 @@ class TharMeshApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        // Stage 6.1 — apply the persisted Theme Mode BEFORE any Activity is
-        // created so the launcher Activity is inflated against the right
-        // night-mode resources on the very first frame. AppCompat handles
-        // recreation cleanly when the user later changes the mode from
-        // Settings; we never call recreate() ourselves.
-        ThemeManager.applyFromPrefs(this)
-        // Stage 6.3 — bootstrap disaster-mode state from prefs and register
-        // the battery-low broadcast receiver. Cheap; no side effects when
-        // disabled (the controller's flows just stay false).
-        DisasterModeController.init(this)
-        appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        database = AppDatabase.getInstance(this)
-        // Pre-login placeholder. The directory holds its own StateFlows; setSource()
-        // will swap in NearbyMeshDataSource inside ensureMeshReady() without changing
-        // the directory reference any Fragment is holding.
-        directory = NearbyDirectory(appScope, EmptyMeshDataSource())
-        // Try to construct the mesh/repository graph eagerly for returning users. If
-        // no profile exists yet (fresh install / signed out), this is a no-op — the
-        // LoginActivity will call ensureMeshStarted() after sign-in, which wires the
-        // graph at that point. DO NOT call UserPrefs.ensureProfile() here — it would
-        // silently flip KEY_AUTHENTICATED=true and auto-login the user without ever
-        // showing LoginActivity.
-        ensureMeshReady()
+        // Diagnostics: persist any uncaught exception to `filesDir/crash.txt`
+        // before the process dies, then let the default handler terminate us
+        // normally. MUST be the first call in onCreate so even a crash inside
+        // [ThemeManager.applyFromPrefs] or Room init is captured.
+        CrashReporter.install(this)
+        // If the previous run wrote a crash file, short-circuit: skip all
+        // TharMesh initialisation and let MainActivity route straight to
+        // [CrashViewerActivity] (see its onCreate). This guarantees the user
+        // can see the trace even when the normal init path is what crashes.
+        if (CrashReporter.hasPendingCrash(this)) {
+            CrashReporter.checkpoint("pending-crash-detected")
+            return
+        }
+        CrashReporter.checkpoint("app.onCreate.start")
+        runCatching {
+            // Stage 6.1 — apply the persisted Theme Mode BEFORE any Activity
+            // is created so the launcher Activity is inflated against the
+            // right night-mode resources on the very first frame.
+            ThemeManager.applyFromPrefs(this)
+            CrashReporter.checkpoint("app.theme.applied")
+            // Stage 6.3 — bootstrap disaster-mode state from prefs and
+            // register the battery-low broadcast receiver.
+            DisasterModeController.init(this)
+            CrashReporter.checkpoint("app.disaster.init")
+            appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            database = AppDatabase.getInstance(this)
+            CrashReporter.checkpoint("app.db.ready")
+            // Pre-login placeholder. The directory holds its own StateFlows;
+            // setSource() will swap in NearbyMeshDataSource inside
+            // ensureMeshReady() without changing the directory reference.
+            directory = NearbyDirectory(appScope, EmptyMeshDataSource())
+            CrashReporter.checkpoint("app.directory.ready")
+            // Try to construct the mesh/repository graph eagerly for
+            // returning users. No-op on fresh installs (no profile yet).
+            ensureMeshReady()
+            CrashReporter.checkpoint("app.onCreate.end")
+        }.onFailure { t ->
+            // Surface the failure through the same crash path instead of
+            // letting Application.onCreate die silently. Throwing here would
+            // loop — the crash file exists and the next launch would re-run
+            // this same code. Instead we record the exception and let
+            // MainActivity route to CrashViewerActivity so the user can
+            // report it.
+            Thread.getDefaultUncaughtExceptionHandler()
+                ?.uncaughtException(Thread.currentThread(), t)
+        }
     }
 
     /**
