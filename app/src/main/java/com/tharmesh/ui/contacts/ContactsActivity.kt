@@ -84,26 +84,41 @@ class ContactsActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun addContact(userId: String, displayName: String) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            repository.addContact(userId, displayName)
-        }
-    }
-
     /**
      * Stage 8.0 — single-step add-then-chat. Pre-8.0, after a successful
      * add (QR scan or manual invite) the user landed back here and had to
      * tap the new contact row to open chat. The spec requires that the
-     * "add" action funnels straight into a chat. The repository.addContact
-     * call is idempotent, so re-issuing it here is safe.
+     * "add" action funnels straight into a chat. Safe to re-issue on a
+     * pre-existing contact; the repository upserts.
+     *
+     * Stage 11.1 — funnels through
+     * [com.tharmesh.data.MessageRepository.addOrMergeContact] so:
+     *  - invalid / truncated userIds are rejected with the standard toast
+     *    (no chat opens);
+     *  - when [publicKeyBase64] is supplied, fingerprint-based merge with
+     *    any pre-existing contact for this device kicks in and the chat
+     *    opens against the canonical userId (not the duplicate input).
      */
-    private fun addContactAndOpenChat(userId: String, displayName: String) {
+    private fun addContactAndOpenChat(
+        userId: String,
+        displayName: String,
+        publicKeyBase64: String? = null
+    ) {
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { repository.addContact(userId, displayName) }
+            val result = withContext(Dispatchers.IO) {
+                repository.addOrMergeContact(userId, displayName, publicKeyBase64)
+            }
             if (isFinishing || isDestroyed) return@launch
+            if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(this@ContactsActivity, result)) {
+                return@launch
+            }
+            val canonicalUserId = com.tharmesh.ui.common.AddContactUx
+                .canonicalUserIdOrNull(result) ?: return@launch
+            val canonicalName = com.tharmesh.ui.common.AddContactUx
+                .canonicalDisplayNameOrNull(result) ?: displayName
             val next = Intent(this@ContactsActivity, ChatActivity::class.java)
-            next.putExtra(ChatActivity.EXTRA_TO_USER_ID, userId)
-            next.putExtra(ChatActivity.EXTRA_TITLE, displayName)
+            next.putExtra(ChatActivity.EXTRA_TO_USER_ID, canonicalUserId)
+            next.putExtra(ChatActivity.EXTRA_TITLE, canonicalName)
             startActivity(next)
         }
     }
@@ -123,7 +138,9 @@ class ContactsActivity : AppCompatActivity() {
             com.tharmesh.data.GrowthMetrics.recordInviteAccepted(this)
             // Stage 8.0 — auto-open the chat after the add commits, in
             // parallel with the trust-verify branch below.
-            addContactAndOpenChat(code, displayName)
+            // Stage 11.1 — pass the scanned publicKey so addOrMergeContact
+            // can merge with any pre-existing contact for this device.
+            addContactAndOpenChat(code, displayName, publicKeyBase64 = pubKey)
             if (pubKey != null) {
                 // Stage 6.2 — out-of-band verify the peer's TOFU pin against the
                 // QR-encoded public key. If the QR's key differs from a key we

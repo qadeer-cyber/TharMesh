@@ -105,17 +105,30 @@ class NewChatSheet : BottomSheetDialogFragment() {
         // covers manual userId entry and nearby-tap paths).
         com.tharmesh.data.GrowthMetrics.recordInviteAccepted(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.addContact(code, displayName)
-                if (pubKey != null) {
-                    // Verify-by-QR is additive over TOFU: a mismatch leaves the
-                    // pinned key untouched. Surfacing the result in this sheet
-                    // would duplicate the existing ContactsActivity toast path,
-                    // so we just trigger the trust-store call here.
-                    TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
+            // Stage 11.1 — QR scan funnels through addOrMergeContact with
+            // the scanned publicKey, enabling fingerprint-based merge with
+            // any pre-existing nearby-discovered contact for this device.
+            val result = withContext(Dispatchers.IO) {
+                repository.addOrMergeContact(code, displayName, publicKeyBase64 = pubKey)
+            }
+            if (pubKey != null) {
+                // Trust-verify runs independently — merge may have moved the
+                // canonical userId, so pin against the user the repository
+                // resolved (falls back to the input code for Invalid/Blocked
+                // paths, which won't reach markVerified anyway).
+                val verifyUserId = com.tharmesh.ui.common.AddContactUx
+                    .canonicalUserIdOrNull(result) ?: code
+                withContext(Dispatchers.IO) {
+                    TharMeshApp.get().peerTrustStore.markVerified(verifyUserId, pubKey)
                 }
             }
-            openChat(code, displayName)
+            val ctx = context ?: return@launch
+            if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(ctx, result)) return@launch
+            val canonicalUserId = com.tharmesh.ui.common.AddContactUx
+                .canonicalUserIdOrNull(result) ?: return@launch
+            val canonicalName = com.tharmesh.ui.common.AddContactUx
+                .canonicalDisplayNameOrNull(result) ?: displayName
+            openChat(canonicalUserId, canonicalName)
         }
     }
 
@@ -130,8 +143,21 @@ class NewChatSheet : BottomSheetDialogFragment() {
                 val userId = input.text?.toString()?.trim().orEmpty()
                 if (userId.isEmpty()) return@setPositiveButton
                 viewLifecycleOwner.lifecycleScope.launch {
-                    withContext(Dispatchers.IO) { repository.addContact(userId) }
-                    openChat(userId, userId)
+                    // Stage 11.1 — manual invite entry also goes through
+                    // the canonical path so `user-` or typos get rejected
+                    // with a toast instead of silently creating a bogus row.
+                    val result = withContext(Dispatchers.IO) {
+                        repository.addOrMergeContact(userId, userId)
+                    }
+                    val dialogCtx = context ?: return@launch
+                    if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(dialogCtx, result)) {
+                        return@launch
+                    }
+                    val canonicalUserId = com.tharmesh.ui.common.AddContactUx
+                        .canonicalUserIdOrNull(result) ?: return@launch
+                    val canonicalName = com.tharmesh.ui.common.AddContactUx
+                        .canonicalDisplayNameOrNull(result) ?: userId
+                    openChat(canonicalUserId, canonicalName)
                 }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
@@ -148,12 +174,24 @@ class NewChatSheet : BottomSheetDialogFragment() {
         val activity = activity ?: return
         val app = TharMeshApp.get()
         app.appScope.launch {
-            withContext(Dispatchers.IO) { app.repository.addContact(node.userId, node.name) }
+            // Stage 11.1 — nearby picker → addOrMergeContact. Invalid
+            // advertised IDs (`user-`, blank) rejected with a toast.
+            val result = withContext(Dispatchers.IO) {
+                app.repository.addOrMergeContact(node.userId, node.name)
+            }
             withContext(Dispatchers.Main) {
                 if (activity.isFinishing || activity.isDestroyed) return@withContext
+                if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(activity, result)) {
+                    if (isAdded) dismissAllowingStateLoss()
+                    return@withContext
+                }
+                val canonicalUserId = com.tharmesh.ui.common.AddContactUx
+                    .canonicalUserIdOrNull(result) ?: return@withContext
+                val canonicalName = com.tharmesh.ui.common.AddContactUx
+                    .canonicalDisplayNameOrNull(result) ?: node.name
                 val intent = Intent(activity, ChatActivity::class.java).apply {
-                    putExtra(ChatActivity.EXTRA_TO_USER_ID, node.userId)
-                    putExtra(ChatActivity.EXTRA_TITLE, node.name)
+                    putExtra(ChatActivity.EXTRA_TO_USER_ID, canonicalUserId)
+                    putExtra(ChatActivity.EXTRA_TITLE, canonicalName)
                 }
                 activity.startActivity(intent)
                 if (isAdded) dismissAllowingStateLoss()

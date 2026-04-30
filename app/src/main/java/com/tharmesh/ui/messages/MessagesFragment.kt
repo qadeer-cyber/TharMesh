@@ -375,6 +375,11 @@ class MessagesFragment : Fragment() {
                 val contactIds = contacts.map { it.userId }.toHashSet()
                 nodes.firstOrNull { node ->
                     node.online &&
+                        // Stage 11.1 — never suggest a peer whose advertised
+                        // userId is invalid/truncated ("user-", blank, …).
+                        // These would get rejected by addOrMergeContact if
+                        // tapped, so don't surface the banner at all.
+                        com.tharmesh.identity.IdentityValidator.isValidUserId(node.userId) &&
                         node.userId !in contactIds &&
                         node.userId !in dismissedSuggestions
                 }
@@ -387,12 +392,26 @@ class MessagesFragment : Fragment() {
                 text.text = getString(R.string.nearby_banner_text_fmt, candidate.name)
                 addBtn.setOnClickListener {
                     viewLifecycleOwner.lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            app.repository.addContact(candidate.userId, candidate.name)
+                        // Stage 11.1 — funnel nearby-banner Add through the
+                        // canonical add/merge path. If the advertised userId
+                        // is invalid (e.g. truncated to "user-"), the toast
+                        // fires and the chat is NOT opened.
+                        val result = withContext(Dispatchers.IO) {
+                            app.repository.addOrMergeContact(candidate.userId, candidate.name)
                         }
+                        val ctx = context ?: return@launch
+                        if (!com.tharmesh.ui.common.AddContactUx.shouldOpenChat(ctx, result)) {
+                            return@launch
+                        }
+                        val canonicalUserId =
+                            com.tharmesh.ui.common.AddContactUx.canonicalUserIdOrNull(result)
+                                ?: return@launch
+                        val canonicalName =
+                            com.tharmesh.ui.common.AddContactUx.canonicalDisplayNameOrNull(result)
+                                ?: candidate.name
                         // The banner row will auto-hide on the next combine
                         // tick once the contact lands in observeContacts.
-                        openChat(candidate.userId, candidate.name, avatarBgForPeer(candidate.userId))
+                        openChat(canonicalUserId, canonicalName, avatarBgForPeer(canonicalUserId))
                     }
                 }
                 dismiss.setOnClickListener {

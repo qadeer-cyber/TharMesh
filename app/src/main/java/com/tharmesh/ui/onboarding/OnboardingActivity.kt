@@ -306,9 +306,16 @@ class OnboardingActivity : AppCompatActivity() {
             com.tharmesh.data.GrowthMetrics.recordInviteAccepted(this)
             ioScope.launch {
                 val app = TharMeshApp.get()
-                app.repository.addContact(userId, name)
+                // Stage 11.1 — onboarding's QR flow joins the canonical
+                // add/merge path with the scanned public key. If the QR
+                // payload fails validation, the repository returns
+                // Invalid and no contact is created — we still proceed
+                // to finishOnboarding so the user lands on MainActivity.
+                val result = app.repository.addOrMergeContact(userId, name, publicKeyBase64 = pubKey)
+                val pinUserId = com.tharmesh.ui.common.AddContactUx
+                    .canonicalUserIdOrNull(result) ?: userId
                 if (!pubKey.isNullOrBlank()) {
-                    app.peerTrustStore.markVerified(userId, pubKey)
+                    app.peerTrustStore.markVerified(pinUserId, pubKey)
                 }
             }
             finishOnboarding()

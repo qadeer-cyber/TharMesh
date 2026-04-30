@@ -45,6 +45,31 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE peerUserId = :peerUserId ORDER BY timestamp ASC")
     fun getForConversation(peerUserId: String): List<MessageEntity>
 
+    /**
+     * Stage 11.1 — reassign every message whose conversation key matches
+     * [fromPeerUserId] over to [toPeerUserId]. Used by
+     * [com.tharmesh.data.MessageRepository.mergeConversations] when two
+     * `contacts` rows are collapsed into one canonical identity. Also
+     * rewrites `fromUserId` / `toUserId` where they equal the source
+     * peer so outbound-vs-inbound direction is preserved relative to
+     * the canonical counter-party.
+     *
+     * The local user's userId (which might appear in `fromUserId` for
+     * outbound rows) is NOT rewritten — only the peer-side keys move.
+     * Idempotent: subsequent calls with the same arguments find no rows
+     * and return 0.
+     */
+    @Query(
+        """
+        UPDATE messages
+           SET peerUserId = :toPeerUserId,
+               fromUserId = CASE WHEN fromUserId = :fromPeerUserId THEN :toPeerUserId ELSE fromUserId END,
+               toUserId   = CASE WHEN toUserId   = :fromPeerUserId THEN :toPeerUserId ELSE toUserId   END
+         WHERE peerUserId = :fromPeerUserId
+        """
+    )
+    fun reassignPeer(fromPeerUserId: String, toPeerUserId: String): Int
+
     @Query("SELECT * FROM messages WHERE peerUserId = :peerUserId ORDER BY timestamp ASC")
     fun observeConversation(peerUserId: String): Flow<List<MessageEntity>>
 

@@ -54,6 +54,12 @@ class PeerTrustStoreTest {
             rows.values.filter { it.verified }.map { it.userId }
 
         override fun getAllUserIds(): List<String> = rows.keys.toList()
+
+        // Stage 11.1 — new DAO methods used by IdentityDedupMigration.
+        override fun getAll(): List<PeerIdentityEntity> = rows.values.toList()
+
+        override fun deleteByUserId(userId: String): Int =
+            if (rows.remove(userId) != null) 1 else 0
     }
 
     private fun store(clock: () -> Long = { 1_000L }): Pair<RoomPeerTrustStore, FakePeerIdentityDao> {

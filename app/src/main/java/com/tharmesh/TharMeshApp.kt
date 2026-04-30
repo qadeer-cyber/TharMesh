@@ -222,6 +222,26 @@ class TharMeshApp : Application() {
             },
             onBlockedSenderDropped = { _, _ -> }
         )
+        // Stage 11.1 — one-shot canonical-identity dedup sweep. Collapses
+        // pre-Stage-11.1 duplicate rows (same physical device reached via
+        // multiple advertised userIds, truncated "user-" contacts, …)
+        // into a single canonical contact per fingerprint. Runs exactly
+        // once per install; gated by SharedPreferences.
+        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                com.tharmesh.data.IdentityDedupMigration.runIfNeeded(this@TharMeshApp, repo)
+            } catch (t: Throwable) {
+                // Migration failures must NOT block app startup. A failed
+                // run leaves PREF_HAS_RUN at false so the next launch
+                // will retry; the old duplicates remain but are harmless.
+                android.util.Log.w(
+                    "TharMeshApp",
+                    "IdentityDedupMigration failed: ${t.javaClass.simpleName}: ${t.message}",
+                    t
+                )
+            }
+        }
+
         val source = NearbyMeshDataSource(engine)
         directory.setSource(source)
         // Stage 5.1 — mirror every MeshEvent into the diagnostics collector.
