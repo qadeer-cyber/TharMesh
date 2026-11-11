@@ -50,16 +50,11 @@
                     android:text="@string/app_subtagline" />
             </LinearLayout>
 
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="@string/cd_search"
-                android:src="@drawable/ic_search" />
         </LinearLayout>
 
         <!-- Connected status card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
@@ -117,7 +112,7 @@
 
         <!-- Signal strength card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -159,7 +154,7 @@
 
         <!-- Network mesh graph card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -201,7 +196,7 @@
 
         <!-- Nearby devices card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"

@@ -73,7 +73,7 @@
         android:id="@+id/device_connect"
         style="@style/TmButton.Ghost"
         android:layout_width="wrap_content"
-        android:layout_height="36dp"
+        android:layout_height="48dp"
         android:minWidth="92dp"
         android:text="@string/devices_connect"
         android:textSize="12sp" />

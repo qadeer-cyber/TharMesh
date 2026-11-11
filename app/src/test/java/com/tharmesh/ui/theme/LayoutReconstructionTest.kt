@@ -65,6 +65,25 @@ class LayoutReconstructionTest {
     }
 
     @Test
+    fun sharedPanels_coverDevicesDashboardStatusAndOnboarding() {
+        assertTrue(read("layout/fragment_devices.xml").contains("android:layout_height=\"48dp\""))
+        assertTrue(read("layout/fragment_devices.xml").contains("@+id/button_scan"))
+        assertFalse(read("layout/fragment_dashboard.xml").contains("TmCard"))
+        assertTrue(read("layout/fragment_dashboard.xml").contains("TmPanel"))
+        assertFalse(read("layout/fragment_status.xml").contains("TmCard"))
+        assertTrue(read("layout/onboarding_step_name.xml").contains("@drawable/bg_input"))
+        assertTrue(read("layout/fragment_contacts.xml").contains("@drawable/bg_input"))
+        assertTrue(read("layout/fragment_settings.xml").contains("@drawable/bg_panel"))
+        val harness = java.io.File("src/debug/AndroidManifest.xml").let {
+            if (it.isFile) it else java.io.File("app/src/debug/AndroidManifest.xml")
+        }
+        assertTrue(harness.isFile)
+        assertTrue(harness.readText().contains("LayoutPreviewActivity"))
+        val main = read("../AndroidManifest.xml")
+        assertFalse(main.contains("LayoutPreviewActivity"))
+    }
+
+    @Test
     fun radialGlows_doNotUseThemeAttributes() {
         for (name in listOf(
             "drawable/bg_nav_pill_glow.xml",

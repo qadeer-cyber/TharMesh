@@ -64,7 +64,7 @@
             android:padding="4dp">
 
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
@@ -158,7 +158,7 @@
 
         <!-- Alerts card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -216,7 +216,7 @@
 
         <!-- Health card: battery / mesh / storage -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"

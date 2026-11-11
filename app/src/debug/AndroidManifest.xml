@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="tharmesh.app">
+
+    <application>
+        <!--
+          Debug builds only. Inflates a whitelisted layout for screenshots.
+          It does not sign in, store a token, or open the account flow.
+        -->
+        <activity
+            android:name="com.tharmesh.ui.debug.LayoutPreviewActivity"
+            android:exported="true" />
+    </application>
+</manifest>
