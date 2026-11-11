@@ -95,7 +95,7 @@ class ScanQrActivity : AppCompatActivity() {
                 // Pause first to stop the decode loop while we commit the
                 // result; if [returnResult] declines (empty text, already
                 // returned), resume so the user isn't stuck on a frozen
-                // preview (Devin Review: PR #33).
+                // preview (code review: PR #33).
                 barcodeView.pause()
                 if (!returnResult(result.text.orEmpty())) {
                     barcodeView.resume()
@@ -168,14 +168,14 @@ class ScanQrActivity : AppCompatActivity() {
      * and the paste dialog funnel through here, so a queued
      * `barcodeResult` event firing after the user has already submitted
      * a pasted invite cannot overwrite the deliberate paste with an
-     * unrelated scan (Devin Review: PR #33).
+     * unrelated scan (code review: PR #33).
      */
     private fun returnResult(raw: String): Boolean {
         if (hasReturned) return false
 
         val text = raw.trim()
         // Set hasReturned only AFTER the empty-text guard, otherwise an
-        // empty barcode result locks the activity (Devin Review: PR #33).
+        // empty barcode result locks the activity (code review: PR #33).
         if (text.isEmpty()) return false
         hasReturned = true
 

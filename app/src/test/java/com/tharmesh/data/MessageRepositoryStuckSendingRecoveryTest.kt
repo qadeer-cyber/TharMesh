@@ -228,7 +228,7 @@ class MessageRepositoryStuckSendingRecoveryTest {
     }
 
     /**
-     * Regression for the Devin Review finding on PR #10: when retryBundle is a
+     * Regression for the code review finding on PR #10: when retryBundle is a
      * no-op (TTL expired in the engine cache), the tick must NOT advance the
      * retryAttempts counter, must NOT call recordAttempt, and must call
      * onTtlExpired so the policy state map can be freed. Without this, every

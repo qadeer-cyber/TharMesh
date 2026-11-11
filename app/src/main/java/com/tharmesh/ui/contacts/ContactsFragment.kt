@@ -217,7 +217,7 @@ class ContactsFragment : Fragment() {
         // chat". The trust verify runs INDEPENDENTLY in the background and
         // toasts its result; landing on the chat does not block on it.
         //
-        // Stage 8.3 — Devin Review on PR #43 noted that the previous
+        // Stage 8.3 — code review on PR #43 noted that the previous
         // implementation chained addContact + markVerified + openChatById
         // inside a single withContext(Dispatchers.IO) block, which forced
         // the chat open to wait for the trust-verify DB/crypto round-trip
