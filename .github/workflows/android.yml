@@ -130,20 +130,7 @@ jobs:
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             "${SUPABASE_URL%/}/auth/v1/settings" || true)
           echo "auth_settings_http=${settings}"
-          python3 -c 'import json
-def flag(v):
-    return "true" if v is True else "false" if v is False else "unknown"
-try:
-    data=json.load(open("/tmp/supabase-auth-settings.json"))
-except Exception:
-    print("auth_settings_parsed=false")
-    raise SystemExit
-ext=data.get("external") if isinstance(data.get("external"), dict) else {}
-print("signup_disabled="+flag(data.get("disable_signup")))
-print("mailer_autoconfirm="+flag(data.get("mailer_autoconfirm")))
-print("provider_email="+flag(ext.get("email")))
-print("provider_google="+flag(ext.get("google")))
-print("auth_settings_parsed=true")'
+          python3 .github/scripts/auth-settings-flags.py /tmp/supabase-auth-settings.json
           rm -f /tmp/supabase-auth-settings.json
 
       - name: Assemble debug APK
