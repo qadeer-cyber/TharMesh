@@ -132,6 +132,11 @@ class ContactsActivity : AppCompatActivity() {
                 lifecycleScope.launch(Dispatchers.IO) {
                     val store = TharMeshApp.get().peerTrustStore
                     val result = store.markVerified(code, pubKey)
+                    if (result is PeerTrustStore.VerifyResult.Verified ||
+                        result is PeerTrustStore.VerifyResult.AlreadyVerified
+                    ) {
+                        TharMeshApp.get().notePeerVerified(code)
+                    }
                     withContext(Dispatchers.Main) {
                         val msg = when (result) {
                             is PeerTrustStore.VerifyResult.Verified ->

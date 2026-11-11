@@ -40,6 +40,29 @@ interface PeerIdentityDao {
     @Query("UPDATE peer_identity SET verified = 1, verifiedAtMs = :ts WHERE userId = :userId")
     fun setVerified(userId: String, ts: Long): Int
 
+    /**
+     * Replace an unverified wire pin with the key the user just confirmed
+     * out of band. A row that is already verified is left untouched
+     * (`verified = 0` predicate), so a later QR cannot rotate a confirmed key.
+     */
+    @Query(
+        """
+        UPDATE peer_identity
+           SET publicKeyBase64 = :publicKeyBase64,
+               fingerprint = :fingerprint,
+               verified = 1,
+               verifiedAtMs = :ts
+         WHERE userId = :userId
+           AND verified = 0
+        """
+    )
+    fun replaceUnverified(
+        userId: String,
+        publicKeyBase64: String,
+        fingerprint: String,
+        ts: Long
+    ): Int
+
     /** Stage 6.2 — true iff the peer row exists AND `verified = 1`. */
     @Query("SELECT COUNT(*) FROM peer_identity WHERE userId = :userId AND verified = 1")
     fun isVerified(userId: String): Int

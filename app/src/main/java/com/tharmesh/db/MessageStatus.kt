@@ -1,6 +1,13 @@
 package com.tharmesh.db
 
 object MessageStatus {
+    /**
+     * Private body is held on this device until the peer's public key has
+     * been verified out of band (QR). Nothing has been handed to the mesh.
+     * Rank sits strictly below [QUEUED] so releasing the hold is a forward
+     * transition, never a regression into a tick the user did not earn.
+     */
+    const val AWAITING_KEY = "AWAITING_KEY"
     const val QUEUED = "QUEUED"
     /**
      * Transport.send(...) was accepted (endpoint known, bytes queued in Nearby's send
@@ -17,11 +24,12 @@ object MessageStatus {
     const val FAILED = "FAILED"
 
     fun rank(status: String): Int = when (status) {
-        QUEUED -> 0
-        SENDING -> 1
-        SENT -> 2
-        DELIVERED -> 3
-        READ -> 4
+        AWAITING_KEY -> 0
+        QUEUED -> 1
+        SENDING -> 2
+        SENT -> 3
+        DELIVERED -> 4
+        READ -> 5
         FAILED -> -1
         else -> -1
     }

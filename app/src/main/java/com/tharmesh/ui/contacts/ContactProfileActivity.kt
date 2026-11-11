@@ -134,7 +134,13 @@ class ContactProfileActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             val res = withContext(Dispatchers.IO) {
-                TharMeshApp.get().peerTrustStore.markVerified(scannedUserId, pubKey)
+                val result = TharMeshApp.get().peerTrustStore.markVerified(scannedUserId, pubKey)
+                if (result is PeerTrustStore.VerifyResult.Verified ||
+                    result is PeerTrustStore.VerifyResult.AlreadyVerified
+                ) {
+                    TharMeshApp.get().notePeerVerified(scannedUserId)
+                }
+                result
             }
             val displayName = contact?.displayName ?: scannedUserId
             val msg = when (res) {

@@ -20,6 +20,7 @@ import com.tharmesh.dtn.RetryConfig
 import com.tharmesh.identity.PeerTrustStore
 import com.tharmesh.identity.RoomPeerTrustStore
 import com.tharmesh.mesh.EmptyMeshDataSource
+import com.tharmesh.mesh.MeshForegroundService
 import com.tharmesh.mesh.NearbyDirectory
 import com.tharmesh.mesh.NearbyMeshDataSource
 import com.tharmesh.permissions.NearbyPermissions
@@ -164,6 +165,7 @@ class TharMeshApp : Application() {
             bundleStore = RoomBundleStore(database.bundleDao()),
             identity = identity,
             peerTrustStore = peerTrustStore,
+            requireVerifiedIdentity = true,
             pacer = pacer,
             onSendPaced = { peerId -> diag.recordSendPaced(peerId) },
             onSendRejected = { peerId, bundleId -> diag.recordSendRejected(peerId, bundleId) },
@@ -207,6 +209,9 @@ class TharMeshApp : Application() {
             },
             isDisasterModeEnabled = { DisasterModeController.shouldForcePriority() },
             peerKeyRing = keyRing,
+            isPeerVerified = { userId ->
+                peerTrustStore.trustState(userId) is PeerTrustStore.TrustState.Verified
+            },
             // Persist retry-curve state + SOS priority bit so a forced
             // process kill doesn't lose the aggressive SOS curve for
             // in-flight disaster bundles.
@@ -269,6 +274,7 @@ class TharMeshApp : Application() {
             directory.setSource(source)
             realSource = source
         }
+        MeshForegroundService.start(this)
         // Flip the started flag synchronously BEFORE launching the IO work so a
         // re-entrant call from a sibling Activity.onCreate (chats, contacts, …)
         // returns immediately and we don't double-start the transport.
@@ -355,6 +361,19 @@ class TharMeshApp : Application() {
         // have been redirected to LoginActivity before they attempt to read it.
         meshReady = false
         started = false
+        MeshForegroundService.stop(this)
+    }
+
+    /**
+     * A peer key was confirmed out of band. Invalidates the ECDH cache and
+     * releases any private messages that were held until this verification.
+     */
+    fun notePeerVerified(userId: String) {
+        if (!meshReady) return
+        try {
+            repository.onPeerVerified(userId)
+        } catch (ignored: Throwable) {
+        }
     }
 
     /**

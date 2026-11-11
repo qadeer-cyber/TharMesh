@@ -146,15 +146,8 @@ class MeshEngineRelayThreeHopTest {
             bundleIdHint = "relay-bundle"
         )
 
-        // A → B: B receives, isn't the dest, relays via forwardBundle → C.
-        // C → B → A: C emits ACK on delivery; B doesn't forward ACK (non-BUNDLE frame,
-        // not addressed to A), so A receives its DELIVERED via A's direct ACK path.
-        //
-        // Actually: ACK is a non-BUNDLE frame. B's handleBundle never sees it; B's
-        // handlePayloadReceived sees the ACK targeted at C→B, but B is not the originator
-        // of "relay-bundle" so handleAck is a no-op. A does NOT directly receive the
-        // ACK here unless we relay ACKs too. For Stage 4.4 scope we only assert
-        // message delivery at C — ACK relay is a separate concern.
+        // A → B → C. C signs nothing (these engines have no identity) and emits
+        // an ACK. B forwards that ACK to A, the peer it received the bundle from.
         val delivered = cEvents.filterIsInstance<MeshEvent.BundleDelivered>()
         assertEquals("C must receive the bundle exactly once", 1, delivered.size)
         assertEquals("relay-bundle", delivered[0].bundle.bundleId)
@@ -169,6 +162,10 @@ class MeshEngineRelayThreeHopTest {
             "hopsLeft must decrement during relay",
             delivered[0].bundle.hopsLeft < bundle.hopsLeft
         )
+        val acked = aEvents.filterIsInstance<MeshEvent.BundleAcked>()
+        assertEquals("A must observe the relayed ACK exactly once", 1, acked.size)
+        assertEquals("relay-bundle", acked[0].bundleId)
+        assertEquals("C", acked[0].ackedByUserId)
     }
 
     @Test
@@ -331,9 +328,10 @@ class MeshEngineRelayThreeHopTest {
         // "no-bounce-bundle" back to A.
         for (send in bSendsToA) {
             val decoded = String(send.bytes, Charsets.UTF_8)
+            // An ACK for the bundle may travel back to A. The bundle frame itself must not.
             assertTrue(
-                "B must not bounce relay-bundle back to A (found: $decoded)",
-                !decoded.contains("no-bounce-bundle")
+                "B must not bounce the bundle back to A (found: $decoded)",
+                !(decoded.startsWith("BUNDLE|") && decoded.contains("no-bounce-bundle"))
             )
         }
     }

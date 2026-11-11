@@ -37,6 +37,22 @@ class MessageStatusTest {
     }
 
     @Test
+    fun advance_releasesAwaitingKeyForwardAndDoesNotRegress() {
+        assertEquals(
+            MessageStatus.QUEUED,
+            MessageStatus.advance(MessageStatus.AWAITING_KEY, MessageStatus.QUEUED)
+        )
+        assertEquals(
+            MessageStatus.AWAITING_KEY,
+            MessageStatus.advance(MessageStatus.AWAITING_KEY, MessageStatus.AWAITING_KEY)
+        )
+        assertEquals(
+            MessageStatus.QUEUED,
+            MessageStatus.advance(MessageStatus.QUEUED, MessageStatus.AWAITING_KEY)
+        )
+    }
+
+    @Test
     fun advance_allowsFailingFromAnyState() {
         assertEquals(MessageStatus.FAILED, MessageStatus.advance(MessageStatus.SENT, MessageStatus.FAILED))
         assertEquals(MessageStatus.FAILED, MessageStatus.advance(MessageStatus.DELIVERED, MessageStatus.FAILED))

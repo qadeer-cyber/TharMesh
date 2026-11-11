@@ -78,6 +78,7 @@ internal object ChatStatusFormatter {
         val msgDelivered: String,       // "Delivered"
         val msgRead: String,            // "Read"
         val msgFailed: String,          // "Failed — tap to retry"
+        val msgAwaitingKey: String = "Waiting for a verified contact — message not sent",
         val separator: String = " · "
     )
 
@@ -115,6 +116,8 @@ internal object ChatStatusFormatter {
     ): String {
         // Rule 1 — FAILED dominates regardless of mesh state.
         if (lastOutgoingStatus == MessageStatus.FAILED) return strings.msgFailed
+        // Held locally until the peer key is verified. Must not look sent.
+        if (lastOutgoingStatus == MessageStatus.AWAITING_KEY) return strings.msgAwaitingKey
         // Rule 2 — QUEUED / SENDING contradicts mesh state, so it must
         // dominate too. SENDING uses a slightly more "in motion" wording
         // because by definition the transport has accepted the bundle.

@@ -94,19 +94,21 @@ interface MessageDao {
                readAt = CASE WHEN :status = 'READ' THEN :ts ELSE readAt END
          WHERE bundleId = :bundleId
            AND (CASE :status
-                  WHEN 'QUEUED' THEN 0
-                  WHEN 'SENDING' THEN 1
-                  WHEN 'SENT' THEN 2
-                  WHEN 'DELIVERED' THEN 3
-                  WHEN 'READ' THEN 4
+                  WHEN 'AWAITING_KEY' THEN 0
+                  WHEN 'QUEUED' THEN 1
+                  WHEN 'SENDING' THEN 2
+                  WHEN 'SENT' THEN 3
+                  WHEN 'DELIVERED' THEN 4
+                  WHEN 'READ' THEN 5
                   ELSE -1
                 END)
              > (CASE status
-                  WHEN 'QUEUED' THEN 0
-                  WHEN 'SENDING' THEN 1
-                  WHEN 'SENT' THEN 2
-                  WHEN 'DELIVERED' THEN 3
-                  WHEN 'READ' THEN 4
+                  WHEN 'AWAITING_KEY' THEN 0
+                  WHEN 'QUEUED' THEN 1
+                  WHEN 'SENDING' THEN 2
+                  WHEN 'SENT' THEN 3
+                  WHEN 'DELIVERED' THEN 4
+                  WHEN 'READ' THEN 5
                   ELSE -1
                 END)
         """
@@ -157,6 +159,22 @@ interface MessageDao {
         """
     )
     fun pendingOutbound(myUserId: String): List<MessageEntity>
+
+    /**
+     * Outbound rows held locally until the peer's key is verified. Empty
+     * [peerUserId] returns every held row. These are intentionally absent
+     * from [pendingOutbound] so the retry loop cannot put them on the wire.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+         WHERE fromUserId = :myUserId
+           AND status = 'AWAITING_KEY'
+           AND (:peerUserId = '' OR toUserId = :peerUserId)
+         ORDER BY timestamp ASC
+        """
+    )
+    fun awaitingIdentity(myUserId: String, peerUserId: String): List<MessageEntity>
 
     /**
      * Flip a QUEUED-or-SENDING row to FAILED on a transport-layer send error. Skips

@@ -44,4 +44,7 @@ interface BundleDao {
 
     @Query("SELECT COUNT(*) FROM bundles")
     fun count(): Int
+
+    @Query("SELECT * FROM bundles WHERE bundleId = :bundleId LIMIT 1")
+    fun findByBundleId(bundleId: String): BundleEntity?
 }

@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.tharmesh.TharMeshApp
+import com.tharmesh.identity.PeerTrustStore
 import com.tharmesh.data.MessageRepository
 import com.tharmesh.db.entity.ContactEntity
 import com.tharmesh.mesh.MeshNode
@@ -112,7 +113,12 @@ class NewChatSheet : BottomSheetDialogFragment() {
                     // pinned key untouched. Surfacing the result in this sheet
                     // would duplicate the existing ContactsActivity toast path,
                     // so we just trigger the trust-store call here.
-                    TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
+                    val verified = TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
+                    if (verified is PeerTrustStore.VerifyResult.Verified ||
+                        verified is PeerTrustStore.VerifyResult.AlreadyVerified
+                    ) {
+                        TharMeshApp.get().notePeerVerified(code)
+                    }
                 }
             }
             openChat(code, displayName)

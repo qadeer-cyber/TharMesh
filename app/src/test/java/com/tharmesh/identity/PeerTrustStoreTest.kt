@@ -18,8 +18,9 @@ import org.junit.Test
  *      [verdict] with the same key returns Match.
  *   2. bind-then-verify: peer's first signed bundle TOFU-pinned the row with
  *      verified=false; a later QR scan with the same key flips verified=true.
- *   3. mismatch: QR scan with a key that disagrees with the pinned key MUST
- *      NOT overwrite the pin and MUST report Mismatch.
+ *   3. verified mismatch: a QR key that disagrees with an already verified
+ *      pin MUST NOT overwrite it.
+ *   4. unverified wire pin: a later QR replaces that pin and marks it verified.
  *   4. already-verified: a second QR scan after a successful verification is
  *      a no-op (idempotent), reporting AlreadyVerified.
  *
@@ -44,6 +45,23 @@ class PeerTrustStoreTest {
         override fun setVerified(userId: String, ts: Long): Int {
             val row = rows[userId] ?: return 0
             rows[userId] = row.copy(verified = true, verifiedAtMs = ts)
+            return 1
+        }
+
+        override fun replaceUnverified(
+            userId: String,
+            publicKeyBase64: String,
+            fingerprint: String,
+            ts: Long
+        ): Int {
+            val row = rows[userId] ?: return 0
+            if (row.verified) return 0
+            rows[userId] = row.copy(
+                publicKeyBase64 = publicKeyBase64,
+                fingerprint = fingerprint,
+                verified = true,
+                verifiedAtMs = ts
+            )
             return 1
         }
 
@@ -115,18 +133,29 @@ class PeerTrustStoreTest {
     }
 
     @Test
-    fun verifyWithMismatchedKey_doesNotOverwritePin() {
-        val (s, dao) = store()
-        // Bind keyA via signed bundle
+    fun unverifiedWirePin_isReplacedByScannedKey() {
+        val (s, dao) = store { 9L }
+        // A bundle pinned keyA before any QR. That pin is not authenticated.
         s.verdict("alice", keyA)
-        // User scans the wrong QR (e.g. MITM gave them a different key)
+        val r = s.markVerified("alice", keyB)
+        assertTrue(r is PeerTrustStore.VerifyResult.Verified)
+        val row = dao.findByUserId("alice")!!
+        assertEquals(keyB, row.publicKeyBase64)
+        assertTrue(row.verified)
+        assertEquals(9L, row.verifiedAtMs)
+        assertEquals(PeerTrustStore.TrustState.Verified, s.trustState("alice"))
+    }
+
+    @Test
+    fun verifiedPin_rejectsDifferentScannedKey() {
+        val (s, dao) = store()
+        s.markVerified("alice", keyA)
         val r = s.markVerified("alice", keyB)
         assertTrue(r is PeerTrustStore.VerifyResult.Mismatch)
         val row = dao.findByUserId("alice")!!
         assertEquals(keyA, row.publicKeyBase64)
-        assertFalse("verified must remain false on mismatch", row.verified)
-        assertNull(row.verifiedAtMs)
-        assertEquals(PeerTrustStore.TrustState.TofuOnly, s.trustState("alice"))
+        assertTrue(row.verified)
+        assertEquals(PeerTrustStore.TrustState.Verified, s.trustState("alice"))
     }
 
     @Test

@@ -204,7 +204,8 @@ class ChatActivity : AppCompatActivity() {
             msgSent = getString(R.string.chat_status_msg_sent),
             msgDelivered = getString(R.string.chat_status_msg_delivered),
             msgRead = getString(R.string.chat_status_msg_read),
-            msgFailed = getString(R.string.chat_status_msg_failed)
+            msgFailed = getString(R.string.chat_status_msg_failed),
+            msgAwaitingKey = getString(R.string.chat_status_msg_awaiting_key)
         )
     }
 
@@ -416,6 +417,7 @@ class ChatActivity : AppCompatActivity() {
         }
 
         private fun statusGlyph(status: String): String = when (status) {
+            MessageStatus.AWAITING_KEY -> "🔒"
             MessageStatus.QUEUED,
             MessageStatus.SENDING -> "⏳"
             MessageStatus.SENT -> "✓"

@@ -36,9 +36,12 @@
          Normal-protection permission, granted at install time. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Keeps Nearby advertising alive when the UI is backgrounded. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
     <application
         android:name="com.tharmesh.TharMeshApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -67,12 +70,18 @@
         <activity android:name="com.tharmesh.ui.legal.TermsActivity" />
         <activity android:name="com.tharmesh.ui.legal.LegalDocActivity" />
         <activity android:name="com.tharmesh.ui.legal.BlockedContactsActivity" />
-        <activity android:name="com.tharmesh.ui.main.MainActivity">
+        <activity
+            android:name="com.tharmesh.ui.main.MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name="com.tharmesh.mesh.MeshForegroundService"
+            android:exported="false" />
     </application>
 
 </manifest>

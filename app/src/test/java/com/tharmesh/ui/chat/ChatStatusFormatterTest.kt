@@ -41,6 +41,16 @@ class ChatStatusFormatterTest {
     )
 
     @Test
+    fun awaitingKey_isShownAsNotSent_evenWhenMeshLooksOnline() {
+        val out = ChatStatusFormatter.format(
+            mesh = MeshState.Online(nearbyOnline = 2),
+            lastOutgoingStatus = MessageStatus.AWAITING_KEY,
+            strings = s
+        )
+        assertEquals("Waiting for a verified contact — message not sent", out)
+    }
+
+    @Test
     fun rendersOnlineWithSingularLabel_whenExactlyOnePeer() {
         val out = ChatStatusFormatter.format(
             mesh = MeshState.Online(nearbyOnline = 1),

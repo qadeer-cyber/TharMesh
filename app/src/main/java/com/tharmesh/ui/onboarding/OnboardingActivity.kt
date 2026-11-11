@@ -308,7 +308,12 @@ class OnboardingActivity : AppCompatActivity() {
                 val app = TharMeshApp.get()
                 app.repository.addContact(userId, name)
                 if (!pubKey.isNullOrBlank()) {
-                    app.peerTrustStore.markVerified(userId, pubKey)
+                    val verified = app.peerTrustStore.markVerified(userId, pubKey)
+                    if (verified is com.tharmesh.identity.PeerTrustStore.VerifyResult.Verified ||
+                        verified is com.tharmesh.identity.PeerTrustStore.VerifyResult.AlreadyVerified
+                    ) {
+                        app.notePeerVerified(userId)
+                    }
                 }
             }
             finishOnboarding()
