@@ -5,7 +5,6 @@ import android.util.Base64
 import com.tharmesh.data.UserPrefs
 import java.security.KeyFactory
 import java.security.KeyPair
-import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.spec.PKCS8EncodedKeySpec
@@ -16,30 +15,68 @@ class IdentityStore(private val context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /**
+     * QR identity. Uses the mesh signing key from [UserPrefs] when one exists.
+     * A different key already in this store is archived under [KEY_ARCHIVED_PUB]
+     * and [KEY_ARCHIVED_PRIV] and is not deleted. A store key is imported into
+     * UserPrefs only when UserPrefs has no signing key yet.
+     */
     fun ensureIdentity(): LocalIdentity {
-        val existingPub = prefs.getString(KEY_PUB, null)
-        val existingPriv = prefs.getString(KEY_PRIV, null)
-        val profile = UserPrefs.ensureProfile(context)
-
-        if (!existingPub.isNullOrBlank() && !existingPriv.isNullOrBlank()) {
+        val profile = UserPrefs.readProfile(context)
+        val mesh = UserPrefs.readIdentity(context)?.let {
+            QrIdentityAlign.KeyMaterial(it.publicKeyBase64, it.privateKeyBase64)
+        }
+        val store = keyMaterial(KEY_PUB, KEY_PRIV)
+        val decision = QrIdentityAlign.decide(mesh, store)
+        if (decision.archiveStore != null) {
+            prefs.edit()
+                .putString(KEY_ARCHIVED_PUB, decision.archiveStore.publicKeyBase64)
+                .putString(KEY_ARCHIVED_PRIV, decision.archiveStore.privateKeyBase64)
+                .apply()
+        }
+        val imported = decision.importIntoMesh
+        if (imported != null && mesh == null) {
+            val identity = CryptoIdentity.fromBase64(imported.privateKeyBase64, imported.publicKeyBase64)
+            if (identity != null) {
+                UserPrefs.writeIdentity(context, identity, allowReplace = false)
+            }
+        }
+        val present = decision.present
+        if (present != null) {
+            prefs.edit()
+                .putString(KEY_PUB, present.publicKeyBase64)
+                .putString(KEY_PRIV, present.privateKeyBase64)
+                .apply()
             return LocalIdentity(
-                userId = profile.userId,
-                name = profile.username,
-                publicKeyBase64 = existingPub,
-                privateKeyBase64 = existingPriv
+                userId = profile?.userId ?: stableUserIdFromPublicKey(present.publicKeyBase64),
+                name = profile?.username ?: "",
+                publicKeyBase64 = present.publicKeyBase64,
+                privateKeyBase64 = present.privateKeyBase64
             )
         }
-
-        val pair = generateKeyPair()
-        val pub = Base64.encodeToString(pair.public.encoded, Base64.NO_WRAP)
-        val priv = Base64.encodeToString(pair.private.encoded, Base64.NO_WRAP)
-        prefs.edit().putString(KEY_PUB, pub).putString(KEY_PRIV, priv).apply()
+        if (UserPrefs.isIdentityHeld(context) || profile == null) {
+            throw IllegalStateException("identity generation held")
+        }
+        val created = UserPrefs.ensureIdentity(context)
+        prefs.edit()
+            .putString(KEY_PUB, created.publicKeyBase64)
+            .putString(KEY_PRIV, created.privateKeyBase64)
+            .apply()
         return LocalIdentity(
-            userId = stableUserIdFromPublicKey(pub),
+            userId = profile.userId,
             name = profile.username,
-            publicKeyBase64 = pub,
-            privateKeyBase64 = priv
+            publicKeyBase64 = created.publicKeyBase64,
+            privateKeyBase64 = created.privateKeyBase64
         )
+    }
+
+    fun archivedPrivateKey(): String? = prefs.getString(KEY_ARCHIVED_PRIV, null)
+
+    private fun keyMaterial(pubKey: String, privKey: String): QrIdentityAlign.KeyMaterial? {
+        val pub = prefs.getString(pubKey, null)
+        val priv = prefs.getString(privKey, null)
+        if (pub.isNullOrBlank() || priv.isNullOrBlank()) return null
+        return QrIdentityAlign.KeyMaterial(pub, priv)
     }
 
     fun getKeyPairOrNull(): KeyPair? {
@@ -60,16 +97,12 @@ class IdentityStore(private val context: Context) {
         return "U" + src.take(11)
     }
 
-    private fun generateKeyPair(): KeyPair {
-        val generator = KeyPairGenerator.getInstance("EC")
-        generator.initialize(256)
-        return generator.generateKeyPair()
-    }
-
     companion object {
         private const val PREFS = "identity_store"
         private const val KEY_PUB = "public_key"
         private const val KEY_PRIV = "private_key"
+        private const val KEY_ARCHIVED_PUB = "archived_public_key"
+        private const val KEY_ARCHIVED_PRIV = "archived_private_key"
     }
 }
 

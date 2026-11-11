@@ -146,3 +146,20 @@ secrets. Not private keys.
 
 Mesh discovery, routing, store-and-forward, history, and encryption do not call
 the cloud.
+
+## QR and IdentityStore
+
+`IdentityStore` used to generate its own P-256 key for My QR. Bundles are
+signed by the `UserPrefs` key, so the QR could show a different fingerprint.
+
+`QrIdentityAlign` is the rule:
+
+- If `UserPrefs` has a signing key, the QR shows that key and the profile
+  user id. A different key already in `IdentityStore` is copied to
+  `archived_public_key` / `archived_private_key` and is not deleted, and it
+  does not replace the signing key.
+- If `UserPrefs` has no key and `IdentityStore` does, that key is imported
+  into `UserPrefs`. Nothing new is generated.
+- If neither exists, and generation is not held, one key is created in
+  `UserPrefs` and mirrored into `IdentityStore`. Opening My QR does not
+  create a second key.

@@ -1,6 +1,8 @@
 -- TharMesh account plane. Run in the Supabase SQL editor.
 -- The app never sends message bodies or recovery secrets.
 -- The anon key is not an admin key. RLS is the authorization.
+-- GoTrue rate limits are configured in the Supabase dashboard, not in this file.
+-- The app also applies AuthRateLimiter before it calls GoTrue.
 
 create table if not exists public.profiles (
     account_id uuid primary key references auth.users (id) on delete cascade,
@@ -10,6 +12,7 @@ create table if not exists public.profiles (
     created_at timestamptz not null default now(),
     constraint profiles_handle_len check (char_length(handle) between 3 and 20),
     constraint profiles_handle_charset check (handle ~ '^[a-z0-9_]+$'),
+    constraint profiles_handle_unique unique (handle),
     constraint profiles_avatar_https check (
         avatar_url is null or avatar_url like 'https://%'
     )

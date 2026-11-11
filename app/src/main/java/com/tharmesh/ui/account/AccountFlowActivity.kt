@@ -74,6 +74,7 @@ class AccountFlowActivity : AppCompatActivity() {
     private lateinit var screen: Screen
     private var pendingPhrase: String? = null
     private var pendingRecord: InstallRecord? = null
+    private var pendingEnrollment: com.tharmesh.account.EnrollmentRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -205,11 +206,16 @@ class AccountFlowActivity : AppCompatActivity() {
                 title.setText(R.string.account_devices_title)
                 body.setText(R.string.account_devices_body)
                 show(f1, R.string.account_field_enroll)
+                confirm.visibility = View.VISIBLE
+                confirm.setText(R.string.account_confirm_enroll)
                 primary.setText(R.string.account_action_show_qr)
                 secondary.visibility = View.VISIBLE
                 secondary.setText(R.string.account_action_approve)
-                primary.setOnClickListener { showEnrollment(qr, secret, status) }
-                secondary.setOnClickListener { approveEnrollment(f1, status) }
+                tertiary.visibility = View.VISIBLE
+                tertiary.setText(R.string.account_action_accept)
+                primary.setOnClickListener { showEnrollment(qr, secret, confirm.isChecked, status) }
+                secondary.setOnClickListener { approveEnrollment(f1, confirm.isChecked, status) }
+                tertiary.setOnClickListener { acceptEnrollment(f1, confirm.isChecked, status) }
             }
             Screen.OFFLINE -> {
                 title.setText(R.string.account_offline_title)
@@ -575,7 +581,11 @@ class AccountFlowActivity : AppCompatActivity() {
         }
     }
 
-    private fun showEnrollment(qr: ImageView, secret: TextView, status: TextView) {
+    private fun showEnrollment(qr: ImageView, secret: TextView, confirmed: Boolean, status: TextView) {
+        if (!confirmed) {
+            status.setText(R.string.account_error_approve)
+            return
+        }
         val identity = UserPrefs.readIdentity(this) ?: run {
             status.setText(R.string.account_error_held)
             return
@@ -595,6 +605,7 @@ class AccountFlowActivity : AppCompatActivity() {
             deviceId = identity.fingerprint,
             nonce = ByteArray(16).also { random.nextBytes(it) }
         )
+        pendingEnrollment = request
         val text = EnrollmentQr.encodeRequest(request)
         secret.visibility = View.VISIBLE
         secret.text = text
@@ -603,7 +614,24 @@ class AccountFlowActivity : AppCompatActivity() {
         status.text = identity.fingerprint
     }
 
-    private fun approveEnrollment(field: EditText, status: TextView) {
+    private fun acceptEnrollment(field: EditText, confirmed: Boolean, status: TextView) {
+        if (!confirmed) {
+            status.setText(R.string.account_error_approve)
+            return
+        }
+        val request = pendingEnrollment
+        val cert = EnrollmentQr.decodeCertificate(field.text.toString().trim())
+        val accountPublic = pendingRecord?.account?.publicKeyBase64
+            ?: CloudSessionStore.readAccountPublic(this)
+        if (request == null || cert == null || accountPublic == null) {
+            status.setText(R.string.account_error_approve)
+            return
+        }
+        val ok = DeviceEnrollment.accept(cert, accountPublic, request)
+        status.setText(if (ok) R.string.account_enroll_accepted else R.string.account_error_approve)
+    }
+
+    private fun approveEnrollment(field: EditText, userApproved: Boolean, status: TextView) {
         val request = EnrollmentQr.decodeRequest(field.text.toString().trim())
         if (request == null) {
             status.setText(R.string.account_error_approve)
@@ -631,7 +659,7 @@ class AccountFlowActivity : AppCompatActivity() {
             account = account,
             localAccountId = localAccount,
             generation = pendingRecord?.account?.generation ?: 1,
-            userApproved = true
+            userApproved = userApproved
         )
         if (cert == null) {
             status.setText(R.string.account_error_approve)

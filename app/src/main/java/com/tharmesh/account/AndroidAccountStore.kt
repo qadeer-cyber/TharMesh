@@ -74,12 +74,11 @@ object AndroidAccountKeyBox {
             cipher.init(Cipher.ENCRYPT_MODE, aesKey())
             val iv = cipher.iv
             val ct = cipher.doFinal(accountPrivateKeyBase64.toByteArray(Charsets.UTF_8))
-            val packed = ByteArray(iv.size + ct.size)
-            System.arraycopy(iv, 0, packed, 0, iv.size)
-            System.arraycopy(ct, 0, packed, iv.size, ct.size)
+            val packed = AccountKeySeal.pack(iv, ct)
+            val stored = AccountKeySeal.bytesToStore(true, packed, accountPrivateKeyBase64) ?: return false
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()
-                .putString(KEY_BLOB, Base64Url.encode(packed))
+                .putString(KEY_BLOB, stored)
                 .apply()
             true
         } catch (ignored: Throwable) {
@@ -92,9 +91,7 @@ object AndroidAccountKeyBox {
             val packedB64 = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(KEY_BLOB, null) ?: return null
             val packed = Base64Url.decode(packedB64) ?: return null
-            if (packed.size <= 12) return null
-            val iv = packed.copyOfRange(0, 12)
-            val ct = packed.copyOfRange(12, packed.size)
+            val (iv, ct) = AccountKeySeal.unpack(packed) ?: return null
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, aesKey(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(ct), Charsets.UTF_8)

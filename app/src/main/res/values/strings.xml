@@ -206,6 +206,9 @@
     <string name="account_action_saved">I saved the recovery key</string>
     <string name="account_action_show_qr">Show this phone\'s enrollment QR</string>
     <string name="account_action_approve">Approve enrollment</string>
+    <string name="account_action_accept">Accept certificate on this phone</string>
+    <string name="account_confirm_enroll">I approve this device enrollment. Both phones must agree.</string>
+    <string name="account_enroll_accepted">This phone accepted the certificate. The mesh key was not replaced.</string>
     <string name="account_confirm_new_key">I understand this is a new key, not my previous one, and contacts must verify it again.</string>
     <string name="account_confirm_first_key">This phone has no earlier TharMesh key to restore.</string>
     <string name="account_error_not_configured">Cloud sign-in is not configured on this build. No account was created. You can continue offline on this phone.</string>
