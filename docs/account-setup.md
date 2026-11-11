@@ -20,13 +20,16 @@ key (`sb_publishable_...`), not a legacy JWT and not the service-role key.
 The app sends it only in the `apikey` header. `Authorization: Bearer` is
 reserved for a user access token after sign-in.
 
-GitHub Actions reads the same names from repository secrets, then variables:
+GitHub Actions reads the same names from repository secrets, then repository variables:
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `GOOGLE_WEB_CLIENT_ID` (optional; the Google button stays disabled when it is empty)
 
 Add them under Settings → Secrets and variables → Actions. Do not commit them.
+This repository has no GitHub Environment, so the Android job does not set
+`environment:`. A value stored only as an environment secret would not reach
+the build until that environment exists and the job names it.
 
 `google-services.json` is gitignored and is not required for this HTTP client.
 
@@ -52,5 +55,6 @@ Add them under Settings → Secrets and variables → Actions. Do not commit the
 - The client refuses a blank config and a non-HTTPS URL without calling HTTP.
 - The recovery upload builder emits ciphertext fields only.
 
-The Firebase emulator and the Supabase CLI were not run. There is no hosted
-project to run them against.
+The Firebase emulator and the Supabase CLI were not run from this repository.
+The owner has a hosted project; CI calls `GET /auth/v1/health` with the
+`apikey` header and does not sign up.

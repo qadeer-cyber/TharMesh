@@ -24,6 +24,9 @@ jobs:
       ANDROID_COMPILE_SDK: "30"
       ANDROID_BUILD_TOOLS: "30.0.3"
       # Public client values only. Never a service-role key. Empty is a valid fail-closed build.
+      # This repository has no GitHub Environment (Actions environments list is empty),
+      # so this job does not set `environment:`. Environment secrets would be invisible
+      # until a real environment name is declared. Repository secrets win over variables.
       SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
@@ -75,7 +78,34 @@ jobs:
           "$JAVA_HOME/bin/java" -version 2>&1 | grep -q '"11' || { echo "JAVA_HOME is not JDK 11"; exit 1; }
 
       - name: Report whether cloud client values are present
+        env:
+          SECRET_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VAR_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SECRET_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VAR_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          SECRET_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          VAR_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
         run: |
+          # Print only present/absent. Do not echo the values.
+          source_of() {
+            key="$1"
+            secret_val="$2"
+            var_val="$3"
+            if [ -n "$secret_val" ]; then
+              echo "${key}_repository_secret=present"
+            else
+              echo "${key}_repository_secret=absent"
+            fi
+            if [ -n "$var_val" ]; then
+              echo "${key}_repository_variable=present"
+            else
+              echo "${key}_repository_variable=absent"
+            fi
+          }
+          source_of SUPABASE_URL "$SECRET_SUPABASE_URL" "$VAR_SUPABASE_URL"
+          source_of SUPABASE_ANON_KEY "$SECRET_SUPABASE_ANON_KEY" "$VAR_SUPABASE_ANON_KEY"
+          source_of GOOGLE_WEB_CLIENT_ID "$SECRET_GOOGLE_WEB_CLIENT_ID" "$VAR_GOOGLE_WEB_CLIENT_ID"
+          echo "github_environment_on_job=none"
           if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
             echo "supabase_configured=true"
           else
