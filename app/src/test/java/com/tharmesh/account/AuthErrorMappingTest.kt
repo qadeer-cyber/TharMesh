@@ -87,6 +87,36 @@ class AuthErrorMappingTest {
     }
 
     @Test
+    fun emailOtpRequiresServerVerificationAndPreservesLeadingZero() {
+        var calls = 0
+        val http = HttpTransport { url, headers, body ->
+            calls++
+            assertEquals(apiKey, headers["apikey"])
+            val payload = org.json.JSONObject(body)
+            assertEquals("a@b.co", payload.getString("email"))
+            when (calls) {
+                1 -> {
+                    assertEquals("$base/auth/v1/otp", url)
+                    assertTrue(payload.getBoolean("create_user"))
+                    HttpTransport.Response(200, "{}")
+                }
+                else -> {
+                    assertEquals("$base/auth/v1/verify", url)
+                    assertEquals("email", payload.getString("type"))
+                    assertEquals("012345", payload.getString("token"))
+                    HttpTransport.Response(403, """{"error_code":"otp_expired"}""")
+                }
+            }
+        }
+        val sent = AuthBackend.requestEmailOtp(http, base, apiKey, "a@b.co") as AuthCall.Ok
+        assertTrue(sent.tokens.accessToken.isEmpty())
+        assertEquals(AuthCall.Failed("otp_invalid"), AuthBackend.verifyEmailOtp(http, base, apiKey, "a@b.co", "12345"))
+        val rejected = AuthBackend.verifyEmailOtp(http, base, apiKey, "a@b.co", "012345") as AuthCall.Failed
+        assertEquals("otp_expired", rejected.reason)
+        assertEquals(2, calls)
+    }
+
+    @Test
     fun diagnostic_dropsEmailsAndTokens() {
         val leaked = AuthErrors.classify(
             "{\"msg\":\"nope for person@example.com\",\"error\":\"eyJhbGciOi.secret\"}",

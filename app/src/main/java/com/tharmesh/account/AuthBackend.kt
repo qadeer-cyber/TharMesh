@@ -241,7 +241,12 @@ object AuthBackend {
         if (refreshToken.isBlank()) return AuthCall.Failed("unauthorized")
         val url = baseUrl.trimEnd('/') + "/auth/v1/token?grant_type=refresh_token"
         val body = JSONObject().put("refresh_token", refreshToken).toString()
-        return postAuth(http, url, apiKey, body, allowEmptyToken = false)
+        val result = postAuth(http, url, apiKey, body, allowEmptyToken = false)
+        return if (result is AuthCall.Failed && result.reason == "invalid_credentials") {
+            result.copy(reason = "unauthorized")
+        } else {
+            result
+        }
     }
 
     fun configured(baseUrl: String, anonKey: String): Boolean {
