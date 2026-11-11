@@ -38,6 +38,9 @@
     <string name="new_chat_directory_unavailable">اس بلڈ میں اکاؤنٹ ڈائریکٹری نہیں۔ کوئی صارف نہیں بنایا گیا۔ قریبی لوگ اور محفوظ رابطے کام کرتے ہیں۔</string>
     <string name="new_chat_directory_not_nearby">رجسٹرڈ اکاؤنٹ کا مطلب یہ نہیں کہ فون قریب ہے۔ میش کے لیے تصدیق شدہ رابطہ رینج میں چاہیے۔</string>
     <string name="profile_permanent_id_fmt">تھارمیش شناخت %1$s</string>
+    <string name="settings_appearance">رنگ</string>
+    <string name="settings_appearance_ocean">سمندری نیلا</string>
+    <string name="settings_appearance_rose">گلابی</string>
     <string name="chat_action_delete_confirm">اس فون پر یہ چیٹ حذف کریں؟ رابطہ اور تصدیق شدہ کلید رہیں گے۔ اس فون کے پیغامات ہٹ جائیں گے۔</string>
     <string name="account_error_not_configured">اس بلڈ میں کلاؤڈ سائن ان ترتیب نہیں۔ کوئی اکاؤنٹ نہیں بنا۔ اس فون پر آف لائن جاری رکھ سکتے ہیں۔</string>
     <string name="account_error_wrong_recovery">یہ بحالی کلید نہیں کھلی۔ اس فون کی کلیدیں نہیں بدلیں۔</string>

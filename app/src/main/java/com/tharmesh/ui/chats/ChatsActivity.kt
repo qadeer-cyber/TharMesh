@@ -1,5 +1,6 @@
 package com.tharmesh.ui.chats
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Intent
 import android.os.Bundle
 import android.text.format.DateFormat
@@ -40,6 +41,7 @@ class ChatsActivity : AppCompatActivity() {
     private lateinit var repository: MessageRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         if (!UserPrefs.hasProfile(this)) {
             startActivity(Intent(this, LoginActivity::class.java))

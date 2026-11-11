@@ -382,7 +382,8 @@ class MessagesFragment : Fragment() {
                 nodes.firstOrNull { node ->
                     node.online &&
                         node.userId !in contactIds &&
-                        node.userId !in dismissedSuggestions
+                        node.userId !in dismissedSuggestions &&
+                        !com.tharmesh.identity.ContactIdentity.isTruncatedMeshId(node.userId)
                 }
             }.collectLatest { candidate ->
                 if (candidate == null) {

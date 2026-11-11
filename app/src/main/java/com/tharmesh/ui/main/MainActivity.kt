@@ -5,6 +5,7 @@
 
 package com.tharmesh.ui.main
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var disasterText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         if (!UserPrefs.hasProfile(this)) {
             startActivity(Intent(this, LoginActivity::class.java))

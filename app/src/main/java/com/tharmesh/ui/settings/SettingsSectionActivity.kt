@@ -4,6 +4,7 @@
 // distribution, or use is strictly prohibited. See LICENSE for details.
 package com.tharmesh.ui.settings
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -52,6 +53,7 @@ class SettingsSectionActivity : AppCompatActivity() {
     private lateinit var content: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         ThemeManager.applyFromPrefs(this)
         setContentView(R.layout.activity_settings_section)
@@ -269,6 +271,11 @@ class SettingsSectionActivity : AppCompatActivity() {
             getString(R.string.settings_chats_theme),
             getString(modeLabel(mode))
         ) { showThemePicker() }
+        addClickRow(
+            R.drawable.ic_moon,
+            getString(R.string.settings_appearance),
+            getString(paletteLabel(UserPrefs.getPalette(this)))
+        ) { showPalettePicker() }
         addInfoRow(
             R.drawable.ic_message,
             getString(R.string.settings_chats_wallpaper),
@@ -510,6 +517,33 @@ class SettingsSectionActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
+    }
+
+    private fun showPalettePicker() {
+        val labels = arrayOf(
+            getString(R.string.settings_appearance_ocean),
+            getString(R.string.settings_appearance_rose)
+        )
+        val current = if (UserPrefs.getPalette(this) == com.tharmesh.ui.theme.Appearance.Palette.ROSE) 1 else 0
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_appearance)
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                val palette = if (which == 1) {
+                    com.tharmesh.ui.theme.Appearance.Palette.ROSE
+                } else {
+                    com.tharmesh.ui.theme.Appearance.Palette.OCEAN
+                }
+                UserPrefs.setPalette(this, palette)
+                dialog.dismiss()
+                recreate()
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun paletteLabel(palette: com.tharmesh.ui.theme.Appearance.Palette): Int = when (palette) {
+        com.tharmesh.ui.theme.Appearance.Palette.OCEAN -> R.string.settings_appearance_ocean
+        com.tharmesh.ui.theme.Appearance.Palette.ROSE -> R.string.settings_appearance_rose
     }
 
     private fun modeLabel(mode: ThemeManager.Mode): Int = when (mode) {

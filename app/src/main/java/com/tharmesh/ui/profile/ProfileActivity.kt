@@ -4,6 +4,7 @@
 // distribution, or use is strictly prohibited. See LICENSE for details.
 package com.tharmesh.ui.profile
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
@@ -66,6 +67,7 @@ class ProfileActivity : AppCompatActivity() {
     private lateinit var statusBubble: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         ThemeManager.applyFromPrefs(this)
         setContentView(R.layout.activity_profile)

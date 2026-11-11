@@ -42,6 +42,7 @@ object UserPrefs {
      * light mode.
      */
     private const val KEY_THEME_MODE = "theme_mode"
+    private const val KEY_PALETTE = "appearance_palette"
 
     /**
      * Stage 6.3 — manual Disaster Mode toggle. When true:
@@ -134,6 +135,7 @@ object UserPrefs {
         KEY_PUBLIC_KEY,
         KEY_FINGERPRINT,
         KEY_THEME_MODE,
+        KEY_PALETTE,
         KEY_DISASTER_MODE,
         KEY_STATUS,
         KEY_AVATAR_LOCAL,
@@ -430,6 +432,20 @@ object UserPrefs {
     fun setThemeMode(context: Context, mode: ThemeManager.Mode) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    @JvmStatic
+    fun getPalette(context: Context): com.tharmesh.ui.theme.Appearance.Palette {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_PALETTE, null) ?: return com.tharmesh.ui.theme.Appearance.Palette.OCEAN
+        return runCatching { com.tharmesh.ui.theme.Appearance.Palette.valueOf(raw) }
+            .getOrDefault(com.tharmesh.ui.theme.Appearance.Palette.OCEAN)
+    }
+
+    @JvmStatic
+    fun setPalette(context: Context, palette: com.tharmesh.ui.theme.Appearance.Palette) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_PALETTE, palette.name).apply()
     }
 
     @JvmStatic

@@ -1,5 +1,6 @@
 package com.tharmesh.ui.groups
 
+import com.tharmesh.ui.theme.Appearance
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -16,6 +17,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 class GroupsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
 
         val root = FrameLayout(this)

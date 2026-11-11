@@ -5,6 +5,7 @@
 
 package com.tharmesh.ui.auth
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -34,6 +35,7 @@ class LoginActivity : AppCompatActivity() {
     private val googleAuth by lazy { GoogleAuthService(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         if (UserPrefs.hasProfile(this)) {
             goToNext()

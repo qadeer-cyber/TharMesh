@@ -1,5 +1,6 @@
 package com.tharmesh.ui.contacts
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -34,6 +35,7 @@ class ContactsActivity : AppCompatActivity() {
     private lateinit var repository: MessageRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_contacts)
         TharMeshApp.get().ensureMeshStarted()

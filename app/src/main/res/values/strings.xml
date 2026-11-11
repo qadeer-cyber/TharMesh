@@ -541,7 +541,11 @@
     <string name="settings_privacy_disappearing">Disappearing messages</string>
 
     <!-- Chats section content -->
-    <string name="settings_chats_theme">Theme</string>
+    <string name="settings_chats_theme">Light or dark</string>
+    <string name="settings_appearance">Color</string>
+    <string name="settings_appearance_ocean">Ocean blue</string>
+    <string name="settings_appearance_rose">Rose pink</string>
+    <string name="identity_invalid_toast">Could not identify this device. Scan the QR or try again. Nothing was added.</string>
     <string name="settings_chats_wallpaper">Wallpaper</string>
     <string name="settings_chats_history">Chat history</string>
 

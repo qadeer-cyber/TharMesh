@@ -5,6 +5,7 @@
 
 package com.tharmesh.ui.account
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -77,6 +78,7 @@ class AccountFlowActivity : AppCompatActivity() {
     private var pendingEnrollment: com.tharmesh.account.EnrollmentRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_account_flow)
         screen = runCatching {

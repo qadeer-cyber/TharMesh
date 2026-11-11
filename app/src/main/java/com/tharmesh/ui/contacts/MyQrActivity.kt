@@ -1,5 +1,6 @@
 package com.tharmesh.ui.contacts
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -33,6 +34,7 @@ import tharmesh.app.R
 class MyQrActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_my_qr)
         title = getString(R.string.my_qr_title)

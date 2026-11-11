@@ -1,5 +1,6 @@
 package com.tharmesh.ui.chat
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Context
 import android.os.Bundle
 import android.text.format.DateFormat
@@ -79,6 +80,7 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var statusStrings: ChatStatusFormatter.Strings
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
         // Stage 9.2 — premium enter transition. Applied after super.onCreate

@@ -1,5 +1,6 @@
 package com.tharmesh.ui.diagnostics
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -42,6 +43,7 @@ class DiagnosticsActivity : AppCompatActivity() {
     private val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_diagnostics)
         counters = findViewById(R.id.diagnostics_counters)

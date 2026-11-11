@@ -201,6 +201,14 @@ class NewChatSheet : BottomSheetDialogFragment() {
             .setPositiveButton(R.string.dialog_start) { _, _ ->
                 val userId = input.text?.toString()?.trim().orEmpty()
                 if (userId.isEmpty()) return@setPositiveButton
+                if (com.tharmesh.identity.ContactIdentity.isTruncatedMeshId(userId)) {
+                    android.widget.Toast.makeText(
+                        ctx,
+                        R.string.identity_invalid_toast,
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    return@setPositiveButton
+                }
                 viewLifecycleOwner.lifecycleScope.launch {
                     withContext(Dispatchers.IO) { repository.addContact(userId) }
                     openChat(userId, userId)
