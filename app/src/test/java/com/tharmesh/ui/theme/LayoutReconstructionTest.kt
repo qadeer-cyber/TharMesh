@@ -46,6 +46,25 @@ class LayoutReconstructionTest {
     }
 
     @Test
+    fun transcript_usesDayChipAndUnavailableScreensStayHonest() {
+        val chat = read("layout/activity_chat.xml")
+        assertTrue(chat.contains("@drawable/bg_date_chip"))
+        assertTrue(chat.contains("@string/chat_header_encrypted"))
+        val day = read("layout/item_msg_date.xml")
+        assertTrue(day.contains("@+id/text_day"))
+        assertTrue(day.contains("@drawable/bg_date_chip"))
+        val unavailable = read("layout/activity_unavailable.xml")
+        assertTrue(unavailable.contains("@+id/unavailable_body"))
+        assertTrue(unavailable.contains("android:minHeight=\"48dp\"") || unavailable.contains("48dp"))
+        val contacts = read("layout/activity_contacts.xml")
+        assertFalse(contacts.contains("@android:color/white"))
+        assertTrue(contacts.contains("@+id/text_empty"))
+        assertTrue(contacts.contains("@+id/btn_my_qr"))
+        val diagnostics = read("layout/activity_diagnostics.xml")
+        assertFalse(diagnostics.contains("android:textColor=\"@android:color/white\""))
+    }
+
+    @Test
     fun radialGlows_doNotUseThemeAttributes() {
         for (name in listOf(
             "drawable/bg_nav_pill_glow.xml",

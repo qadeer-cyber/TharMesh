@@ -3,7 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?attr/tmBg"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:fitsSystemWindows="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -34,7 +35,7 @@
         <FrameLayout
             android:layout_width="280dp"
             android:layout_height="280dp"
-            android:background="@drawable/bg_qr_card"
+            android:background="@drawable/bg_panel"
             android:padding="16dp">
 
             <ImageView
@@ -89,8 +90,9 @@
 
         <Button
             android:id="@+id/btn_share"
+            style="@style/TmButton.Primary"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginTop="20dp"
             android:text="@string/my_qr_share" />
     </LinearLayout>

@@ -18,6 +18,8 @@
         <item name="colorOnSurface">@color/tm_dark_text_primary</item>
         <item name="android:colorBackground">@color/tm_dark_bg</item>
         <item name="android:textColorPrimary">@color/tm_dark_text_primary</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.TharMesh.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.TharMesh.Dialog</item>
         <item name="android:textColorSecondary">@color/tm_dark_text_secondary</item>
         <item name="android:windowBackground">@color/tm_dark_bg</item>
         <item name="android:statusBarColor" tools:targetApi="l">@color/tm_dark_bg</item>

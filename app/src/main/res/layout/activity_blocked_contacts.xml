@@ -14,7 +14,7 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="64dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="4dp"
@@ -22,8 +22,8 @@
 
         <ImageView
             android:id="@+id/blocked_back"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/profile_back"
             android:padding="10dp"
@@ -52,12 +52,24 @@
         android:padding="32dp"
         android:visibility="gone">
 
+        <FrameLayout
+            android:layout_width="88dp"
+            android:layout_height="88dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_round_icon_green">
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_user" />
+        </FrameLayout>
+
         <TextView
+            style="@style/Text.H2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="?attr/tmTextPrimary"
-            android:textSize="18sp"
-            android:textStyle="bold"
             android:text="@string/settings_blocked_contacts_empty_title" />
 
         <TextView

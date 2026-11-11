@@ -29,6 +29,8 @@
         <item name="android:statusBarColor" tools:targetApi="l">@color/tm_light_bg</item>
         <item name="android:navigationBarColor" tools:targetApi="l">@color/tm_light_bg</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.TharMesh.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.TharMesh.Dialog</item>
 
         <!-- TharMesh palette attrs — LIGHT bindings. -->
         <item name="tmBg">@color/tm_light_bg</item>
@@ -108,5 +110,12 @@
         <item name="tmBubbleMeEnd">@color/tm_rose_primary_soft</item>
         <item name="tmBubbleTextMe">@color/tm_rose_text</item>
         <item name="tmUnreadBadge">@color/tm_rose_primary</item>
+    </style>
+
+    <style name="ThemeOverlay.TharMesh.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorPrimary">?attr/colorPrimary</item>
+        <item name="colorSurface">?attr/tmSurface</item>
+        <item name="android:textColorPrimary">?attr/tmTextPrimary</item>
+        <item name="android:textColorSecondary">?attr/tmTextSecondary</item>
     </style>
 </resources>

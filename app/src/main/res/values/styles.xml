@@ -104,6 +104,11 @@
          deliberately empty so the AppCompat Button parent doesn't apply its
          backgroundTint from colorAccent (which was painting every chip
          saturated WhatsApp green regardless of activated state). -->
+    <style name="TmPanel">
+        <item name="android:background">@drawable/bg_panel</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
     <style name="TmChip.Filter" parent="">
         <item name="android:background">@drawable/bg_chip_filter</item>
         <item name="android:backgroundTint">@null</item>

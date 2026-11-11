@@ -42,7 +42,7 @@ class ContactsActivity : AppCompatActivity() {
         repository = TharMeshApp.get().repository
 
         val recycler: RecyclerView = findViewById(R.id.recycler_contacts)
-        val empty: TextView = findViewById(R.id.text_empty)
+        val empty: View = findViewById(R.id.text_empty)
         recycler.layoutManager = LinearLayoutManager(this)
         adapter = ContactAdapter(
             onClick = { contact ->

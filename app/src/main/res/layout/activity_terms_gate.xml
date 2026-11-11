@@ -49,10 +49,12 @@
             android:id="@+id/terms_gate_body"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="?attr/tmTextPrimary"
-            android:textSize="15sp"
+            android:background="@drawable/bg_panel"
             android:lineSpacingMultiplier="1.25"
-            android:text="@string/legal_doc_terms_body" />
+            android:padding="16dp"
+            android:text="@string/legal_doc_terms_body"
+            android:textColor="?attr/tmTextPrimary"
+            android:textSize="15sp" />
     </ScrollView>
 
     <LinearLayout
@@ -63,17 +65,17 @@
 
         <Button
             android:id="@+id/terms_gate_accept"
+            style="@style/TmButton.Primary"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:text="@string/legal_terms_gate_accept" />
 
         <Button
             android:id="@+id/terms_gate_decline"
+            style="@style/TmButton.Ghost"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginTop="8dp"
-            android:background="@android:color/transparent"
-            android:textColor="?attr/tmTextSecondary"
             android:text="@string/legal_terms_gate_decline" />
     </LinearLayout>
 </LinearLayout>
