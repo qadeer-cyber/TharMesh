@@ -147,6 +147,26 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      - name: Build and verify stable QA APK
+        if: vars.THARMESH_QA_SIGNING_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          THARMESH_QA_KEYSTORE_BASE64: ${{ secrets.THARMESH_QA_KEYSTORE_BASE64 }}
+          THARMESH_QA_STORE_PASSWORD: ${{ secrets.THARMESH_QA_STORE_PASSWORD }}
+          THARMESH_QA_KEY_ALIAS: ${{ secrets.THARMESH_QA_KEY_ALIAS }}
+          THARMESH_QA_KEY_PASSWORD: ${{ secrets.THARMESH_QA_KEY_PASSWORD }}
+          THARMESH_QA_CERT_SHA256: ${{ vars.THARMESH_QA_CERT_SHA256 }}
+        run: bash .github/scripts/build-qa-apk.sh
+
+      - name: Upload verified QA APK
+        if: success() && vars.THARMESH_QA_SIGNING_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tharmesh-app-qa
+          path: |
+            app/build/outputs/apk/qa/*.apk
+            app/build/outputs/apk/qa/certificate-fingerprints.txt
+          if-no-files-found: error
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

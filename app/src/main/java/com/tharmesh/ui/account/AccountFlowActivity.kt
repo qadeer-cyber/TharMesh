@@ -129,6 +129,8 @@ class AccountFlowActivity : AppCompatActivity() {
         val status = findViewById<TextView>(R.id.account_status)
         listOf(f1, f2, f3, f4).forEach { it.visibility = View.GONE; it.text = null; it.isEnabled = true }
         f2.filters = emptyArray()
+        f2.setOnEditorActionListener(null)
+        f2.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_UNSPECIFIED
         f2.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         f2.isSaveEnabled = false
         primary.isEnabled = true
@@ -168,6 +170,15 @@ class AccountFlowActivity : AppCompatActivity() {
                     f2.inputType = android.text.InputType.TYPE_CLASS_NUMBER
                     f2.filters = arrayOf(android.text.InputFilter.LengthFilter(6))
                     f2.isSaveEnabled = false
+                    f2.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+                    f2.setOnEditorActionListener { _, action, _ ->
+                        if (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                            verifyOtp(email, f2.text.toString(), status)
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     f2.requestFocus()
                     primary.setText(R.string.account_otp_verify)
                     primary.setOnClickListener { verifyOtp(email, f2.text.toString(), status) }
@@ -387,6 +398,11 @@ class AccountFlowActivity : AppCompatActivity() {
     }
 
     private fun verifyOtp(email: String, code: String, status: TextView) {
+        val waitMs = otpPrefs.getLong("verify_retry", 0L) - System.currentTimeMillis()
+        if (waitMs > 0L) {
+            status.text = explain("rate_limited", (waitMs + 999L) / 1000L)
+            return
+        }
         runVerification(status) {
             AuthBackend.verifyEmailOtp(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, email, code)
         }
@@ -408,7 +424,13 @@ class AccountFlowActivity : AppCompatActivity() {
                     otpPrefs.edit().remove("email").apply()
                     applyLogin(result, status)
                 }
-                is AuthCall.Failed -> status.text = explain(result.reason, result.retryAfterSeconds, result.diagnostic)
+                is AuthCall.Failed -> {
+                    if (screen == Screen.EMAIL_OTP && result.reason == "rate_limited") {
+                        val wait = (result.retryAfterSeconds ?: 60L).coerceIn(1L, 3600L)
+                        otpPrefs.edit().putLong("verify_retry", System.currentTimeMillis() + wait * 1000L).apply()
+                    }
+                    status.text = explain(result.reason, result.retryAfterSeconds, result.diagnostic)
+                }
                 else -> status.setText(R.string.account_error_email_unverified)
             }
         }

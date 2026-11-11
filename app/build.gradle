@@ -50,6 +50,11 @@ try {
     // Keep fallback.
 }
 
+def qaKeyPath = System.getenv("THARMESH_QA_KEYSTORE_PATH")
+def qaSigningValues = ["THARMESH_QA_STORE_PASSWORD", "THARMESH_QA_KEY_ALIAS", "THARMESH_QA_KEY_PASSWORD"]
+        .collect { System.getenv(it) }
+def qaSigningReady = qaKeyPath && file(qaKeyPath).isFile() && qaSigningValues.every { it }
+
 android {
     compileSdkVersion 30
     buildToolsVersion "30.0.3"
@@ -69,10 +74,26 @@ android {
         buildConfigField "String", "SUPABASE_ANON_KEY", "\"${escapeBuildConfig(supabaseAnonKey)}\""
     }
 
+    signingConfigs {
+        qa {
+            if (qaSigningReady) {
+                storeFile file(qaKeyPath)
+                storeType "PKCS12"
+                storePassword qaSigningValues[0]
+                keyAlias qaSigningValues[1]
+                keyPassword qaSigningValues[2]
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        qa {
+            initWith release
+            signingConfig signingConfigs.qa
         }
     }
 
@@ -87,6 +108,14 @@ android {
 
     testOptions {
         unitTests.returnDefaultValues = true
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (!qaSigningReady && graph.allTasks.any {
+        it.project == project && it.name in ["assembleQa", "bundleQa", "packageQa"]
+    }) {
+        throw new GradleException("QA signing is missing. Configure the persistent TharMesh QA keystore.")
     }
 }
 
