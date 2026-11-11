@@ -8,8 +8,23 @@ if (localPropsFile.exists()) {
     localProps.load(new FileInputStream(localPropsFile))
 }
 def googleWebClientId = (localProps.getProperty("GOOGLE_WEB_CLIENT_ID")
+        ?: System.getenv("GOOGLE_WEB_CLIENT_ID")
         ?: project.findProperty("GOOGLE_WEB_CLIENT_ID")
         ?: "").toString()
+
+// Supabase project URL and the public anon key. Both stay empty in git.
+// A blank value makes AuthBackend fail closed. Never put a service-role key here.
+def supabaseUrl = (localProps.getProperty("SUPABASE_URL")
+        ?: System.getenv("SUPABASE_URL")
+        ?: project.findProperty("SUPABASE_URL")
+        ?: "").toString()
+def supabaseAnonKey = (localProps.getProperty("SUPABASE_ANON_KEY")
+        ?: System.getenv("SUPABASE_ANON_KEY")
+        ?: project.findProperty("SUPABASE_ANON_KEY")
+        ?: "").toString()
+def escapeBuildConfig = { String value ->
+    value.replace("\\", "\\\\").replace("\"", "\\\"")
+}
 
 // Stage 10.1 — short commit hash exposed via BuildConfig.GIT_COMMIT_HASH and
 // rendered on the About screen. Defensive: silently falls back to "—" when
@@ -43,8 +58,10 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${googleWebClientId}\""
+        buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${escapeBuildConfig(googleWebClientId)}\""
         buildConfigField "String", "GIT_COMMIT_HASH", "\"${gitCommitHash}\""
+        buildConfigField "String", "SUPABASE_URL", "\"${escapeBuildConfig(supabaseUrl)}\""
+        buildConfigField "String", "SUPABASE_ANON_KEY", "\"${escapeBuildConfig(supabaseAnonKey)}\""
     }
 
     buildTypes {

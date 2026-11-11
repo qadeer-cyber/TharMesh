@@ -22,7 +22,6 @@ import com.tharmesh.TharMeshApp
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.disaster.DisasterModeController
-import com.tharmesh.ui.auth.LoginActivity
 import com.tharmesh.ui.theme.ThemeManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -128,6 +127,39 @@ class SettingsSectionActivity : AppCompatActivity() {
             (profile?.authProvider ?: UserPrefs.PROVIDER_ANONYMOUS).replaceFirstChar { it.uppercase() }
         )
         addClickRow(
+            R.drawable.ic_lock,
+            getString(R.string.settings_account_security),
+            getString(R.string.settings_account_security_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.SECURITY
+                )
+            )
+        }
+        addClickRow(
+            R.drawable.ic_devices,
+            getString(R.string.settings_account_devices),
+            getString(R.string.settings_account_devices_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.DEVICES
+                )
+            )
+        }
+        addClickRow(
+            R.drawable.ic_wifi,
+            getString(R.string.settings_account_offline),
+            getString(R.string.settings_account_offline_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.OFFLINE
+                )
+            )
+        }
+        addClickRow(
             R.drawable.ic_alert,
             getString(R.string.settings_account_sign_out),
             getString(R.string.settings_account_sign_out_sub)
@@ -137,18 +169,11 @@ class SettingsSectionActivity : AppCompatActivity() {
                 .setMessage(R.string.settings_account_sign_out_confirm)
                 .setPositiveButton(R.string.settings_account_sign_out) { _, _ ->
                     GoogleAuthService(this).signOut()
-                    TharMeshApp.get().stopMesh()
+                    // Cloud sign-out keeps the mesh key, the Room database,
+                    // and the block list. The mesh keeps running.
                     UserPrefs.signOut(this)
-                    // Stage 8.4 \u2014 sign-out wipes the prefs file (which
-                    // includes the persisted block list) but the
-                    // BlockedContacts singleton would otherwise carry the
-                    // previous account's in-memory cache into the next
-                    // sign-in. Invalidate it so the new account starts clean.
-                    com.tharmesh.data.BlockedContacts.onSignOut()
-                    val intent = Intent(this, LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(intent)
-                    finish()
+                    Toast.makeText(this, R.string.settings_account_sign_out_kept, Toast.LENGTH_LONG).show()
+                    renderSection(SettingsSections.Key.ACCOUNT)
                 }
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show()

@@ -8,4 +8,24 @@
     <string name="chat_status_msg_failed">ناڪام — ٻيهر ڪوشش لاءِ ٽيپ ڪريو</string>
     <string name="chat_status_msg_awaiting_key">تصديق ٿيل رابطي جو انتظار — نياپو نه موڪليو ويو</string>
     <string name="mesh_service_notification">ٿارميش ويجها ڊوائيس ٻڌي رهيو آهي</string>
+    <string name="login_create_account">اڪائونٽ ٺاهيو</string>
+    <string name="login_sign_in">سائن ان</string>
+    <string name="login_continue_with_google">گوگل سان جاري رکو</string>
+    <string name="login_continue_anonymously">اڪائونٽ کان سواءِ جاري رکو</string>
+    <string name="account_create_title">اڪائونٽ ٺاهيو</string>
+    <string name="account_signin_title">سائن ان</string>
+    <string name="account_verify_title">اي ميل جي تصديق</string>
+    <string name="account_recover_title">اڪائونٽ بحال ڪريو</string>
+    <string name="account_secure_title">سڃاڻپ محفوظ ڪريو</string>
+    <string name="account_save_title">بحالي واري چاٻي سانڍيو</string>
+    <string name="account_devices_title">ڊوائيسز</string>
+    <string name="account_offline_title">آف لائن موڊ</string>
+    <string name="account_security_title">اڪائونٽ جي حفاظت</string>
+    <string name="account_error_not_configured">هن بلڊ ۾ ڪلائوڊ سائن ان ترتيب ناهي. ڪو اڪائونٽ نه ٺهيو. هن فون تي آف لائن جاري رکي سگهو ٿا.</string>
+    <string name="account_error_wrong_recovery">هي بحالي واري چاٻي نه کلي. هن فون جون چاٻيون نه مٽيون.</string>
+    <string name="account_status_token_expired">ڪلائوڊ ٽوڪن ختم ٿي ويو. توهان سائن آئوٽ نه آهيو. ميش سڃاڻپ هن فون تي آهي.</string>
+    <string name="account_offline_body">هي انسٽال نيٽ ورڪ کان سواءِ مجاز رهي ٿو. ختم ٿيل ڪلائوڊ ٽوڪن سائن آئوٽ ناهي. جيڪو ڊوائيس ٻيهر نه ڳنڍجي، سرور ان کي رد نه ٿو ڪري سگهي.</string>
+    <string name="account_reset_warning">هي نئين ميش چاٻي آهي. هي پراڻي چاٻي ناهي. رابطن کي ٻيهر تصديق ڪرڻي پوندي.</string>
+    <string name="settings_account_sign_out">ڪلائوڊ مان سائن آئوٽ</string>
+    <string name="settings_account_sign_out_kept">ڪلائوڊ سيشن ختم. هن فون جي ميش چاٻي رکي وئي.</string>
 </resources>

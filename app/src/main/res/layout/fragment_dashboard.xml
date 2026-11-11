@@ -107,6 +107,14 @@
                 android:src="@drawable/ic_wifi" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/account_offline_mode"
+            style="@style/Text.Caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/account_status_offline_authorized" />
+
         <!-- Signal strength card -->
         <LinearLayout
             style="@style/TmCard"

@@ -16,6 +16,7 @@ import com.tharmesh.TharMeshApp
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.data.UserProfile
+import com.tharmesh.ui.account.AccountFlowActivity
 import com.tharmesh.ui.main.MainActivity
 import com.tharmesh.ui.onboarding.OnboardingActivity
 
@@ -40,6 +41,14 @@ class LoginActivity : AppCompatActivity() {
         val status: TextView = findViewById(R.id.login_status)
         val googleBtn: Button = findViewById(R.id.login_google_button)
         val anonBtn: Button = findViewById(R.id.login_anonymous_button)
+        val createBtn: Button = findViewById(R.id.login_create_button)
+        val signInBtn: Button = findViewById(R.id.login_signin_button)
+        createBtn.setOnClickListener {
+            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.CREATE))
+        }
+        signInBtn.setOnClickListener {
+            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.SIGN_IN))
+        }
 
         if (googleAuth.isAvailable) {
             googleBtn.isEnabled = true
@@ -96,7 +105,17 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun finishWith(profile: UserProfile) {
+        val freshMesh = UserPrefs.readIdentity(this) == null
+        if (freshMesh && profile.authProvider == UserPrefs.PROVIDER_GOOGLE) {
+            // Google sign-in must not mint a mesh key by itself.
+            UserPrefs.setIdentityHeld(this, true)
+        }
         UserPrefs.saveProfile(this, profile)
+        if (freshMesh && profile.authProvider == UserPrefs.PROVIDER_GOOGLE) {
+            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.SECURE_IDENTITY))
+            finish()
+            return
+        }
         // Stage 8.4 \u2014 do NOT start the mesh *transport* here (i.e. don't
         // call ensureMeshStarted): if a returning user has Nearby
         // permissions already granted but has not yet accepted the

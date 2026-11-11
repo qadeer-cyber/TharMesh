@@ -8,4 +8,24 @@
     <string name="chat_status_msg_failed">ناکام — دوبارہ کوشش کے لیے ٹیپ کریں</string>
     <string name="chat_status_msg_awaiting_key">تصدیق شدہ رابطے کا انتظار — پیغام نہیں بھیجا گیا</string>
     <string name="mesh_service_notification">تھارمیش قریبی آلات سن رہا ہے</string>
+    <string name="login_create_account">اکاؤنٹ بنائیں</string>
+    <string name="login_sign_in">سائن ان</string>
+    <string name="login_continue_with_google">گوگل کے ساتھ جاری رکھیں</string>
+    <string name="login_continue_anonymously">بغیر اکاؤنٹ کے جاری رکھیں</string>
+    <string name="account_create_title">اکاؤنٹ بنائیں</string>
+    <string name="account_signin_title">سائن ان</string>
+    <string name="account_verify_title">ای میل کی تصدیق</string>
+    <string name="account_recover_title">اکاؤنٹ بحال کریں</string>
+    <string name="account_secure_title">شناخت محفوظ کریں</string>
+    <string name="account_save_title">بحالی کی کلید محفوظ کریں</string>
+    <string name="account_devices_title">آلات</string>
+    <string name="account_offline_title">آف لائن موڈ</string>
+    <string name="account_security_title">اکاؤنٹ کی حفاظت</string>
+    <string name="account_error_not_configured">اس بلڈ میں کلاؤڈ سائن ان ترتیب نہیں۔ کوئی اکاؤنٹ نہیں بنا۔ اس فون پر آف لائن جاری رکھ سکتے ہیں۔</string>
+    <string name="account_error_wrong_recovery">یہ بحالی کلید نہیں کھلی۔ اس فون کی کلیدیں نہیں بدلیں۔</string>
+    <string name="account_status_token_expired">کلاؤڈ ٹوکن ختم ہو گیا۔ آپ سائن آؤٹ نہیں۔ میش شناخت اسی فون پر ہے۔</string>
+    <string name="account_offline_body">یہ انسٹال بغیر نیٹ ورک کے مجاز رہتا ہے۔ ختم شدہ کلاؤڈ ٹوکن سائن آؤٹ نہیں۔ جو آلہ دوبارہ نہ جڑے، سرور اسے منسوخ نہیں کر سکتا۔</string>
+    <string name="account_reset_warning">یہ نئی میش کلید ہے۔ یہ پرانی کلید نہیں۔ رابطوں کو دوبارہ تصدیق کرنی ہوگی۔</string>
+    <string name="settings_account_sign_out">کلاؤڈ سے سائن آؤٹ</string>
+    <string name="settings_account_sign_out_kept">کلاؤڈ سیشن ختم۔ اس فون کی میش کلید رکھی گئی۔</string>
 </resources>

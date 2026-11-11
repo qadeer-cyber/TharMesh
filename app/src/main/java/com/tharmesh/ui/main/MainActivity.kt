@@ -66,6 +66,18 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+        // Cloud login on a phone with no mesh key holds generation. Do not
+        // enter the mesh UI, which would call ensureIdentity and mint a key.
+        if (UserPrefs.isIdentityHeld(this) && UserPrefs.readIdentity(this) == null) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this,
+                    com.tharmesh.ui.account.AccountFlowActivity.Screen.RECOVER
+                )
+            )
+            finish()
+            return
+        }
         setContentView(R.layout.activity_main)
         TharMeshApp.get().ensureMeshStarted()
         requestNearbyPermissionsIfMissing()

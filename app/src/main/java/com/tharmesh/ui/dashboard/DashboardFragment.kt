@@ -42,6 +42,8 @@ class DashboardFragment : Fragment() {
         val signalBars: SignalBarsView? = view.findViewById(R.id.network_signal_bars)
         val statusTitle: TextView = view.findViewById(R.id.mesh_status_title)
         val statusSub: TextView = view.findViewById(R.id.mesh_status_sub)
+        val offline: TextView? = view.findViewById(R.id.account_offline_mode)
+        offline?.text = com.tharmesh.ui.account.AccountOfflineLabel.read(requireContext())
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.isNestedScrollingEnabled = false
         adapter = NearbyAdapter(entries)

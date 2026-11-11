@@ -54,6 +54,7 @@
         tools:ignore="UnusedAttribute">
 
         <activity android:name="com.tharmesh.ui.auth.LoginActivity" />
+        <activity android:name="com.tharmesh.ui.account.AccountFlowActivity" />
         <activity android:name="com.tharmesh.ui.status.StatusActivity" />
         <activity android:name="com.tharmesh.ui.groups.GroupsActivity" />
         <activity android:name="com.tharmesh.ui.contacts.ScanQrActivity" />
