@@ -36,7 +36,7 @@
                 android:textColor="?attr/tmNeonCyan"
                 android:textSize="11sp"
                 android:textStyle="bold"
-                android:text="Replying to" />
+                android:text="@string/chat_reply_to" />
 
             <TextView
                 android:id="@+id/reply_preview"

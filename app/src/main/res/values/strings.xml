@@ -150,6 +150,13 @@
     <!-- Reply action in message bottom sheet. -->
     <string name="action_reply">Reply</string>
     <string name="action_copy">Copy</string>
+    <string name="action_copied">Message copied</string>
+    <string name="chat_day_today">Today</string>
+    <string name="chat_day_yesterday">Yesterday</string>
+    <string name="groups_unavailable_title">Groups</string>
+    <string name="groups_unavailable_body">Groups are not available in this build. Nothing was created.</string>
+    <string name="status_unavailable_title">Status</string>
+    <string name="status_unavailable_body">Status stories are not available. Mesh and disaster status are on the Alerts tab.</string>
     <string name="action_delete">Delete</string>
 
     <!-- Login screen. -->
@@ -265,6 +272,8 @@
     <string name="contacts_scan_qr">Scan QR</string>
     <string name="contacts_add_by_invite">Add by invite code</string>
     <string name="contacts_empty">No contacts yet</string>
+    <string name="contacts_empty_hint">Scan a QR code or enter an invite. A saved contact is not the same as a phone that is nearby.</string>
+    <string name="contacts_screen_hint">Your saved people. Nearby phones are on the Devices tab.</string>
     <string name="contacts_empty_title">No contacts yet</string>
     <string name="contacts_empty_subtitle">Add a contact by QR or nearby mesh discovery</string>
     <string name="contacts_search_hint">Search by name or userId</string>

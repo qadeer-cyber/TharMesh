@@ -1,6 +1,8 @@
 package com.tharmesh.ui.chat
 
 import com.tharmesh.ui.theme.Appearance
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.text.format.DateFormat
@@ -34,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 import java.util.Date
 
 /**
@@ -112,18 +115,7 @@ class ChatActivity : AppCompatActivity() {
 
         adapter = MessageAdapter(
             myUserId = myUserId,
-            onLongPress = { msg ->
-                // Stage 5.3 — failed messages get a "Retry" affordance via the
-                // long-press menu. Non-failed messages keep the existing
-                // reply-on-long-press behaviour.
-                if (msg.fromUserId == myUserId &&
-                    msg.status == com.tharmesh.db.MessageStatus.FAILED
-                ) {
-                    confirmRetryFailed(msg)
-                } else {
-                    startReply(msg)
-                }
-            }
+            onLongPress = { msg -> showMessageActions(msg) }
         )
         val lm = LinearLayoutManager(this)
         lm.stackFromEnd = true
@@ -266,7 +258,7 @@ class ChatActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repository.observeConversation(toUserId).collectLatest { msgs ->
                 adapter.submitList(msgs)
-                if (msgs.isNotEmpty()) recycler.scrollToPosition(msgs.size - 1)
+                if (adapter.itemCount > 0) recycler.scrollToPosition(adapter.itemCount - 1)
                 lastOutgoingStatus = msgs.lastOrNull { it.fromUserId == myUserId }?.status
                 renderTopStatus()
             }
@@ -347,6 +339,28 @@ class ChatActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showMessageActions(msg: MessageEntity) {
+        val labels = ArrayList<String>()
+        val actions = ArrayList<() -> Unit>()
+        labels.add(getString(R.string.action_reply))
+        actions.add { startReply(msg) }
+        labels.add(getString(R.string.action_copy))
+        actions.add { copyMessage(msg) }
+        if (msg.fromUserId == myUserId && msg.status == MessageStatus.FAILED) {
+            labels.add(getString(R.string.chat_retry_failed_action))
+            actions.add { confirmRetryFailed(msg) }
+        }
+        AlertDialog.Builder(this)
+            .setItems(labels.toTypedArray()) { _, which -> actions[which].invoke() }
+            .show()
+    }
+
+    private fun copyMessage(msg: MessageEntity) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("message", msg.body))
+        Toast.makeText(this, R.string.action_copied, Toast.LENGTH_SHORT).show()
+    }
+
     private fun startReply(msg: MessageEntity) {
         replyingTo = msg
         replyBarAuthor.text = if (msg.fromUserId == myUserId) "You" else msg.fromUserId
@@ -362,34 +376,60 @@ class ChatActivity : AppCompatActivity() {
     private class MessageAdapter(
         private val myUserId: String,
         private val onLongPress: (MessageEntity) -> Unit
-    ) : RecyclerView.Adapter<MessageAdapter.VH>() {
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-        private val items: MutableList<MessageEntity> = mutableListOf()
+        private val messages: MutableList<MessageEntity> = mutableListOf()
+        private val rows: MutableList<ChatTranscript.Row> = mutableListOf()
         private val timeFormat = "HH:mm"
 
         fun submitList(msgs: List<MessageEntity>) {
-            items.clear()
-            items.addAll(msgs)
+            messages.clear()
+            messages.addAll(msgs)
+            rows.clear()
+            rows.addAll(ChatTranscript.rows(msgs.map { ChatTranscript.Msg(it.fromUserId, it.timestamp) }))
             notifyDataSetChanged()
         }
 
-        override fun getItemViewType(position: Int): Int =
-            if (items[position].fromUserId == myUserId) TYPE_ME else TYPE_PEER
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-            val layout = if (viewType == TYPE_ME) R.layout.item_msg_me else R.layout.item_msg_peer
-            val view = LayoutInflater.from(parent.context).inflate(layout, parent, false)
-            return VH(view)
+        override fun getItemViewType(position: Int): Int = when (val row = rows[position]) {
+            is ChatTranscript.Row.Day -> TYPE_DATE
+            is ChatTranscript.Row.Bubble ->
+                if (messages[row.messageIndex].fromUserId == myUserId) TYPE_ME else TYPE_PEER
         }
 
-        override fun onBindViewHolder(holder: VH, position: Int) {
-            val msg = items[position]
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            return when (viewType) {
+                TYPE_DATE -> DateVH(inflater.inflate(R.layout.item_msg_date, parent, false))
+                TYPE_ME -> BubbleVH(inflater.inflate(R.layout.item_msg_me, parent, false))
+                else -> BubbleVH(inflater.inflate(R.layout.item_msg_peer, parent, false))
+            }
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            when (val row = rows[position]) {
+                is ChatTranscript.Row.Day ->
+                    (holder as DateVH).label.text = formatDay(holder.itemView.context, row.dayStartMillis)
+                is ChatTranscript.Row.Bubble ->
+                    bindBubble(holder as BubbleVH, messages[row.messageIndex], row.groupedWithPrevious)
+            }
+        }
+
+        private fun bindBubble(holder: BubbleVH, msg: MessageEntity, grouped: Boolean) {
             val ctx = holder.itemView.context
+            val density = ctx.resources.displayMetrics.density
+            val top = ((if (grouped) 2 else 10) * density).toInt()
+            holder.itemView.setPadding(
+                holder.itemView.paddingLeft,
+                top,
+                holder.itemView.paddingRight,
+                holder.itemView.paddingBottom
+            )
             holder.body.text = msg.body
             holder.time.text = DateFormat.format(timeFormat, Date(msg.timestamp))
 
             if (msg.replyToPreview != null) {
                 holder.replyContainer?.visibility = View.VISIBLE
+                holder.replyAuthor?.text = ctx.getString(R.string.chat_reply_to)
                 holder.replyPreview?.text = msg.replyToPreview
             } else {
                 holder.replyContainer?.visibility = View.GONE
@@ -397,17 +437,7 @@ class ChatActivity : AppCompatActivity() {
 
             if (holder.status != null) {
                 holder.status.text = statusGlyph(msg.status)
-                // Resolve tick colour via theme attrs so the light-mode green
-                // bubble gets a contrast-correct slate (#8696A0) and the
-                // dark-mode bubble keeps its neon cyan/blue. Was hardcoded
-                // R.color.tm_tick_* (static, ignores DayNight); on the light
-                // green bubble the static neon-blue read tick was too saturated
-                // and the default tick-blue washed out against the green fill.
-                val attr = if (msg.status == MessageStatus.READ) {
-                    R.attr.tmTickRead
-                } else {
-                    R.attr.tmTickDefault
-                }
+                val attr = if (msg.status == MessageStatus.READ) R.attr.tmTickRead else R.attr.tmTickDefault
                 val tv = android.util.TypedValue()
                 ctx.theme.resolveAttribute(attr, tv, true)
                 holder.status.setTextColor(tv.data)
@@ -417,6 +447,20 @@ class ChatActivity : AppCompatActivity() {
                 onLongPress(msg)
                 true
             }
+        }
+
+        private fun formatDay(ctx: Context, dayStartMillis: Long): String {
+            val today = Calendar.getInstance()
+            val day = Calendar.getInstance().apply { timeInMillis = dayStartMillis }
+            if (sameDay(today, day)) return ctx.getString(R.string.chat_day_today)
+            today.add(Calendar.DAY_OF_YEAR, -1)
+            if (sameDay(today, day)) return ctx.getString(R.string.chat_day_yesterday)
+            return DateFormat.getMediumDateFormat(ctx).format(Date(dayStartMillis))
+        }
+
+        private fun sameDay(a: Calendar, b: Calendar): Boolean {
+            return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
+                a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
         }
 
         private fun statusGlyph(status: String): String = when (status) {
@@ -430,17 +474,23 @@ class ChatActivity : AppCompatActivity() {
             else -> ""
         }
 
-        override fun getItemCount(): Int = items.size
+        override fun getItemCount(): Int = rows.size
 
-        class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        class DateVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val label: TextView = itemView.findViewById(R.id.text_day)
+        }
+
+        class BubbleVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
             val body: TextView = itemView.findViewById(R.id.text_body)
             val time: TextView = itemView.findViewById(R.id.text_time)
             val status: TextView? = itemView.findViewById(R.id.text_status)
             val replyContainer: LinearLayout? = itemView.findViewById(R.id.reply_container)
+            val replyAuthor: TextView? = itemView.findViewById(R.id.reply_author)
             val replyPreview: TextView? = itemView.findViewById(R.id.reply_preview)
         }
 
         companion object {
+            private const val TYPE_DATE = 0
             private const val TYPE_ME = 1
             private const val TYPE_PEER = 2
         }

@@ -55,4 +55,13 @@
     <string name="new_chat_userid_hint">اهڙي مستقل ٿارميش سڃاڻپ سان چيٽ کوليو جيڪا اڳ ۾ ئي اوهان وٽ هجي.</string>
     <string name="chat_row_pinned">پن</string>
     <string name="chat_row_muted">خاموش</string>
+    <string name="action_copied">نياپو نقل ٿي ويو</string>
+    <string name="chat_day_today">اڄ</string>
+    <string name="chat_day_yesterday">ڪالهه</string>
+    <string name="groups_unavailable_title">گروپ</string>
+    <string name="groups_unavailable_body">هن بلڊ ۾ گروپ موجود نه آهن. ڪجهه نه ٺهيو.</string>
+    <string name="status_unavailable_title">اسٽيٽس</string>
+    <string name="status_unavailable_body">اسٽيٽس ڪهاڻيون موجود نه آهن. ميش ۽ آفت جي حالت الرٽس ٽيب تي آهي.</string>
+    <string name="contacts_empty_hint">QR اسڪين ڪريو يا دعوت لکو. محفوظ رابطو ويجهو فون نه آهي.</string>
+    <string name="contacts_screen_hint">اوهان جا محفوظ ماڻهو. ويجهو فون ڊوائيس واري ٽيب تي آهن.</string>
 </resources>

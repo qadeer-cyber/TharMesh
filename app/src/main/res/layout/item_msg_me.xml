@@ -36,7 +36,7 @@
                 android:textColor="?attr/tmNeonCyan"
                 android:textSize="11sp"
                 android:textStyle="bold"
-                android:text="Replying to" />
+                android:text="@string/chat_reply_to" />
 
             <TextView
                 android:id="@+id/reply_preview"
@@ -44,7 +44,7 @@
                 android:layout_height="wrap_content"
                 android:maxLines="2"
                 android:ellipsize="end"
-                android:textColor="#CCE6F5FF"
+                android:textColor="?attr/tmBubbleTextMe"
                 android:textSize="12sp" />
         </LinearLayout>
 

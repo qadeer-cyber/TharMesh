@@ -55,4 +55,13 @@
     <string name="new_chat_userid_hint">ایسی مستقل تھارمیش شناخت سے چیٹ کھولیں جو آپ کے پاس پہلے سے ہو۔</string>
     <string name="chat_row_pinned">پن</string>
     <string name="chat_row_muted">خاموش</string>
+    <string name="action_copied">پیغام نقل ہو گیا</string>
+    <string name="chat_day_today">آج</string>
+    <string name="chat_day_yesterday">کل</string>
+    <string name="groups_unavailable_title">گروپ</string>
+    <string name="groups_unavailable_body">اس بلڈ میں گروپ دستیاب نہیں۔ کچھ نہیں بنا۔</string>
+    <string name="status_unavailable_title">اسٹیٹس</string>
+    <string name="status_unavailable_body">اسٹیٹس کہانیاں دستیاب نہیں۔ میش اور آفت کی حالت الرٹس ٹیب پر ہے۔</string>
+    <string name="contacts_empty_hint">QR اسکین کریں یا دعوت لکھیں۔ محفوظ رابطہ قریبی فون نہیں۔</string>
+    <string name="contacts_screen_hint">آپ کے محفوظ لوگ۔ قریبی فون آلات والے ٹیب پر ہیں۔</string>
 </resources>

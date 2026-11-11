@@ -68,15 +68,19 @@
     </LinearLayout>
 
     <TextView
-        style="@style/Text.Caption"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_date_chip"
         android:gravity="center"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingBottom="8dp"
+        android:paddingStart="14dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="6dp"
         android:text="@string/chat_header_encrypted"
-        android:textColor="?attr/tmTextSecondary" />
+        android:textColor="?attr/tmTextSecondary"
+        android:textSize="12sp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_messages"
