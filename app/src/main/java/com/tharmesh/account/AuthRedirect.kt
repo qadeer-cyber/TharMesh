@@ -4,6 +4,7 @@
 package com.tharmesh.account
 
 import com.tharmesh.identity.Base64Url
+import org.json.JSONObject
 import java.net.URLDecoder
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -18,7 +19,7 @@ object AuthRedirect {
     private val ALLOWED_TYPES = setOf("signup", "email", "magiclink", "recovery", "invite")
 
     sealed class Parsed {
-        object Rejected : Parsed()
+        data class Rejected(val reason: String) : Parsed()
         data class Accepted(
             val code: String?,
             val tokenHash: String?,
@@ -64,7 +65,16 @@ object AuthRedirect {
         val query = decodeParams(afterHost.substringAfter('?', ""))
         val frag = decodeParams(fragment)
         fun pick(name: String): String? = query[name] ?: frag[name]
-        if (!pick("error").isNullOrBlank()) return Parsed.Rejected
+        val error = pick("error")
+        val errorCode = pick("error_code")
+        if (!error.isNullOrBlank() || !errorCode.isNullOrBlank()) {
+            val body = JSONObject()
+                .put("error", error ?: "")
+                .put("error_code", errorCode ?: "")
+                .put("error_description", pick("error_description") ?: "")
+                .toString()
+            return Parsed.Rejected(AuthErrors.classify(body, 400).reason)
+        }
         val type = pick("type")
         if (type != null && type !in ALLOWED_TYPES) return null
         val access = pick("access_token")

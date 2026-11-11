@@ -37,16 +37,28 @@ the build until that environment exists and the job names it.
 
 ## URL configuration (owner action in the Supabase dashboard)
 
-Authentication → URL Configuration. The default Site URL `http://localhost:3000` is why the confirmation email never opens the app.
+A confirmation link that opens `http://localhost:3000` was built from the project Site URL. GoTrue uses `redirect_to` only when that exact value is on the allow-list. If it is missing, GoTrue falls back to the Site URL and does not return an error to the app. An email sent before this APK, or before the allow-list was saved, keeps the old link. Resend from the new APK after the dashboard is saved. A user who is already confirmed will not get another mail.
 
-Set both of these exactly:
+Authentication → URL Configuration. Set these exactly:
 
 - **Site URL:** `tharmesh://auth/callback`
 - **Additional Redirect URLs:** `tharmesh://auth/callback`
 
-Save. The app also sends `redirect_to=tharmesh://auth/callback` on signup and resend. Supabase still refuses a redirect that is not on that allow-list, and the email link is built from the Site URL, so the dashboard values are required.
+If the dashboard offers a wildcard, also add `tharmesh://**`. The string must match, including the scheme. `http://localhost:3000` must not remain the Site URL.
+
+Authentication → Emails → Confirm signup. The template must keep `{{ .ConfirmationURL }}`. Do not replace it with `{{ .SiteURL }}`. The app also accepts a direct link:
+
+```
+{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=signup
+```
+
+`type=email` is accepted as well. Signup and resend both send `redirect_to=tharmesh://auth/callback` as a query parameter. Signup also repeats it in the JSON body. The password grant and a verified callback are the only paths that mark the account confirmed on the phone.
+
+If the link opens on a phone that no longer has the signup challenge (reinstall, or the mail was opened after the challenge was cleared), the screen says to sign in with the password. Code: `pkce_verifier_missing` or `pkce_expired`.
 
 Built-in email rate limits return HTTP 429. The app shows that, honors `Retry-After` when Supabase sends it, and disables Resend for the cooldown. It does not retry the send by itself. For real use, configure custom SMTP under Authentication → Emails. The built-in mailer is only enough for a few messages an hour.
+
+Every auth failure ends with `Code: <slug>`. Send that slug. It is not an email, token, or key.
 
 ## Dashboard steps that are not in this repo
 

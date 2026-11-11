@@ -33,7 +33,11 @@ data class AuthTokens(
 sealed class AuthCall {
     data class Ok(val tokens: AuthTokens) : AuthCall()
     data class PendingVerification(val accountId: String) : AuthCall()
-    data class Failed(val reason: String, val retryAfterSeconds: Long? = null) : AuthCall()
+    data class Failed(
+        val reason: String,
+        val retryAfterSeconds: Long? = null,
+        val diagnostic: String = ""
+    ) : AuthCall()
 }
 
 /**
@@ -133,7 +137,11 @@ object AuthBackend {
     fun resendVerification(http: HttpTransport, baseUrl: String, anonKey: String, email: String): AuthCall {
         if (!configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
         val url = baseUrl.trim().trimEnd('/') + "/auth/v1/resend" + redirectQuery()
-        val body = JSONObject().put("type", "signup").put("email", email.trim()).toString()
+        val body = JSONObject()
+            .put("type", "signup")
+            .put("email", email.trim())
+            .put("redirect_to", AuthRedirect.CALLBACK)
+            .toString()
         val response = try {
             http.post(url, SupabaseHeaders.build(anonKey), body)
         } catch (ignored: Throwable) {
@@ -168,7 +176,9 @@ object AuthBackend {
         codeVerifier: String
     ): AuthCall {
         if (!configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        if (code.isBlank() || codeVerifier.isBlank()) return AuthCall.Failed("callback_rejected")
+        if (code.isBlank() || codeVerifier.isBlank()) {
+            return AuthCall.Failed("pkce_verifier_missing", diagnostic = "pkce_verifier_missing")
+        }
         val url = baseUrl.trim().trimEnd('/') + "/auth/v1/token?grant_type=pkce"
         val body = JSONObject().put("auth_code", code).put("code_verifier", codeVerifier).toString()
         return postAuth(http, url, anonKey, body, allowEmptyToken = false)
@@ -240,6 +250,7 @@ object AuthBackend {
         }
         val url = baseUrl.trim().trimEnd('/') + path + query
         val payload = JSONObject().put("email", email.trim()).put("password", password)
+        if (path.endsWith("/signup")) payload.put("redirect_to", AuthRedirect.CALLBACK)
         if (!codeChallenge.isNullOrBlank()) {
             payload.put("code_challenge", codeChallenge)
             payload.put("code_challenge_method", "s256")
@@ -268,43 +279,22 @@ object AuthBackend {
     }
 
     private fun mapResponse(response: HttpTransport.Response, onSuccess: () -> AuthCall): AuthCall {
-        if (response.code == 401) return AuthCall.Failed("unauthorized")
-        val reason = errorReason(response.body)
-        if (response.code == 429 || reason == "rate_limited") {
-            return AuthCall.Failed("rate_limited", response.retryAfterSeconds)
+        if (response.code in 200..299) return onSuccess()
+        val mapped = AuthErrors.classify(response.body, response.code)
+        val reason = when {
+            response.code == 401 &&
+                (mapped.reason == "unrecognized" || mapped.reason == "invalid_credentials") -> "unauthorized"
+            mapped.reason != "unrecognized" -> mapped.reason
+            response.code == 401 -> "unauthorized"
+            else -> "unrecognized"
         }
-        if (response.code !in 200..299) {
-            return AuthCall.Failed(reason ?: "http_${response.code}")
-        }
-        return onSuccess()
+        val retry = if (reason == "rate_limited" || response.code == 429) response.retryAfterSeconds else null
+        return AuthCall.Failed(reason, retry, mapped.diagnostic)
     }
 
     private fun redirectQuery(): String {
         val encoded = URLEncoder.encode(AuthRedirect.CALLBACK, "UTF-8")
         return "?redirect_to=$encoded"
-    }
-
-    private fun errorReason(body: String): String? {
-        return try {
-            val json = JSONObject(body)
-            val code = json.optString("error_code", json.optString("error", ""))
-            val description = json.optString("error_description", "") + json.optString("msg", "")
-            if (code.contains("email_not_confirmed") || description.contains("email_not_confirmed") ||
-                description.contains("Email not confirmed")
-            ) {
-                "email_unverified"
-            } else if (
-                code.contains("over_request_rate_limit") ||
-                code.contains("over_email_send_rate_limit") ||
-                description.contains("rate limit")
-            ) {
-                "rate_limited"
-            } else {
-                null
-            }
-        } catch (ignored: Throwable) {
-            null
-        }
     }
 
     private fun emailConfirmed(body: String): Boolean {

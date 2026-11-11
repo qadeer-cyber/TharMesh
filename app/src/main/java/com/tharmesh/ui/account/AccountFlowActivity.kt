@@ -98,6 +98,9 @@ class AccountFlowActivity : AppCompatActivity() {
         }
         findViewById<TextView>(R.id.account_back).setOnClickListener { finish() }
         bind(screen)
+        intent.getStringExtra(EXTRA_AUTH_REASON)?.let { reason ->
+            findViewById<TextView>(R.id.account_status).text = explain(reason, diagnostic = reason)
+        }
     }
 
     override fun onDestroy() {
@@ -311,7 +314,7 @@ class AccountFlowActivity : AppCompatActivity() {
                     ) {
                         limiter.recordFailure(System.currentTimeMillis())
                     }
-                    status.text = explain(result.reason, result.retryAfterSeconds)
+                    status.text = explain(result.reason, result.retryAfterSeconds, result.diagnostic)
                 }
                 is AuthCall.PendingVerification -> {
                     PendingSignupStore.save(
@@ -360,14 +363,14 @@ class AccountFlowActivity : AppCompatActivity() {
                         status.setText(R.string.account_error_network)
                     } else if (result.reason == "rate_limited") {
                         armResendCooldown(result.retryAfterSeconds)
-                        status.text = explain(result.reason, result.retryAfterSeconds)
+                        status.text = explain(result.reason, result.retryAfterSeconds, result.diagnostic)
                     } else if (result.reason == "email_unverified") {
                         intent.putExtra(EXTRA_EMAIL, mail)
                         status.setText(R.string.account_verify_body)
                         if (screen != Screen.VERIFY_EMAIL) bind(Screen.VERIFY_EMAIL)
                     } else {
                         if (result.reason != "cloud_auth_not_configured") limiter.recordFailure(System.currentTimeMillis())
-                        status.text = explain(result.reason)
+                        status.text = explain(result.reason, diagnostic = result.diagnostic)
                     }
                 }
                 is AuthCall.PendingVerification -> status.setText(R.string.account_verify_body)
@@ -775,7 +778,7 @@ class AccountFlowActivity : AppCompatActivity() {
             when (result) {
                 is AuthCall.Failed -> {
                     if (result.reason == "rate_limited") armResendCooldown(result.retryAfterSeconds)
-                    status.text = explain(result.reason, result.retryAfterSeconds)
+                    status.text = explain(result.reason, result.retryAfterSeconds, result.diagnostic)
                 }
                 else -> {
                     armResendCooldown(60)
@@ -822,21 +825,32 @@ class AccountFlowActivity : AppCompatActivity() {
         )
     }
 
-    private fun explain(reason: String, retryAfterSeconds: Long? = null): String {
-        return when (reason) {
+    private fun explain(reason: String, retryAfterSeconds: Long? = null, diagnostic: String = ""): String {
+        val message = when (reason) {
             "cloud_auth_not_configured" -> getString(R.string.account_error_not_configured)
             "network" -> getString(R.string.account_error_network)
             "invalid_credentials_shape", "invalid_handle" -> getString(R.string.account_error_invalid)
             "handle_taken", "email_taken" -> getString(R.string.account_error_handle)
-            "email_unverified" -> getString(R.string.account_verify_body)
+            "email_unverified" -> getString(R.string.account_error_email_unverified)
+            "invalid_credentials" -> getString(R.string.account_error_invalid_credentials)
+            "otp_expired" -> getString(R.string.account_error_otp_expired)
             "rate_limited" -> getString(
                 R.string.account_error_email_rate_limited,
                 (retryAfterSeconds ?: 60L).toInt()
             )
+            "account_exists" -> getString(R.string.account_error_account_exists)
+            "already_confirmed" -> getString(R.string.account_error_already_confirmed)
+            "weak_password" -> getString(R.string.account_error_weak_password)
+            "validation_failed" -> getString(R.string.account_error_validation)
+            "pkce_expired", "pkce_verifier_missing" -> getString(R.string.account_error_pkce)
+            "email_address_invalid" -> getString(R.string.account_error_email_invalid)
+            "signup_disabled" -> getString(R.string.account_error_signup_disabled)
             "callback_rejected" -> getString(R.string.account_error_callback)
-            "unauthorized" -> getString(R.string.login_failed_fmt, "session expired")
-            else -> getString(R.string.login_failed_fmt, reason)
+            "unauthorized" -> getString(R.string.account_error_unauthorized)
+            else -> getString(R.string.account_error_unrecognized)
         }
+        val code = diagnostic.ifBlank { reason }
+        return getString(R.string.account_error_with_code, message, code)
     }
 
     private fun offlineLabel(): String {
@@ -909,6 +923,7 @@ class AccountFlowActivity : AppCompatActivity() {
         private const val EXTRA_EMAIL = "email"
         private const val EXTRA_ACCOUNT_ID = "account_id"
         private const val EXTRA_ACCESS = "access_token"
+        const val EXTRA_AUTH_REASON = "auth_reason"
         private val limiter = AuthRateLimiter()
 
         fun intent(context: Context, screen: Screen): Intent {

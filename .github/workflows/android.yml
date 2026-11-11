@@ -126,6 +126,29 @@ jobs:
           echo "auth_health_http=${code}"
           echo "live_signup_executed=false"
           rm -f /tmp/supabase-auth-health.json
+          settings=$(curl -sS -o /tmp/supabase-auth-settings.json -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL%/}/auth/v1/settings" || true)
+          echo "auth_settings_http=${settings}"
+          python3 - <<'PY'
+import json
+def flag(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return "unknown"
+try:
+    data = json.load(open("/tmp/supabase-auth-settings.json"))
+except Exception:
+    print("auth_settings_parsed=false")
+    raise SystemExit
+external = data.get("external") if isinstance(data.get("external"), dict) else {}
+print("signup_disabled=" + flag(data.get("disable_signup")))
+print("mailer_autoconfirm=" + flag(data.get("mailer_autoconfirm")))
+print("provider_email=" + flag(external.get("email")))
+print("provider_google=" + flag(external.get("google")))
+print("auth_settings_parsed=true")
+PY
+          rm -f /tmp/supabase-auth-settings.json
 
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug

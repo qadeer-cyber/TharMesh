@@ -36,8 +36,12 @@ class AuthCallbackActivity : AppCompatActivity() {
         Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         val parsed = AuthRedirect.parse(intent?.data?.toString())
+        if (parsed is AuthRedirect.Parsed.Rejected) {
+            open(AccountFlowActivity.Screen.VERIFY_EMAIL, parsed.reason)
+            return
+        }
         if (parsed !is AuthRedirect.Parsed.Accepted) {
-            open(AccountFlowActivity.Screen.VERIFY_EMAIL)
+            open(AccountFlowActivity.Screen.VERIFY_EMAIL, "callback_rejected")
             return
         }
         lifecycleScope.launch {
@@ -71,7 +75,8 @@ class AuthCallbackActivity : AppCompatActivity() {
                         open(AccountFlowActivity.Screen.RECOVER)
                 }
             } else {
-                open(AccountFlowActivity.Screen.VERIFY_EMAIL)
+                val reason = if (result is AuthCall.Failed) result.reason else "callback_rejected"
+                open(AccountFlowActivity.Screen.VERIFY_EMAIL, reason)
             }
             finish()
         }
@@ -102,10 +107,10 @@ class AuthCallbackActivity : AppCompatActivity() {
         return AuthCall.Failed("callback_rejected")
     }
 
-    private fun open(screen: AccountFlowActivity.Screen) {
-        startActivity(
-            AccountFlowActivity.intent(this, screen).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        )
+    private fun open(screen: AccountFlowActivity.Screen, reason: String? = null) {
+        val next = AccountFlowActivity.intent(this, screen).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (!reason.isNullOrBlank()) next.putExtra(AccountFlowActivity.EXTRA_AUTH_REASON, reason)
+        startActivity(next)
         finish()
     }
 }

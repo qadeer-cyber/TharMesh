@@ -77,7 +77,7 @@ class EmailConfirmationTest {
         val fromCode = AuthBackend.exchangePkce(http, base, apiKey, "code-1", "verifier-1") as AuthCall.Ok
         assertTrue(fromCode.tokens.emailVerified)
         val missingVerifier = AuthBackend.exchangePkce(http, base, apiKey, "code-1", "")
-        assertEquals("callback_rejected", (missingVerifier as AuthCall.Failed).reason)
+        assertEquals("pkce_verifier_missing", (missingVerifier as AuthCall.Failed).reason)
     }
 
     @Test
