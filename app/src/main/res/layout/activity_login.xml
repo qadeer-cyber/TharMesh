@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -79,7 +80,8 @@
             android:layout_height="52dp"
             android:layout_marginTop="12dp"
             android:text="@string/login_sign_in"
-            android:textAllCaps="false" />
+            android:textAllCaps="false"
+            app:backgroundTint="@null" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/login_anonymous_button"

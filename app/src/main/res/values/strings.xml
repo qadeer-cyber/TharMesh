@@ -226,7 +226,7 @@
     <string name="account_enroll_accepted">This phone accepted the certificate. The mesh key was not replaced.</string>
     <string name="account_confirm_new_key">I understand this is a new key, not my previous one, and contacts must verify it again.</string>
     <string name="account_confirm_first_key">This phone has no earlier TharMesh key to restore.</string>
-    <string name="account_error_not_configured">Cloud sign-in is not configured on this build. No account was created. You can continue offline on this phone.</string>
+    <string name="account_error_not_configured">Cloud sign-in is not configured on this build. No account was created. Add the Supabase URL and anon key, then try again.</string>
     <string name="account_error_rate_limited">Too many attempts. Wait and try again.</string>
     <string name="account_error_invalid">Check the email, password (8 or more characters), and handle.</string>
     <string name="account_error_handle">That handle is already used, or it is not 3–20 letters, digits, or underscores.</string>
