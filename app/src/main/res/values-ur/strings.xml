@@ -60,6 +60,7 @@
     <string name="new_chat_userid_hint">ایسی مستقل تھارمیش شناخت سے چیٹ کھولیں جو آپ کے پاس پہلے سے ہو۔</string>
     <string name="chat_row_pinned">پن</string>
     <string name="chat_row_muted">خاموش</string>
+    <string name="dash_signal_empty">رینج میں کوئی ساتھی نہیں۔ سگنل کی پٹیاں تب تک چھپی رہتی ہیں جب تک کوئی آلہ قریب نہ ہو۔</string>
     <string name="action_copied">پیغام نقل ہو گیا</string>
     <string name="chat_day_today">آج</string>
     <string name="chat_day_yesterday">کل</string>

@@ -374,6 +374,7 @@
     <string name="dash_signal_good">Good · -62 dBm</string>
     <string name="dash_signal_weak">Weak · -84 dBm</string>
     <string name="dash_signal_unknown">—</string>
+    <string name="dash_signal_empty">No peers in range. Signal bars stay hidden until a device is nearby.</string>
     <string name="dash_network_title">Network</string>
     <string name="dash_network_live">LIVE</string>
     <string name="dash_nearby_title">Nearby Devices</string>

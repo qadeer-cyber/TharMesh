@@ -190,12 +190,12 @@
     <color name="tm_dark_glass_highlight">#33FFFFFF</color>
     <!-- Two-tone accent gradient (cyan → green) for the brand identity. -->
     <color name="tm_dark_gradient_accent_start">#00E5FF</color>
-    <color name="tm_dark_gradient_accent_end">#00E676</color>
+    <color name="tm_dark_gradient_accent_end">#60A5FA</color>
     <!-- Drop-shadow tint for elevated surfaces (used as an outer stroke
          layer in faux-glass; real elevation only renders on MaterialCardView). -->
     <color name="tm_dark_shadow_soft">#66000000</color>
     <!-- Status dot palettes — picked up by [com.tharmesh.ui.widget.PulsingDot]. -->
-    <color name="tm_dark_dot_connected">#00E676</color>
+    <color name="tm_dark_dot_connected">#60A5FA</color>
     <color name="tm_dark_dot_searching">#00E5FF</color>
     <color name="tm_dark_dot_offline">#5E6B87</color>
     <color name="tm_dark_dot_degraded">#F0B070</color>
@@ -205,9 +205,9 @@
     <color name="tm_light_surface_glass_floating">#E6FFFFFF</color>
     <color name="tm_light_glass_highlight">#33FFFFFF</color>
     <color name="tm_light_gradient_accent_start">#1FA2FF</color>
-    <color name="tm_light_gradient_accent_end">#25D366</color>
+    <color name="tm_light_gradient_accent_end">#2563EB</color>
     <color name="tm_light_shadow_soft">#26000000</color>
-    <color name="tm_light_dot_connected">#25D366</color>
+    <color name="tm_light_dot_connected">#2563EB</color>
     <color name="tm_light_dot_searching">#1FA2FF</color>
     <color name="tm_light_dot_offline">#8696A0</color>
     <color name="tm_light_dot_degraded">#F09D38</color>

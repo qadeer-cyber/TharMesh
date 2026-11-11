@@ -110,6 +110,9 @@
         <item name="tmBubbleMeEnd">@color/tm_rose_primary_soft</item>
         <item name="tmBubbleTextMe">@color/tm_rose_text</item>
         <item name="tmUnreadBadge">@color/tm_rose_primary</item>
+        <item name="tmGradientAccentStart">@color/tm_rose_primary</item>
+        <item name="tmGradientAccentEnd">@color/tm_rose_primary</item>
+        <item name="tmDotConnected">@color/tm_rose_primary</item>
     </style>
 
     <style name="ThemeOverlay.TharMesh.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">

@@ -84,6 +84,20 @@ class LayoutReconstructionTest {
     }
 
     @Test
+    fun sendButtonAndWelcomeDoNotUseTheOldAccent() {
+        val send = read("drawable/bg_send_button_active.xml")
+        assertFalse(send.contains("<gradient"))
+        assertTrue(send.contains("?attr/tmNeonGreen"))
+        val login = read("layout/activity_login.xml")
+        assertFalse(login.contains("bg_composer"))
+        assertTrue(login.contains("@drawable/ic_google"))
+        assertFalse(read("layout/fragment_contacts.xml").contains("bg_brand_accent_underline"))
+        assertFalse(read("layout/fragment_status.xml").contains("bg_brand_accent_underline"))
+        assertTrue(read("layout/fragment_dashboard.xml").contains("@+id/signal_empty"))
+        assertFalse(read("layout/part_health_stat.xml").contains("86%"))
+    }
+
+    @Test
     fun radialGlows_doNotUseThemeAttributes() {
         for (name in listOf(
             "drawable/bg_nav_pill_glow.xml",

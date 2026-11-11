@@ -31,14 +31,16 @@
             style="@style/Text.H1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="8dp"
+            android:text="@string/account_create_title" />
 
         <TextView
             android:id="@+id/account_body"
             style="@style/Text.Body"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="8dp"
+            android:text="@string/account_create_body" />
 
         <EditText
             android:id="@+id/account_field_1"
@@ -47,6 +49,7 @@
             android:layout_marginTop="20dp"
             android:background="@drawable/bg_input"
             android:importantForAutofill="no"
+            android:hint="@string/account_field_email"
             android:inputType="textEmailAddress"
             android:minHeight="48dp"
             android:padding="12dp"
@@ -60,6 +63,7 @@
             android:layout_marginTop="12dp"
             android:background="@drawable/bg_input"
             android:importantForAutofill="no"
+            android:hint="@string/account_field_password"
             android:inputType="textPassword"
             android:minHeight="48dp"
             android:padding="12dp"
@@ -73,12 +77,12 @@
             android:layout_marginTop="12dp"
             android:background="@drawable/bg_input"
             android:importantForAutofill="no"
+            android:hint="@string/account_field_name"
             android:inputType="textPersonName"
             android:minHeight="48dp"
             android:padding="12dp"
             android:textColor="?attr/tmTextPrimary"
-            android:textColorHint="?attr/tmTextMuted"
-            android:visibility="gone" />
+            android:textColorHint="?attr/tmTextMuted" />
 
         <EditText
             android:id="@+id/account_field_3"
@@ -87,6 +91,7 @@
             android:layout_marginTop="12dp"
             android:background="@drawable/bg_input"
             android:importantForAutofill="no"
+            android:hint="@string/account_field_handle"
             android:inputType="text"
             android:minHeight="48dp"
             android:padding="12dp"
@@ -127,6 +132,7 @@
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginTop="20dp"
+            android:text="@string/account_action_create"
             android:textAllCaps="false" />
 
         <com.google.android.material.button.MaterialButton

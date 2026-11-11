@@ -44,6 +44,9 @@ class DashboardFragment : Fragment() {
         val statusSub: TextView = view.findViewById(R.id.mesh_status_sub)
         val offline: TextView? = view.findViewById(R.id.account_offline_mode)
         offline?.text = com.tharmesh.ui.account.AccountOfflineLabel.read(requireContext())
+        offline?.visibility = View.VISIBLE
+        val signalEmpty: View = view.findViewById(R.id.signal_empty)
+        val liveChip: View = view.findViewById(R.id.network_live)
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.isNestedScrollingEnabled = false
         adapter = NearbyAdapter(entries)
@@ -67,11 +70,11 @@ class DashboardFragment : Fragment() {
 
                 val onlineCount = nodes.count { it.online }
                 graph.setPeerCount(onlineCount)
-                // Stage 9.2 — feed the same online count into the signal-bars
-                // indicator so it actually animates instead of showing 4
-                // permanently-dim bars (the old self-animating implementation
-                // was replaced by a peer-count-driven one).
                 signalBars?.setPeerCount(onlineCount)
+                val hasPeers = onlineCount > 0
+                signalBars?.visibility = if (hasPeers) View.VISIBLE else View.GONE
+                signalEmpty.visibility = if (hasPeers) View.GONE else View.VISIBLE
+                liveChip.visibility = if (hasPeers) View.VISIBLE else View.GONE
                 if (onlineCount == 0) {
                     statusTitle.setText(R.string.dash_searching_title)
                     statusSub.setText(R.string.dash_searching_sub)

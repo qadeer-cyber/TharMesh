@@ -46,12 +46,6 @@
             android:layout_marginTop="2dp"
             android:text="@string/app_subtagline" />
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="2dp"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_brand_accent_underline" />
-
         <!-- Emergency broadcast card. Stage 9.2 wrapped in a parent FrameLayout
              with bg_pulse_red so the soft red halo bleeds beyond the card
              edges; ObjectAnimator alpha pulse driven from StatusFragment. -->

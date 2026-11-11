@@ -60,6 +60,7 @@
     <string name="new_chat_userid_hint">اهڙي مستقل ٿارميش سڃاڻپ سان چيٽ کوليو جيڪا اڳ ۾ ئي اوهان وٽ هجي.</string>
     <string name="chat_row_pinned">پن</string>
     <string name="chat_row_muted">خاموش</string>
+    <string name="dash_signal_empty">رينج ۾ ڪو ساٿي نه. سگنل جون پٽيون تيستائين لڪل رهن ٿيون جيستائين ڪو ڊوائيس ويجهو نه اچي.</string>
     <string name="action_copied">نياپو نقل ٿي ويو</string>
     <string name="chat_day_today">اڄ</string>
     <string name="chat_day_yesterday">ڪالهه</string>

@@ -19,12 +19,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:text="86%" />
+        android:text="\u2014" />
 
     <TextView
         android:id="@+id/health_label"
         style="@style/Text.Caption"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Battery" />
+        android:text="\u2014" />
 </LinearLayout>

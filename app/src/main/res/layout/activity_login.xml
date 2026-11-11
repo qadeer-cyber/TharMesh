@@ -52,17 +52,20 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_composer"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/login_google_button"
-            style="@style/TmButton.Primary"
+            style="@style/TmButton.Ghost"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:text="@string/login_continue_with_google"
-            android:textAllCaps="false" />
+            android:textAllCaps="false"
+            app:backgroundTint="@null"
+            app:icon="@drawable/ic_google"
+            app:iconGravity="textStart"
+            app:iconPadding="12dp"
+            app:iconTint="@null" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/login_create_button"

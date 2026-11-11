@@ -54,7 +54,7 @@
             android:layout_height="wrap_content"
             android:maxWidth="@dimen/tm_bubble_max_width"
             android:textColor="?attr/tmBubbleTextPeer"
-            android:textSize="15sp" />
+            android:textSize="16sp" />
 
         <TextView
             android:id="@+id/text_time"

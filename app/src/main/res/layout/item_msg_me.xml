@@ -54,7 +54,7 @@
             android:layout_height="wrap_content"
             android:maxWidth="@dimen/tm_bubble_max_width"
             android:textColor="?attr/tmBubbleTextMe"
-            android:textSize="15sp" />
+            android:textSize="16sp" />
 
         <LinearLayout
             android:layout_width="wrap_content"

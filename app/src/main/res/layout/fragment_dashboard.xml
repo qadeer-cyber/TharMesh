@@ -108,7 +108,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/account_status_offline_authorized" />
+            android:visibility="gone" />
 
         <!-- Signal strength card -->
         <LinearLayout
@@ -131,25 +131,22 @@
                     android:layout_weight="1"
                     android:text="@string/dash_signal_title" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_chip_green"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp"
-                    android:text="@string/dash_signal_unknown"
-                    android:textColor="?attr/tmNeonGreen"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/signal_empty"
+                style="@style/Text.Body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/dash_signal_empty" />
 
             <com.tharmesh.ui.widget.SignalBarsView
                 android:id="@+id/network_signal_bars"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="12dp" />
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Network mesh graph card -->
@@ -174,6 +171,7 @@
                     android:text="@string/dash_network_title" />
 
                 <TextView
+                    android:id="@+id/network_live"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_chip_cyan"
@@ -182,9 +180,10 @@
                     android:paddingTop="4dp"
                     android:paddingBottom="4dp"
                     android:text="@string/dash_network_live"
-                    android:textColor="?attr/tmNeonCyan"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
+                    android:textColor="?attr/tmNeonGreen"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <com.tharmesh.ui.widget.MeshGraphView
