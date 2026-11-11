@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,7 +26,7 @@ class GroupsActivity : AppCompatActivity() {
         val comingSoon = TextView(this)
         val pad = (12 * resources.displayMetrics.density).toInt()
         comingSoon.setPadding(pad, pad, pad, pad)
-        comingSoon.text = "Groups - Coming soon"
+        comingSoon.text = "Groups are not available in this build."
         content.addView(comingSoon)
 
         val recyclerView = RecyclerView(this)
@@ -50,7 +51,10 @@ class GroupsActivity : AppCompatActivity() {
 
         val fab = FloatingActionButton(this)
         fab.setImageResource(android.R.drawable.ic_input_add)
-        fab.contentDescription = "New Group"
+        fab.contentDescription = "New group is not available"
+        fab.setOnClickListener {
+            Toast.makeText(this, "Groups are not available yet.", Toast.LENGTH_SHORT).show()
+        }
         val fabParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
