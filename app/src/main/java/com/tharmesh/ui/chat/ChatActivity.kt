@@ -83,6 +83,7 @@ class ChatActivity : AppCompatActivity() {
         Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
+        findViewById<android.view.View>(R.id.button_chat_back).setOnClickListener { finish() }
         // Stage 9.2 — premium enter transition. Applied after super.onCreate
         // because overridePendingTransition only takes effect on the most
         // recent activity transition.

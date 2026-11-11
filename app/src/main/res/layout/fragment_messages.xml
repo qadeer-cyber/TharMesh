@@ -21,7 +21,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient">
+    android:background="?attr/tmBg">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -57,9 +57,9 @@
                  missing. Tap opens [mesh_warning_dialog]. -->
             <FrameLayout
                 android:id="@+id/btn_top_mesh"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_top_icon">
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless">
 
                 <ImageView
                     android:layout_width="match_parent"
@@ -81,9 +81,9 @@
 
             <ImageView
                 android:id="@+id/btn_top_theme"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_top_icon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/settings_theme"
                 android:padding="8dp"
                 android:src="@drawable/ic_moon" />
@@ -116,9 +116,9 @@
 
             <ImageView
                 android:id="@+id/btn_top_overflow"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_top_icon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/settings_title"
                 android:padding="8dp"
                 android:src="@drawable/ic_more_vert" />
@@ -143,7 +143,7 @@
             android:layout_marginBottom="12dp"
             android:background="@drawable/bg_search_pill"
             android:gravity="center_vertical"
-            android:minHeight="44dp"
+            android:minHeight="48dp"
             android:orientation="horizontal"
             android:paddingStart="14dp"
             android:paddingEnd="14dp">

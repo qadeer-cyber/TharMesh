@@ -2,23 +2,26 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient"
-    android:orientation="vertical"
-    android:fitsSystemWindows="true">
+    android:background="?attr/tmBg"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
 
-    <!-- Top bar: avatar + name + status -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="?attr/tmBg2"
-        android:elevation="@dimen/tm_elev_top_bar"
+        android:layout_height="64dp"
         android:gravity="center_vertical"
-        android:minHeight="56dp"
         android:orientation="horizontal"
-        android:paddingStart="@dimen/tm_space_m"
-        android:paddingEnd="@dimen/tm_space_l"
-        android:paddingTop="@dimen/tm_space_m"
-        android:paddingBottom="@dimen/tm_space_m">
+        android:paddingStart="4dp"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/button_chat_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/profile_back"
+            android:src="@drawable/ic_chevron_right"
+            android:rotation="180" />
 
         <TextView
             android:id="@+id/text_chat_avatar"
@@ -26,7 +29,6 @@
             android:layout_height="40dp"
             android:background="@drawable/bg_avatar"
             android:gravity="center"
-            android:text="A"
             android:textColor="@android:color/white"
             android:textStyle="bold" />
 
@@ -42,65 +44,39 @@
                 style="@style/Text.Name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:maxLines="1"
                 android:ellipsize="end"
-                android:text="Contact" />
+                android:maxLines="1" />
 
             <TextView
                 android:id="@+id/text_top_status"
                 style="@style/Text.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="?attr/tmNeonGreen"
-                android:text="@string/chat_header_offline" />
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:text="@string/chat_header_offline"
+                android:textColor="?attr/tmTextSecondary" />
         </LinearLayout>
 
-        <ImageView
+        <ImageButton
             android:id="@+id/icon_chat_shield"
-            android:layout_width="@dimen/tm_icon"
-            android:layout_height="@dimen/tm_icon"
-            android:src="@drawable/ic_shield_outline"
-            android:contentDescription="@string/cd_shield_tofu" />
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_shield_tofu"
+            android:src="@drawable/ic_shield_outline" />
     </LinearLayout>
 
-    <!-- E2EE banner -->
-    <LinearLayout
+    <TextView
+        style="@style/Text.Caption"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/tmBg2"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="10dp">
-
-        <ImageView
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:src="@drawable/ic_lock" />
-
-        <TextView
-            style="@style/Text.Caption"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:text="@string/chat_header_encrypted"
-            android:textColor="?attr/tmNeonCyan" />
-
-        <TextView
-            style="@style/Text.Caption"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/chat_header_encrypted_sub"
-            android:textColor="?attr/tmTextSecondary"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="?attr/tmStrokeSoft" />
+        android:gravity="center"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="8dp"
+        android:text="@string/chat_header_encrypted"
+        android:textColor="?attr/tmTextSecondary" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_messages"
@@ -115,104 +91,102 @@
         android:id="@+id/reply_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/tmBg2"
+        android:background="?attr/tmSurface"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingEnd="8dp"
+        android:paddingStart="16dp"
         android:paddingTop="8dp"
+        android:paddingEnd="8dp"
         android:paddingBottom="8dp"
         android:visibility="gone">
 
         <View
             android:layout_width="3dp"
-            android:layout_height="match_parent"
-            android:background="?attr/tmNeonCyan" />
+            android:layout_height="36dp"
+            android:background="?attr/tmNeonGreen" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical"
-            android:paddingStart="10dp"
+            android:paddingStart="12dp"
             android:paddingEnd="8dp">
 
             <TextView
                 android:id="@+id/reply_bar_author"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="?attr/tmNeonCyan"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:text="@string/chat_reply_to" />
+                android:text="@string/chat_reply_to"
+                android:textColor="?attr/tmTextPrimary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/reply_bar_preview"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:maxLines="2"
                 android:ellipsize="end"
+                android:maxLines="2"
                 android:textColor="?attr/tmTextSecondary"
                 android:textSize="13sp" />
         </LinearLayout>
 
         <ImageButton
             android:id="@+id/reply_bar_close"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@android:color/transparent"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/chat_cancel_reply"
             android:src="@drawable/ic_close" />
     </LinearLayout>
 
-    <!--
-      Composer. Stage 9.2 — bg_glass_floating gives the input bar a
-      translucent glass surface so it lifts off the chat history; the
-      send button uses a state-list selector that morphs between dim
-      (idle) and the cyan→green gradient (active) based on enabled state.
-    -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_glass_floating"
-        android:gravity="center_vertical"
+        android:background="@drawable/bg_composer"
+        android:gravity="bottom"
         android:orientation="horizontal"
-        android:padding="10dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="8dp">
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp">
 
         <ImageButton
             android:id="@+id/button_attach"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@android:color/transparent"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/chat_attach"
             android:src="@drawable/ic_attach" />
 
         <EditText
             android:id="@+id/edit_message"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_input"
             android:hint="@string/hint_message"
+            android:importantForAutofill="no"
             android:inputType="textMultiLine|textCapSentences"
-            android:maxLines="4"
+            android:maxLines="5"
+            android:minHeight="48dp"
             android:paddingStart="16dp"
+            android:paddingTop="12dp"
             android:paddingEnd="16dp"
+            android:paddingBottom="12dp"
             android:textColor="?attr/tmTextPrimary"
             android:textColorHint="?attr/tmTextMuted"
-            android:textSize="14sp" />
+            android:textSize="16sp" />
 
         <ImageButton
             android:id="@+id/button_send"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/bg_send_button"
             android:contentDescription="@string/chat_send"
             android:src="@drawable/ic_send" />
     </LinearLayout>
-
 </LinearLayout>
