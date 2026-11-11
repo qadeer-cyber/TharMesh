@@ -74,9 +74,27 @@ class MeshEngine(
      * engine. Default: no-op.
      */
     private val onRelaySent: (peerId: String, bundleId: String, payloadBytes: Int) -> Unit =
-        { _, _, _ -> }
+        { _, _, _ -> },
+    /**
+     * When true, a bundle addressed to this device is delivered only if the
+     * sender's public key is already verified out of band. Default turns on
+     * for an engine that can sign, has a trust store, and is not in legacy
+     * unsigned mode — the production posture. Test engines that omit an
+     * identity keep accepting any bundle whose signature matches its own key.
+     */
+    requireVerifiedIdentity: Boolean? = null,
+    /**
+     * Production sets this true. Local outbound bundles whose payload is not
+     * a sealed envelope are kept off the wire, including retries of rows that
+     * were queued before sealing was required.
+     */
+    private val refuseUnsealedLocalSend: Boolean = false
 ) {
     private val allowLegacyUnsigned: Boolean = allowLegacyUnsigned ?: (identity == null)
+    private val deliverOnlyVerifiedSenders: Boolean = run {
+        val legacy = allowLegacyUnsigned ?: (identity == null)
+        requireVerifiedIdentity ?: (identity != null && peerTrustStore != null && !legacy)
+    }
 
     private val router = Router()
     // Bundle cache is read/written from both IO dispatcher threads (repository sends, retry
@@ -92,7 +110,27 @@ class MeshEngine(
     // Cleared alongside cache eviction (same lock).
     private val receivedFrom: MutableMap<String, MutableSet<String>> = HashMap()
 
+    /**
+     * Bundle ids this device has already delivered locally. Survives LRU
+     * eviction of the working set so a replay cannot be shown twice. Relayed
+     * bundles are NOT recorded here — an evicted relay copy may still need
+     * to be forwarded again. Capped; the on-disk row (status DELIVERED_FINAL)
+     * is the durable backstop when a [BundleStore] is wired.
+     */
+    private val locallyDeliveredIds: MutableSet<String> = LinkedHashSet()
+
+    /** ACK/READ bundle ids we have already forwarded, to stop relay loops. */
+    private val forwardedControl: MutableSet<String> = HashSet()
+
     @Volatile private var eventListener: ((MeshEvent) -> Unit)? = null
+
+    /**
+     * Synchronous check before a bundle addressed to us is acknowledged.
+     * Null accepts. A false result is fail-closed: no delivery event, no ACK.
+     * Production wires this to authenticated decryption so a forged or
+     * undecryptable envelope cannot advance the sender to DELIVERED.
+     */
+    @Volatile private var deliveryGate: ((MeshBundle) -> Boolean)? = null
 
     // Additional peer-lifecycle listeners — the data source that feeds the Devices UI
     // subscribes here so it can update its StateFlow as TransportEvents arrive.
@@ -200,6 +238,9 @@ class MeshEngine(
                     // re-persist during restore (no-op but wasteful), and we do NOT
                     // want LRU eviction to kick in while we're loading the working set.
                     cache[b.bundleId] = b
+                    if (b.destId == localUserId && b.status == "DELIVERED_FINAL") {
+                        rememberDeliveredLocked(b.bundleId)
+                    }
                 }
             }
             MeshLog.restored(restored.size)
@@ -238,6 +279,10 @@ class MeshEngine(
         // touch the transport.
         synchronized(peersLock) { connectedPeers.clear() }
         synchronized(cacheLock) { receivedFrom.clear() }
+    }
+
+    fun setDeliveryGate(gate: (MeshBundle) -> Boolean) {
+        deliveryGate = gate
     }
 
     fun setEventListener(listener: (MeshEvent) -> Unit) {
@@ -432,7 +477,43 @@ class MeshEngine(
      * it just queues the frame in memory (lost on process death — acceptable for MVP).
      */
     fun sendRead(bundleId: String, toPeerId: String) {
-        sendFrame(toPeerId, ProtocolFrame(ProtocolType.READ, localUserId, bundleId))
+        val bundle = synchronized(cacheLock) { cache[bundleId] } ?: bundleStore?.find(bundleId)
+        val payload = when {
+            bundle != null -> controlPayload("READ", bundle)
+            identity != null -> signControl("READ", bundleId, srcId = toPeerId, destId = localUserId)
+            else -> bundleId
+        }
+        // Hand the receipt to whoever brought us the bundle, and to the
+        // originator when they are a direct neighbor. Relays forward it.
+        // Marking the id first stops an echo from being forwarded again.
+        val connected = snapshotConnectedPeers()
+        val targets = synchronized(cacheLock) {
+            forwardedControl.add(controlKey(ProtocolType.READ, bundleId))
+            val upstream = receivedFrom[bundleId]?.toList().orEmpty()
+            val out = LinkedHashSet<String>()
+            out.addAll(upstream)
+            if (toPeerId in connected) out.add(toPeerId)
+            if (out.isEmpty()) out.addAll(connected)
+            out
+        }
+        val frame = ProtocolFrame(ProtocolType.READ, localUserId, payload)
+        for (peer in targets) {
+            sendFrame(peer, frame)
+        }
+    }
+
+    /** Payload of a cached bundle, if any. Used to spot legacy plaintext. */
+    fun localPayload(bundleId: String): String? =
+        synchronized(cacheLock) { cache[bundleId]?.payloadCiphertext }
+            ?: bundleStore?.find(bundleId)?.payloadCiphertext
+
+    /** Remove a local bundle from memory and disk so it cannot be retried. */
+    fun dropLocalBundle(bundleId: String) {
+        synchronized(cacheLock) {
+            cache.remove(bundleId)
+            receivedFrom.remove(bundleId)
+        }
+        bundleStore?.delete(bundleId)
     }
 
     /**
@@ -512,6 +593,13 @@ class MeshEngine(
      * retry loop / PeerConnected flush will re-invoke this later.
      */
     private fun broadcastBundle(bundle: MeshBundle) {
+        if (refuseUnsealedLocalSend &&
+            bundle.srcId == localUserId &&
+            !com.tharmesh.crypto.SealedEnvelope.looksSealed(bundle.payloadCiphertext)
+        ) {
+            MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "plaintext_suppressed")
+            return
+        }
         val nowMs = now()
         if (bundle.ttlUntil < nowMs) {
             MeshLog.droppedTtl(bundle.bundleId, fromPeer = "self")
@@ -572,6 +660,12 @@ class MeshEngine(
      * [Router.shouldForward] for the (bundleId, peerId) memo.
      */
     private fun forwardBundle(bundle: MeshBundle, fromPeerId: String) {
+        if (refuseUnsealedLocalSend &&
+            !com.tharmesh.crypto.SealedEnvelope.looksSealed(bundle.payloadCiphertext)
+        ) {
+            MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "plaintext_suppressed")
+            return
+        }
         val nowMs = now()
         if (bundle.ttlUntil < nowMs) {
             MeshLog.droppedTtl(bundle.bundleId, fromPeer = fromPeerId)
@@ -651,8 +745,8 @@ class MeshEngine(
                     ProtocolType.INV -> handleInv(event.peerId, frame.payload)
                     ProtocolType.GET -> handleGet(event.peerId, frame.payload)
                     ProtocolType.BUNDLE -> handleBundle(event.peerId, frame.payload)
-                    ProtocolType.ACK -> handleAck(frame.fromPeerId, frame.payload)
-                    ProtocolType.READ -> handleRead(frame.fromPeerId, frame.payload)
+                    ProtocolType.ACK -> handleAck(event.peerId, frame.payload)
+                    ProtocolType.READ -> handleRead(event.peerId, frame.payload)
                     ProtocolType.HELLO -> {
                         // TODO: trust handshake + capability exchange.
                     }
@@ -715,6 +809,11 @@ class MeshEngine(
         for (bundle in toForward) {
             if (bundle.ttlUntil < nowMs) continue
             if (bundle.hopsLeft <= 0) continue
+            if (refuseUnsealedLocalSend &&
+                !com.tharmesh.crypto.SealedEnvelope.looksSealed(bundle.payloadCiphertext)
+            ) {
+                continue
+            }
             if (!router.shouldForward(bundle, peerId, nowMs)) continue
             // Stage 5.3: per-peer pacing applies to GET responses too — without
             // this, a peer that requested many bundles via INV/GET would receive
@@ -761,25 +860,9 @@ class MeshEngine(
             return false
         }
 
-        val trust = peerTrustStore
-        if (trust != null) {
-            when (val verdict = trust.verdict(bundle.srcId, bundle.srcPubKey)) {
-                is PeerTrustStore.Verdict.FirstSeen ->
-                    MeshLog.peerKeyFirstSeen(bundle.srcId, CryptoIdentity.fingerprintOf(bundle.srcPubKey))
-                is PeerTrustStore.Verdict.Match -> {
-                    // no-op, proceed to cryptographic verify below
-                }
-                is PeerTrustStore.Verdict.Mismatch -> {
-                    MeshLog.peerKeyMismatch(
-                        userId = bundle.srcId,
-                        storedFp = verdict.storedFingerprint,
-                        presentedFp = verdict.presentedFingerprint
-                    )
-                    return false
-                }
-            }
-        }
-
+        // Verify the signature BEFORE any trust-store write. The previous
+        // order pinned a key on FirstSeen even when the signature was bad,
+        // which let a forged bundle occupy the userId.
         val canonical = CryptoIdentity.canonicalBundleBytes(
             bundleId = bundle.bundleId,
             srcId = bundle.srcId,
@@ -792,12 +875,44 @@ class MeshEngine(
             MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "ecdsa_verify_failed")
             return false
         }
+
+        val trust = peerTrustStore
+        if (trust != null) {
+            when (val verdict = trust.verdict(bundle.srcId, bundle.srcPubKey)) {
+                is PeerTrustStore.Verdict.FirstSeen ->
+                    MeshLog.peerKeyFirstSeen(bundle.srcId, CryptoIdentity.fingerprintOf(bundle.srcPubKey))
+                is PeerTrustStore.Verdict.Match -> {
+                    // no-op
+                }
+                is PeerTrustStore.Verdict.Mismatch -> {
+                    MeshLog.peerKeyMismatch(
+                        userId = bundle.srcId,
+                        storedFp = verdict.storedFingerprint,
+                        presentedFp = verdict.presentedFingerprint
+                    )
+                    return false
+                }
+            }
+        }
         MeshLog.signatureVerified(
             bundleId = bundle.bundleId,
             srcId = bundle.srcId,
             fp = CryptoIdentity.fingerprintOf(bundle.srcPubKey)
         )
         return true
+    }
+
+    /**
+     * Local delivery requires an out-of-band verified key that matches the
+     * key that just signed the bundle. Relays do not call this — they forward
+     * ciphertext without learning the body.
+     */
+    private fun senderVerifiedForDelivery(bundle: MeshBundle): Boolean {
+        if (!deliverOnlyVerifiedSenders) return true
+        val trust = peerTrustStore ?: return false
+        if (trust.trustState(bundle.srcId) !is PeerTrustStore.TrustState.Verified) return false
+        val stored = trust.storedKey(bundle.srcId) ?: return false
+        return stored == bundle.srcPubKey
     }
 
     private fun handleBundle(peerId: String, payload: String) {
@@ -813,17 +928,40 @@ class MeshEngine(
             return
         }
 
-        // Stage 4.6 signature + TOFU gate. Order matters:
-        //   1) Unsigned bundle → reject unless allowLegacyUnsigned (tests / rolling upgrade).
-        //   2) TOFU check against peer_identity store — if the srcId previously signed with
-        //      a different key, reject here BEFORE cryptographic verify. This protects
-        //      against an attacker that minted a valid signature with their own keypair
-        //      but reused someone else's srcId.
-        //   3) ECDSA verify against the canonical signing blob. Any failure → reject.
-        // A rejected bundle is NOT cached, NOT ACK'd, NOT forwarded — as if it never
-        // arrived. That is the only safe posture: caching or ACK'ing a bad bundle would
-        // leak DoS amplification to the attacker.
+        // Signature is checked before any trust-store pin (see verifyIncoming).
+        // A rejected bundle is NOT cached, NOT ACK'd, NOT forwarded.
         if (!verifyIncoming(bundle)) return
+
+        val forUs = bundle.destId == localUserId
+        if (forUs && deliverOnlyVerifiedSenders &&
+            !com.tharmesh.crypto.SealedEnvelope.looksSealed(bundle.payloadCiphertext)
+        ) {
+            MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "plaintext_rejected")
+            return
+        }
+        if (forUs && !passesDeliveryGate(bundle)) {
+            MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "content_rejected")
+            return
+        }
+        if (forUs && !senderVerifiedForDelivery(bundle)) {
+            // Do not cache and do not ACK. The sender retries; once the user
+            // verifies the peer out of band, a later copy is accepted.
+            MeshLog.signatureFailed(bundle.bundleId, bundle.srcId, "unverified_sender")
+            return
+        }
+        val knownDelivered = forUs && (
+            synchronized(cacheLock) { locallyDeliveredIds.contains(bundle.bundleId) } ||
+                bundleStore?.find(bundle.bundleId)?.status == "DELIVERED_FINAL"
+            )
+        if (knownDelivered) {
+            synchronized(cacheLock) {
+                receivedFrom.getOrPut(bundle.bundleId) { HashSet() }.add(peerId)
+                rememberDeliveredLocked(bundle.bundleId)
+            }
+            sendAck(bundle, peerId)
+            MeshLog.droppedDuplicate(bundle.bundleId, peerId)
+            return
+        }
 
         val isFirstArrival: Boolean
         var alreadyDelivered = false
@@ -836,10 +974,12 @@ class MeshEngine(
             // Track which peers have given us this bundle — consulted by forwardBundle
             // to implement the anti-sender invariant (never forward back upstream).
             receivedFrom.getOrPut(bundle.bundleId) { HashSet() }.add(peerId)
-            if (bundle.destId == localUserId) {
-                alreadyDelivered = cache[bundle.bundleId]?.status == "DELIVERED_FINAL"
+            if (forUs) {
+                alreadyDelivered = locallyDeliveredIds.contains(bundle.bundleId) ||
+                    cache[bundle.bundleId]?.status == "DELIVERED_FINAL"
                 val delivered = bundle.copy(status = "DELIVERED_FINAL")
                 cache[delivered.bundleId] = delivered
+                rememberDeliveredLocked(bundle.bundleId)
                 deliveredSnapshot = delivered
             }
         }
@@ -860,8 +1000,7 @@ class MeshEngine(
             } else {
                 MeshLog.droppedDuplicate(bundle.bundleId, peerId)
             }
-            val ack = ProtocolFrame(ProtocolType.ACK, localUserId, bundle.bundleId)
-            sendFrame(peerId, ack)
+            sendAck(bundle, peerId)
             return
         }
 
@@ -875,34 +1014,125 @@ class MeshEngine(
         forwardBundle(bundle, fromPeerId = peerId)
     }
 
-    private fun handleAck(ackedBy: String, bundleId: String) {
-        // First-ACK idempotency: fire BundleAcked exactly once per bundleId, on the
-        // first ACK that arrives for one of OUR outbound bundles. Duplicate ACKs
-        // (e.g. a relay chain feeding us back a second copy, or a peer sending the
-        // same ACK twice) hit the already-DELIVERED_FINAL guard and are silently
-        // dropped — no event fired, no state change.
-        val firstAck: Boolean = synchronized(cacheLock) {
-            val existing = cache[bundleId] ?: return@synchronized false
-            if (existing.srcId != localUserId) return@synchronized false
-            if (existing.status == "DELIVERED_FINAL") return@synchronized false
-            cache[bundleId] = existing.copy(status = "DELIVERED_FINAL")
-            true
+    private fun handleAck(fromPeerId: String, payload: String) {
+        handleControl(ProtocolType.ACK, fromPeerId, payload)
+    }
+
+    private fun handleRead(fromPeerId: String, payload: String) {
+        handleControl(ProtocolType.READ, fromPeerId, payload)
+    }
+
+    /**
+     * ACK and READ are hop-by-hop frames. The destination signs the payload.
+     * Relays forward it toward the peers they received the bundle from.
+     * Only the originator accepts it, and only when the signature matches
+     * the destination's pinned key (unless this engine is in legacy unsigned
+     * mode, where a bare bundle id is still accepted so existing tests and
+     * pre-signature peers keep working).
+     */
+    private fun handleControl(type: ProtocolType, fromPeerId: String, payload: String) {
+        val kind = type.name
+        val (bundleId, signature) = splitControl(payload)
+        if (bundleId.isEmpty()) return
+        val existing = synchronized(cacheLock) { cache[bundleId] }
+            ?: bundleStore?.find(bundleId)
+            ?: return
+        if (existing.srcId == localUserId) {
+            if (!controlSignatureOk(kind, existing, signature)) return
+            if (type == ProtocolType.ACK) {
+                val firstAck: Boolean = synchronized(cacheLock) {
+                    val row = cache[bundleId] ?: existing
+                    if (row.srcId != localUserId) return@synchronized false
+                    if (row.status == "DELIVERED_FINAL") return@synchronized false
+                    cache[bundleId] = row.copy(status = "DELIVERED_FINAL")
+                    true
+                }
+                if (firstAck) {
+                    persistStatus(bundleId, "DELIVERED_FINAL")
+                    emit(MeshEvent.BundleAcked(bundleId, existing.destId))
+                    MeshLog.acked(bundleId, existing.destId)
+                }
+            } else {
+                val fire = synchronized(cacheLock) {
+                    (cache[bundleId] ?: existing).srcId == localUserId
+                }
+                if (fire) emit(MeshEvent.BundleRead(bundleId, existing.destId))
+            }
+            return
         }
-        if (firstAck) {
-            // Mirror the DELIVERED_FINAL status to disk so a restart does not treat the
-            // bundle as still-pending and try to re-send.
-            persistStatus(bundleId, "DELIVERED_FINAL")
-            emit(MeshEvent.BundleAcked(bundleId, ackedBy))
-            MeshLog.acked(bundleId, ackedBy)
+        forwardControl(type, bundleId, fromPeerId, payload)
+    }
+
+    private fun sendAck(bundle: MeshBundle, toPeerId: String) {
+        synchronized(cacheLock) { forwardedControl.add(controlKey(ProtocolType.ACK, bundle.bundleId)) }
+        sendFrame(toPeerId, ProtocolFrame(ProtocolType.ACK, localUserId, controlPayload("ACK", bundle)))
+    }
+
+    private fun forwardControl(
+        type: ProtocolType,
+        bundleId: String,
+        fromPeerId: String,
+        payload: String
+    ) {
+        val first = synchronized(cacheLock) { forwardedControl.add(controlKey(type, bundleId)) }
+        if (!first) return
+        val upstream = synchronized(cacheLock) {
+            receivedFrom[bundleId]?.toList().orEmpty()
+        }
+        val targets = if (upstream.isNotEmpty()) upstream else snapshotConnectedPeers()
+        for (peer in targets) {
+            if (peer == fromPeerId) continue
+            sendFrame(peer, ProtocolFrame(type, localUserId, payload))
         }
     }
 
-    private fun handleRead(readBy: String, bundleId: String) {
-        val fireEvent: Boolean = synchronized(cacheLock) {
-            val existing = cache[bundleId] ?: return@synchronized false
-            existing.srcId == localUserId
+    private fun controlPayload(kind: String, bundle: MeshBundle): String {
+        if (identity == null) return bundle.bundleId
+        return signControl(kind, bundle.bundleId, bundle.srcId, bundle.destId)
+    }
+
+    private fun signControl(kind: String, bundleId: String, srcId: String, destId: String): String {
+        val id = identity ?: return bundleId
+        val sig = id.sign(CryptoIdentity.canonicalControlBytes(kind, bundleId, srcId, destId))
+        return bundleId + "|" + sig
+    }
+
+    private fun passesDeliveryGate(bundle: MeshBundle): Boolean {
+        val gate = deliveryGate ?: return true
+        return try {
+            gate(bundle)
+        } catch (ignored: Throwable) {
+            false
         }
-        if (fireEvent) emit(MeshEvent.BundleRead(bundleId, readBy))
+    }
+
+    private fun splitControl(payload: String): Pair<String, String?> {
+        val sep = payload.indexOf('|')
+        if (sep <= 0 || sep >= payload.length - 1) return payload to null
+        return payload.substring(0, sep) to payload.substring(sep + 1)
+    }
+
+    private fun controlSignatureOk(kind: String, bundle: MeshBundle, signature: String?): Boolean {
+        if (identity == null || allowLegacyUnsigned) return true
+        if (signature.isNullOrEmpty()) return false
+        val destKey = peerTrustStore?.storedKey(bundle.destId) ?: return false
+        val data = CryptoIdentity.canonicalControlBytes(
+            kind, bundle.bundleId, bundle.srcId, bundle.destId
+        )
+        return CryptoIdentity.verify(destKey, data, signature)
+    }
+
+    private fun controlKey(type: ProtocolType, bundleId: String): String =
+        type.name + ":" + bundleId
+
+    private fun rememberDeliveredLocked(bundleId: String) {
+        locallyDeliveredIds.add(bundleId)
+        while (locallyDeliveredIds.size > MAX_DELIVERED_IDS) {
+            val it = locallyDeliveredIds.iterator()
+            if (!it.hasNext()) break
+            it.next()
+            it.remove()
+        }
     }
 
     /**
@@ -995,6 +1225,7 @@ class MeshEngine(
     companion object {
         /** Hard cap on the in-memory bundle cache (bundles, not bytes). */
         const val DEFAULT_MAX_CACHE_SIZE: Int = 500
+        private const val MAX_DELIVERED_IDS: Int = 4096
     }
 }
 

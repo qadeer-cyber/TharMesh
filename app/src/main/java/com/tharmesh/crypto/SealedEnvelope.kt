@@ -62,8 +62,8 @@ object SealedEnvelope {
      * Unwrap a TME1-framed [wire] string using [key]. Returns the plaintext,
      * or `null` for any failure path — wrong prefix, malformed framing,
      * bad base64, wrong key, tampered ciphertext, or GCM auth-tag mismatch.
-     * Callers MUST treat null as "could not decrypt, fall back to
-     * plaintext-body behaviour" and NEVER as "silently drop".
+     * Callers in secure mode MUST treat null as "drop this payload".
+     * They must not display [wire] or substitute a plaintext body.
      */
     fun unseal(wire: String, key: SecretKey): String? {
         if (!looksSealed(wire)) return null

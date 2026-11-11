@@ -33,7 +33,7 @@ import com.tharmesh.db.entity.RetryStateEntity
         PeerIdentityEntity::class,
         RetryStateEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -90,6 +90,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v6 → v7. Deduplicate message rows that share a bundleId (keep the
+         * earliest id) and replace the non-unique bundleId index with a
+         * unique one. No table is dropped. Rows with a null bundleId are
+         * left alone — SQLite unique indexes allow multiple NULLs.
+         */
+        @JvmField
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "DELETE FROM messages WHERE id IN (" +
+                        "SELECT id FROM messages WHERE bundleId IS NOT NULL AND id NOT IN (" +
+                        "SELECT MIN(id) FROM messages WHERE bundleId IS NOT NULL GROUP BY bundleId))"
+                )
+                database.execSQL("DROP INDEX IF EXISTS `index_messages_bundleId`")
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_messages_bundleId` " +
+                        "ON `messages` (`bundleId`)"
+                )
+            }
+        }
+
         @JvmStatic
         fun getInstance(context: Context): AppDatabase {
             val existing = instance
@@ -106,8 +128,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tharmesh.db"
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build()
                 instance = created
                 return created

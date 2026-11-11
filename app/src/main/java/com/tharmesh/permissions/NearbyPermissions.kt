@@ -24,6 +24,21 @@ object NearbyPermissions {
     // Build.VERSION_CODES.S = 31 on real devices, but the constant is only
     // defined in compileSdk 31+. Inline the integer to stay compatible.
     private const val SDK_S: Int = 31
+    private const val SDK_TIRAMISU: Int = 33
+    private const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
+
+    /**
+     * Permissions to show in the system prompt. Includes POST_NOTIFICATIONS
+     * on API 33+ so the mesh foreground notification is visible. That
+     * permission is not part of [allGranted]: denying it must not stop the
+     * radio, because the foreground-service notification itself is still
+     * posted by the platform.
+     */
+    fun toRequest(): Array<String> {
+        val base = required
+        if (Build.VERSION.SDK_INT < SDK_TIRAMISU) return base
+        return base + POST_NOTIFICATIONS
+    }
 
     val required: Array<String>
         get() = if (Build.VERSION.SDK_INT >= SDK_S) {

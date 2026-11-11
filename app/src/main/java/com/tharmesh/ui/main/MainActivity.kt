@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
      * declares the full set.
      */
     private fun requestNearbyPermissionsIfMissing() {
-        val missing = NearbyPermissions.required.filter { perm ->
+        val missing = NearbyPermissions.toRequest().filter { perm ->
             ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isEmpty()) return

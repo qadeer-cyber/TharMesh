@@ -84,8 +84,11 @@ interface PeerTrustStore {
      *    [Verdict.Mismatch] and the receive path rejects it).
      * 2. Row exists and pinned key == [scannedPubKeyBase64] → flip
      *    `verified = true`.
-     * 3. Row exists and pinned key ≠ [scannedPubKeyBase64] → leave the row
-     *    untouched and return [VerifyResult.Mismatch]. The pin is sticky.
+     * 3. Row exists, is already verified, and pinned key ≠ [scannedPubKeyBase64]
+     *    → leave the row untouched and return [VerifyResult.Mismatch].
+     * 4. Row exists, is NOT verified, and the scanned key differs → replace
+     *    the unauthenticated wire pin with the scanned key and mark it
+     *    verified. A first forged bundle must not be able to block the QR.
      */
     fun markVerified(userId: String, scannedPubKeyBase64: String): VerifyResult {
         // Default no-op so existing test fakes that only override [verdict]
@@ -150,10 +153,32 @@ class RoomPeerTrustStore(
             return PeerTrustStore.VerifyResult.Verified
         }
         if (stored.publicKeyBase64 != scannedPubKeyBase64) {
-            return PeerTrustStore.VerifyResult.Mismatch(
-                storedFingerprint = stored.fingerprint,
-                scannedFingerprint = scannedFp
+            // A verified pin is the authenticated anchor and stays put.
+            // An unverified pin came from the wire (or nowhere trustworthy).
+            // The QR the user just scanned replaces it; otherwise a first
+            // forged bundle could permanently block the real key.
+            if (stored.verified) {
+                return PeerTrustStore.VerifyResult.Mismatch(
+                    storedFingerprint = stored.fingerprint,
+                    scannedFingerprint = scannedFp
+                )
+            }
+            val replaced = dao.replaceUnverified(
+                userId = userId,
+                publicKeyBase64 = scannedPubKeyBase64,
+                fingerprint = scannedFp,
+                ts = ts
             )
+            if (replaced > 0) return PeerTrustStore.VerifyResult.Verified
+            val raced = dao.findByUserId(userId)
+            return if (raced != null && raced.publicKeyBase64 == scannedPubKeyBase64) {
+                PeerTrustStore.VerifyResult.AlreadyVerified
+            } else {
+                PeerTrustStore.VerifyResult.Mismatch(
+                    storedFingerprint = raced?.fingerprint ?: stored.fingerprint,
+                    scannedFingerprint = scannedFp
+                )
+            }
         }
         if (stored.verified) {
             return PeerTrustStore.VerifyResult.AlreadyVerified

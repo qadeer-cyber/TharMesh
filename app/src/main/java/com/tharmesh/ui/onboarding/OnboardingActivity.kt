@@ -229,7 +229,7 @@ class OnboardingActivity : AppCompatActivity() {
                 showStep(2)
                 return@setOnClickListener
             }
-            val missing = NearbyPermissions.required.filter { perm ->
+            val missing = NearbyPermissions.toRequest().filter { perm ->
                 ContextCompat.checkSelfPermission(this, perm) !=
                     PackageManager.PERMISSION_GRANTED
             }
@@ -308,7 +308,12 @@ class OnboardingActivity : AppCompatActivity() {
                 val app = TharMeshApp.get()
                 app.repository.addContact(userId, name)
                 if (!pubKey.isNullOrBlank()) {
-                    app.peerTrustStore.markVerified(userId, pubKey)
+                    val verified = app.peerTrustStore.markVerified(userId, pubKey)
+                    if (verified is com.tharmesh.identity.PeerTrustStore.VerifyResult.Verified ||
+                        verified is com.tharmesh.identity.PeerTrustStore.VerifyResult.AlreadyVerified
+                    ) {
+                        app.notePeerVerified(userId)
+                    }
                 }
             }
             finishOnboarding()

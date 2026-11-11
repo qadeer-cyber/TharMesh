@@ -123,6 +123,7 @@ class ChatsActivity : AppCompatActivity() {
             holder.time.text = DateFormat.format("HH:mm", Date(conv.lastTimestamp))
 
             val statusGlyph = when (conv.lastMessageStatus) {
+                MessageStatus.AWAITING_KEY -> "🔒 "
                 MessageStatus.QUEUED,
                 MessageStatus.SENDING -> "⏳ "
                 MessageStatus.SENT -> "✓ "

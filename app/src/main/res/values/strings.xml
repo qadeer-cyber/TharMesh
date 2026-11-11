@@ -124,6 +124,9 @@
     <string name="chat_status_msg_delivered">Delivered</string>
     <string name="chat_status_msg_read">Read</string>
     <string name="chat_status_msg_failed">Failed — tap to retry</string>
+    <string name="chat_status_msg_awaiting_key">Waiting for a verified contact — message not sent</string>
+    <string name="mesh_service_channel">Mesh connection</string>
+    <string name="mesh_service_notification">TharMesh is listening for nearby devices</string>
 
     <!-- WhatsApp-style message status ticks. -->
     <string name="status_queued">⏳</string>

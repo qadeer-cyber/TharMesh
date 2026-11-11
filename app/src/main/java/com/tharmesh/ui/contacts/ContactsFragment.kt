@@ -233,7 +233,13 @@ class ContactsFragment : Fragment() {
         if (pubKey != null) {
             viewLifecycleOwner.lifecycleScope.launch {
                 val res = withContext(Dispatchers.IO) {
-                    TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
+                    val verified = TharMeshApp.get().peerTrustStore.markVerified(code, pubKey)
+                    if (verified is PeerTrustStore.VerifyResult.Verified ||
+                        verified is PeerTrustStore.VerifyResult.AlreadyVerified
+                    ) {
+                        TharMeshApp.get().notePeerVerified(code)
+                    }
+                    verified
                 }
                 surfaceVerifyResult(displayName, res)
             }

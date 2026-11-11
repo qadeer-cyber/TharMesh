@@ -38,12 +38,13 @@ import java.util.UUID
  *  - Handles incoming bundles from [MeshEngine], unseals the envelope when
  *    present, persists the message, and bumps the conversation row.
  *
- * Encryption: when a [com.tharmesh.crypto.PeerKeyRing] is wired, the send
- * path wraps the body in a [com.tharmesh.crypto.SealedEnvelope] (AES-256 /
- * GCM over an ECDH-derived key); receive reverses the wrap. Peers whose
- * public keys we have not pinned yet fall back to plaintext bodies so the
- * TOFU bootstrap path remains open. The SOS framing runs OUTSIDE the
- * envelope so encrypted SOS bundles still trigger the disaster alert.
+ * Encryption: when a [com.tharmesh.crypto.PeerKeyRing] is wired, private
+ * bodies are sealed (AES-256/GCM) only for a peer whose key has been
+ * verified out of band. There is no plaintext fallback. Until that key
+ * exists the row stays [com.tharmesh.db.MessageStatus.AWAITING_KEY] and
+ * nothing is handed to the mesh. A sealed payload that does not decrypt
+ * is dropped rather than shown. The SOS framing is applied before sealing
+ * so relays still cannot read it.
  */
 class MessageRepository(
     private val db: AppDatabase,
@@ -134,16 +135,17 @@ class MessageRepository(
      */
     private val isDisasterModeEnabled: () -> Boolean = { false },
     /**
-     * Optional per-peer AES key ring. When provided, [send] wraps the
-     * outgoing body in a [com.tharmesh.crypto.SealedEnvelope] for any peer
-     * whose public key we have pinned, and [handleIncomingBundle] unwraps
-     * envelopes it recognises. When null (production bring-up before the
-     * key ring is wired, or tests that don't care about encryption), both
-     * paths fall back to plaintext bodies. The SOS prefix and all wire
-     * signatures are applied OUTSIDE the envelope, so this change is
-     * invisible to relays and TOFU key-pinning.
+     * Optional per-peer AES key ring. When non-null, private bodies are
+     * sealed and plaintext is never put on the wire. When null (unit tests
+     * that drive the mesh without crypto), bodies stay plaintext.
      */
     private val peerKeyRing: com.tharmesh.crypto.PeerKeyRing? = null,
+    /**
+     * True when [userId]'s public key was established out of band (QR).
+     * Ignored when [peerKeyRing] is null. Production wires this to
+     * [com.tharmesh.identity.PeerTrustStore.trustState].
+     */
+    private val isPeerVerified: (userId: String) -> Boolean = { _ -> false },
     /**
      * Optional persistence mirror for [retryPolicy] + [priorityBundleIds].
      * When present, retry-curve state and the SOS priority bit survive a
@@ -191,7 +193,13 @@ class MessageRepository(
      * and wire this hook in [com.tharmesh.TharMeshApp.ensureMeshReady]
      * without any change to this seam. Tests use the same default no-op.
      */
-    private val onBlockedSenderDropped: (srcId: String, bundleId: String) -> Unit = { _, _ -> }
+    private val onBlockedSenderDropped: (srcId: String, bundleId: String) -> Unit = { _, _ -> },
+    /**
+     * Fired when an inbound private payload is dropped because it was
+     * plaintext, failed to decrypt, or came from a peer that is not verified.
+     * The body is not logged.
+     */
+    private val onInsecureContentDropped: (srcId: String, bundleId: String) -> Unit = { _, _ -> }
 ) {
 
     /**
@@ -281,6 +289,48 @@ class MessageRepository(
             }
         }
         retryPolicy.hydrate(seed)
+    }
+
+    private fun persistRetryStateBlocking(bundleId: String) {
+        val p = retryStatePersistence ?: return
+        val state = retryPolicy.currentState(bundleId) ?: return
+        try {
+            p.save(bundleId, state, isPriority(bundleId))
+        } catch (ignored: Throwable) {
+        }
+    }
+
+    /**
+     * Legacy outbound rows whose cached payload is not a sealed envelope are
+     * pulled back to [MessageStatus.AWAITING_KEY] and deleted from the mesh
+     * cache. Returns the rows that are still safe to retry.
+     */
+    private fun quarantineUnsealedOutbound(pending: List<MessageEntity>): List<MessageEntity> {
+        if (peerKeyRing == null) return pending
+        val kept = ArrayList<MessageEntity>(pending.size)
+        for (msg in pending) {
+            val bid = msg.bundleId
+            if (bid.isNullOrEmpty()) {
+                kept.add(msg)
+                continue
+            }
+            val payload = mesh.localPayload(bid)
+            if (payload != null && !com.tharmesh.crypto.SealedEnvelope.looksSealed(payload)) {
+                mesh.dropLocalBundle(bid)
+                val updated = db.messageDao().holdForIdentity(myUserId(), bid)
+                if (updated > 0) {
+                    db.conversationDao().setLastMessage(
+                        msg.peerUserId,
+                        msg.body,
+                        msg.timestamp,
+                        MessageStatus.AWAITING_KEY
+                    )
+                }
+                continue
+            }
+            kept.add(msg)
+        }
+        return kept
     }
 
     private fun persistRetryState(bundleId: String) {
@@ -500,22 +550,27 @@ class MessageRepository(
         } else {
             body
         }
-        // Apply end-to-end encryption OUTSIDE the SOS frame so the on-wire
-        // ciphertext hides both the message body and the SOS marker from
-        // eavesdroppers; relays don't look at body content anyway (they
-        // forward bytes keyed by destId). Falls back to plaintext when we
-        // have no pinned public key for the recipient — this is the
-        // TOFU/bootstrap path for peers whose keys we haven't learnt yet.
-        val wireBody = peerKeyRing
-            ?.keyFor(toUserId)
-            ?.let { com.tharmesh.crypto.SealedEnvelope.seal(sosFramed, it) }
-            ?: sosFramed
+        // Seal only when secure mode has a verified peer key. Null means
+        // the body stays on this device; it is not transmitted in the clear.
+        val secureMode = peerKeyRing != null
+        val peerKey = if (secureMode && isPeerVerified(toUserId)) {
+            peerKeyRing?.keyFor(toUserId)
+        } else {
+            null
+        }
+        val wireBody = com.tharmesh.crypto.SecureContent.sealForTransport(
+            framedBody = sosFramed,
+            key = peerKey,
+            peerVerified = !secureMode || isPeerVerified(toUserId),
+            secureMode = secureMode
+        )
+        val holdForIdentity = wireBody == null
         val entity = MessageEntity(
             fromUserId = me,
             toUserId = toUserId,
             peerUserId = toUserId,
             body = body,
-            status = MessageStatus.QUEUED,
+            status = if (holdForIdentity) MessageStatus.AWAITING_KEY else MessageStatus.QUEUED,
             timestamp = ts,
             bundleId = bundleId,
             replyToId = replyToId,
@@ -524,6 +579,34 @@ class MessageRepository(
 
         if (effectivePriority) {
             synchronized(priorityBundleIds) { priorityBundleIds.add(bundleId) }
+        }
+
+        if (wireBody == null) {
+            // No bundle is prepared and nothing is broadcast. The row is the
+            // only durable copy. [releaseAwaitingIdentity] seals and sends
+            // it after the peer is verified.
+            val (messageId, isFirstChat) = runIo {
+                var first = false
+                var id = 0L
+                db.runInTransaction {
+                    first = db.messageDao().countOutgoingTo(me, toUserId) == 0
+                    id = db.messageDao().insert(entity)
+                    bumpConversation(
+                        toUserId,
+                        body,
+                        ts,
+                        MessageStatus.AWAITING_KEY,
+                        incrementUnread = false
+                    )
+                }
+                id to first
+            }
+            if (isFirstChat) onFirstChatStarted(toUserId)
+            if (effectivePriority) {
+                retryPolicy.markOriginated(bundleId, ts, RetryConfig.SOS)
+                persistRetryStateBlocking(bundleId)
+            }
+            return SendResult(messageId, bundleId)
         }
 
         // Stage 7.9 — process-death-safe send ordering. We MUST guarantee
@@ -610,6 +693,65 @@ class MessageRepository(
         }
     }
 
+    /**
+     * Peer key was just verified (or re-verified) out of band. Drop any
+     * cached ECDH key and try to seal rows that were held for this peer.
+     */
+    fun onPeerVerified(userId: String) {
+        peerKeyRing?.invalidate(userId)
+        scope.launch(Dispatchers.IO) {
+            try {
+                releaseAwaitingIdentity(userId)
+            } catch (ignored: Throwable) {
+            }
+        }
+    }
+
+    /**
+     * Seal and broadcast rows in [MessageStatus.AWAITING_KEY] whose peer is
+     * now verified. [onlyPeerId] null releases every held row.
+     */
+    internal fun releaseAwaitingIdentity(onlyPeerId: String?) {
+        if (peerKeyRing == null) return
+        val rows = db.messageDao().awaitingIdentity(myUserId(), onlyPeerId ?: "")
+        for (msg in rows) {
+            val peer = msg.toUserId
+            if (!isPeerVerified(peer)) continue
+            val key = peerKeyRing.keyFor(peer) ?: continue
+            val bid = msg.bundleId ?: continue
+            val priority = isPriority(bid)
+            val framed = if (priority) {
+                com.tharmesh.disaster.SosPayload.encode(msg.body)
+            } else {
+                msg.body
+            }
+            val wire = com.tharmesh.crypto.SecureContent.sealForTransport(
+                framedBody = framed,
+                key = key,
+                peerVerified = true,
+                secureMode = true
+            ) ?: continue
+            val bundle = mesh.prepareOutbound(
+                destId = peer,
+                payloadCiphertext = wire,
+                ttlMs = DEFAULT_TTL_MS,
+                hops = DEFAULT_HOPS,
+                bundleIdHint = bid,
+                priority = priority
+            )
+            val ts = now()
+            val updated = db.messageDao().advanceStatusByBundleId(bid, MessageStatus.QUEUED, ts)
+            if (updated > 0) {
+                db.conversationDao().setLastMessage(peer, msg.body, msg.timestamp, MessageStatus.QUEUED)
+            }
+            if (retryPolicy.currentState(bid) == null) {
+                retryPolicy.markOriginated(bid, ts, if (priority) RetryConfig.SOS else null)
+            }
+            persistRetryStateBlocking(bid)
+            mesh.broadcastOutbound(bundle)
+        }
+    }
+
     /** Feed an incoming bundle from transport back into Room. Called by [onMeshEvent]. */
     private fun handleIncomingBundle(bundle: MeshBundle) {
         scope.launch(Dispatchers.IO) {
@@ -630,20 +772,25 @@ class MessageRepository(
                 return@launch
             }
 
-            // Unseal end-to-end envelope when present. Unknown prefix or a
-            // decrypt failure falls back to the raw body — preserves the
-            // plaintext path for peers that haven't been key-pinned yet and
-            // keeps the receive loop working through a key-rotation window.
-            // SOS detection runs OUTSIDE the envelope, so encrypted SOS
-            // bundles still trigger the alert once decrypted.
+            // Secure mode drops plaintext, unverified senders, and any
+            // envelope that does not decrypt. The raw wire string is never
+            // stored as the chat body.
             val raw = bundle.payloadCiphertext
-            val unsealed = if (com.tharmesh.crypto.SealedEnvelope.looksSealed(raw)) {
-                peerKeyRing
-                    ?.keyFor(bundle.srcId)
-                    ?.let { com.tharmesh.crypto.SealedEnvelope.unseal(raw, it) }
-                    ?: raw
+            val secureMode = peerKeyRing != null
+            val peerKey = if (secureMode && isPeerVerified(bundle.srcId)) {
+                peerKeyRing?.keyFor(bundle.srcId)
             } else {
-                raw
+                null
+            }
+            val unsealed = com.tharmesh.crypto.SecureContent.openForDisplay(
+                raw = raw,
+                key = peerKey,
+                peerVerified = !secureMode || isPeerVerified(bundle.srcId),
+                secureMode = secureMode
+            )
+            if (unsealed == null) {
+                onInsecureContentDropped(bundle.srcId, bundle.bundleId)
+                return@launch
             }
             val decoded = com.tharmesh.disaster.SosPayload.decode(unsealed)
             val plaintext = decoded.body
@@ -958,6 +1105,13 @@ class MessageRepository(
     fun startStoreAndForwardLoop() {
         if (retryJob?.isActive == true) return
         retryJob = scope.launch(Dispatchers.IO) {
+            // Cold start: reseal anything left in the clear, then release
+            // rows that were waiting on a verified key, before the first delay.
+            try {
+                quarantineUnsealedOutbound(db.messageDao().pendingOutbound(myUserId()))
+                releaseAwaitingIdentity(null)
+            } catch (ignored: Throwable) {
+            }
             while (true) {
                 delay(retryConfig.tickIntervalMs)
                 try {
@@ -972,6 +1126,7 @@ class MessageRepository(
                     // for long periods. Cheap: single DELETE-WHERE on an indexed
                     // column.
                     mesh.sweepExpiredPersistent()
+                    releaseAwaitingIdentity(null)
                 } catch (_: Throwable) {
                     // Ignore transient I/O failures; next tick will retry.
                 }
@@ -987,9 +1142,10 @@ class MessageRepository(
      * stuck-recovery path.
      */
     internal fun runRetryTick(nowMs: Long, pending: List<MessageEntity>) {
+        val sendable = quarantineUnsealedOutbound(pending)
         runRetryTickStandalone(
             nowMs = nowMs,
-            pending = pending,
+            pending = sendable,
             retryPolicy = retryPolicy,
             onRetryAttempt = onRetryAttempt,
             onStuckSendingRecovered = onStuckSendingRecovered,

@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
     tableName = "messages",
     indices = [
         Index(value = ["peerUserId", "timestamp"]),
-        Index(value = ["bundleId"])
+        Index(value = ["bundleId"], unique = true)
     ]
 )
 data class MessageEntity(

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_status_msg_queued">قطار میں — جڑنے پر بھیجا جائے گا</string>
+    <string name="chat_status_msg_sending">بھیجا جا رہا ہے…</string>
+    <string name="chat_status_msg_sent">بھیج دیا گیا</string>
+    <string name="chat_status_msg_delivered">پہنچ گیا</string>
+    <string name="chat_status_msg_read">پڑھ لیا گیا</string>
+    <string name="chat_status_msg_failed">ناکام — دوبارہ کوشش کے لیے ٹیپ کریں</string>
+    <string name="chat_status_msg_awaiting_key">تصدیق شدہ رابطے کا انتظار — پیغام نہیں بھیجا گیا</string>
+    <string name="mesh_service_notification">تھارمیش قریبی آلات سن رہا ہے</string>
+</resources>

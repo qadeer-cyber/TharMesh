@@ -58,4 +58,18 @@ class RoomBundleStore(
     }
 
     override fun deleteExpired(nowMs: Long): Int = dao.deleteExpired(nowMs)
+
+    override fun find(bundleId: String): MeshBundle? {
+        val row = dao.findByBundleId(bundleId) ?: return null
+        return MeshBundle(
+            bundleId = row.bundleId,
+            srcId = row.srcId,
+            destId = row.destId,
+            payloadCiphertext = row.payloadCiphertext,
+            ttlUntil = row.ttlUntil,
+            hopsLeft = row.hopsLeft,
+            signature = row.signature,
+            status = row.status
+        )
+    }
 }

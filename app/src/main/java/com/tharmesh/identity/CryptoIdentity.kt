@@ -138,6 +138,27 @@ class CryptoIdentity private constructor(
         }
 
         /**
+         * Canonical bytes for an ACK or READ control frame. [kind] is `"ACK"`
+         * or `"READ"`. The destination signs this blob; the originator verifies
+         * it against the destination's pinned public key. A relay cannot forge
+         * delivery by writing a bare bundle id into an ACK frame.
+         */
+        fun canonicalControlBytes(
+            kind: String,
+            bundleId: String,
+            srcId: String,
+            destId: String
+        ): ByteArray {
+            val parts = listOf(kind, bundleId, srcId, destId)
+            val out = java.io.ByteArrayOutputStream()
+            parts.forEachIndexed { idx, s ->
+                if (idx > 0) out.write(FIELD_SEP.toInt())
+                out.write(s.toByteArray(Charsets.UTF_8))
+            }
+            return out.toByteArray()
+        }
+
+        /**
          * Canonical bytes signed/verified on every bundle. Fields included are exactly
          * the end-to-end invariants: bundleId, srcId, destId, payloadCiphertext,
          * ttlUntil. Explicitly NOT included:

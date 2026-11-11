@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_status_msg_queued">قطار ۾ — ڳنڍجڻ تي موڪليو ويندو</string>
+    <string name="chat_status_msg_sending">موڪليو پيو وڃي…</string>
+    <string name="chat_status_msg_sent">موڪليو ويو</string>
+    <string name="chat_status_msg_delivered">پهچي ويو</string>
+    <string name="chat_status_msg_read">پڙهيو ويو</string>
+    <string name="chat_status_msg_failed">ناڪام — ٻيهر ڪوشش لاءِ ٽيپ ڪريو</string>
+    <string name="chat_status_msg_awaiting_key">تصديق ٿيل رابطي جو انتظار — نياپو نه موڪليو ويو</string>
+    <string name="mesh_service_notification">ٿارميش ويجها ڊوائيس ٻڌي رهيو آهي</string>
+</resources>

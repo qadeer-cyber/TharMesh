@@ -14,6 +14,13 @@ interface BundleStore {
     /** Insert-or-replace. Keyed by [MeshBundle.bundleId]. */
     fun upsert(bundle: MeshBundle)
 
+    /**
+     * Row for [bundleId], or null. Default is "not found" so in-memory test
+     * fakes keep compiling. Used to recognise a bundle we already accepted
+     * after the working-set cache has evicted it.
+     */
+    fun find(bundleId: String): MeshBundle? = null
+
     /** All non-expired bundles (ttlUntil >= nowMs), oldest-first. */
     fun loadActive(nowMs: Long): List<MeshBundle>
 

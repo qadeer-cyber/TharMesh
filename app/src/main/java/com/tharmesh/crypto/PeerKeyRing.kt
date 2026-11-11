@@ -47,9 +47,8 @@ class PeerKeyRing(
 
     /**
      * Returns the cached/derived AES-256 key for [peerUserId], or `null` if
-     * we have no pinned public key for that peer. Callers should treat null
-     * as "fall back to plaintext body on the wire" — this is the TOFU rollout
-     * path for peers whose keys we haven't learnt yet.
+     * we have no pinned public key for that peer. Callers must treat null
+     * as "do not transmit the body" — see [SecureContent].
      */
     fun keyFor(peerUserId: String): SecretKey? {
         synchronized(cacheLock) { cache[peerUserId] }?.let { return it }
