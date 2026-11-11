@@ -25,7 +25,7 @@ class PublishableKeyAuthTest {
             override fun post(url: String, headers: Map<String, String>, body: String): HttpTransport.Response {
                 seen += headers
                 return when {
-                    url.endsWith("/auth/v1/signup") ->
+                    url.contains("/auth/v1/signup") ->
                         HttpTransport.Response(200, "{\"user\":{\"id\":\"acct-1\",\"email_confirmed_at\":null}}")
                     body.contains("pending@b.co") ->
                         HttpTransport.Response(400, "{\"error\":\"email_not_confirmed\",\"error_description\":\"Email not confirmed\"}")

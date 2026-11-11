@@ -7,21 +7,26 @@ def localPropsFile = rootProject.file("local.properties")
 if (localPropsFile.exists()) {
     localProps.load(new FileInputStream(localPropsFile))
 }
-def googleWebClientId = (localProps.getProperty("GOOGLE_WEB_CLIENT_ID")
-        ?: System.getenv("GOOGLE_WEB_CLIENT_ID")
-        ?: project.findProperty("GOOGLE_WEB_CLIENT_ID")
-        ?: "").toString()
+// A blank local.properties entry must not hide a CI environment variable.
+def firstNonBlank = { String name ->
+    def candidates = [
+            localProps.getProperty(name),
+            System.getenv(name),
+            project.findProperty(name)
+    ]
+    for (candidate in candidates) {
+        if (candidate != null && candidate.toString().trim()) {
+            return candidate.toString().trim()
+        }
+    }
+    return ""
+}
+def googleWebClientId = firstNonBlank("GOOGLE_WEB_CLIENT_ID")
 
-// Supabase project URL and the public anon key. Both stay empty in git.
+// Supabase project URL and the public publishable key. Both stay empty in git.
 // A blank value makes AuthBackend fail closed. Never put a service-role key here.
-def supabaseUrl = (localProps.getProperty("SUPABASE_URL")
-        ?: System.getenv("SUPABASE_URL")
-        ?: project.findProperty("SUPABASE_URL")
-        ?: "").toString()
-def supabaseAnonKey = (localProps.getProperty("SUPABASE_ANON_KEY")
-        ?: System.getenv("SUPABASE_ANON_KEY")
-        ?: project.findProperty("SUPABASE_ANON_KEY")
-        ?: "").toString()
+def supabaseUrl = firstNonBlank("SUPABASE_URL")
+def supabaseAnonKey = firstNonBlank("SUPABASE_ANON_KEY")
 def escapeBuildConfig = { String value ->
     value.replace("\\", "\\\\").replace("\"", "\\\"")
 }

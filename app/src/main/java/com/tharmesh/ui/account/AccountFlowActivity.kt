@@ -8,6 +8,8 @@ package com.tharmesh.ui.account
 import com.tharmesh.ui.theme.Appearance
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.ConnectivityManager
@@ -24,9 +26,11 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.tharmesh.TharMeshApp
+import com.tharmesh.account.AccountActivation
 import com.tharmesh.account.AccountMaterial
 import com.tharmesh.account.AndroidAccountKeyBox
 import com.tharmesh.account.AndroidDeviceKey
+import com.tharmesh.account.AuthRedirect
 import com.tharmesh.account.AuthBackend
 import com.tharmesh.account.AuthCall
 import com.tharmesh.account.AuthRateLimiter
@@ -43,6 +47,8 @@ import com.tharmesh.account.LocalAuth
 import com.tharmesh.account.MeshMaterial
 import com.tharmesh.account.OfflineMode
 import com.tharmesh.account.OfflineModeResolver
+import com.tharmesh.account.PendingSignup
+import com.tharmesh.account.PendingSignupStore
 import com.tharmesh.account.RecoveryUpload
 import com.tharmesh.account.SupabaseDirectory
 import com.tharmesh.account.UrlHttpTransport
@@ -76,6 +82,9 @@ class AccountFlowActivity : AppCompatActivity() {
     private var pendingPhrase: String? = null
     private var pendingRecord: InstallRecord? = null
     private var pendingEnrollment: com.tharmesh.account.EnrollmentRequest? = null
+    private var resendBlockedUntilMs: Long = 0L
+    private val handler = Handler(Looper.getMainLooper())
+    private val resendTick = Runnable { paintResendCooldown() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Appearance.applyTheme(this)
@@ -84,8 +93,16 @@ class AccountFlowActivity : AppCompatActivity() {
         screen = runCatching {
             Screen.valueOf(intent.getStringExtra(EXTRA_SCREEN) ?: Screen.SECURITY.name)
         }.getOrDefault(Screen.SECURITY)
+        if (screen == Screen.CREATE && PendingSignupStore.read(this) != null) {
+            screen = Screen.VERIFY_EMAIL
+        }
         findViewById<TextView>(R.id.account_back).setOnClickListener { finish() }
         bind(screen)
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(resendTick)
+        super.onDestroy()
     }
 
     private fun bind(next: Screen) {
@@ -114,6 +131,8 @@ class AccountFlowActivity : AppCompatActivity() {
         primary.setOnClickListener(null)
         secondary.setOnClickListener(null)
         tertiary.setOnClickListener(null)
+        handler.removeCallbacks(resendTick)
+        secondary.isEnabled = true
 
         when (next) {
             Screen.CREATE -> {
@@ -138,15 +157,15 @@ class AccountFlowActivity : AppCompatActivity() {
                 title.setText(R.string.account_verify_title)
                 body.setText(R.string.account_verify_body)
                 show(f1, R.string.account_field_email)
-                f1.setText(intent.getStringExtra(EXTRA_EMAIL).orEmpty())
-                primary.setText(R.string.account_action_checked)
+                show(f2, R.string.account_field_password)
+                val pendingEmail = PendingSignupStore.read(this)?.email
+                f1.setText(pendingEmail ?: intent.getStringExtra(EXTRA_EMAIL).orEmpty())
+                primary.setText(R.string.account_action_finish_signin)
                 secondary.visibility = View.VISIBLE
                 secondary.setText(R.string.account_action_resend)
-                tertiary.visibility = View.VISIBLE
-                tertiary.setText(R.string.account_action_continue_offline)
-                primary.setOnClickListener { refreshVerification(f1, status) }
+                primary.setOnClickListener { signIn(f1, f2, status) }
                 secondary.setOnClickListener { resend(f1, status) }
-                tertiary.setOnClickListener { bind(Screen.SECURE_IDENTITY) }
+                paintResendCooldown()
             }
             Screen.RECOVER -> {
                 title.setText(R.string.account_recover_title)
@@ -169,6 +188,15 @@ class AccountFlowActivity : AppCompatActivity() {
                 primary.setOnClickListener { restore(f1, f2, status) }
             }
             Screen.SECURE_IDENTITY -> {
+                if (!AccountActivation.mayOpenSecureIdentity(
+                        emailVerified = CloudSessionStore.readEmailVerified(this),
+                        hasLegacyProfile = UserPrefs.hasProfile(this),
+                        hasMeshIdentity = UserPrefs.readIdentity(this) != null
+                    )
+                ) {
+                    bind(Screen.VERIFY_EMAIL)
+                    return
+                }
                 title.setText(R.string.account_secure_title)
                 body.setText(R.string.account_secure_body)
                 val existing = UserPrefs.readIdentity(this)
@@ -261,21 +289,35 @@ class AccountFlowActivity : AppCompatActivity() {
             status.setText(R.string.account_error_rate_limited)
             return
         }
+        val pkce = AuthRedirect.generatePkce(random)
+        PendingSignupStore.save(this, PendingSignup(mail, "", pkce.verifier))
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 AuthBackend.signUp(
                     http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY,
-                    mail, pass, mapOf("handle" to h, "display_name" to name)
+                    mail, pass, mapOf("handle" to h, "display_name" to name), pkce.challenge
                 )
             }
             when (result) {
                 is AuthCall.Failed -> {
-                    if (result.reason != "cloud_auth_not_configured" && result.reason != "invalid_credentials_shape") {
+                    if (result.reason == "rate_limited") {
+                        armResendCooldown(result.retryAfterSeconds)
+                        bind(Screen.VERIFY_EMAIL)
+                    } else {
+                        PendingSignupStore.clear(this@AccountFlowActivity)
+                    }
+                    if (result.reason != "cloud_auth_not_configured" && result.reason != "invalid_credentials_shape" &&
+                        result.reason != "rate_limited"
+                    ) {
                         limiter.recordFailure(System.currentTimeMillis())
                     }
-                    status.text = explain(result.reason)
+                    status.text = explain(result.reason, result.retryAfterSeconds)
                 }
                 is AuthCall.PendingVerification -> {
+                    PendingSignupStore.save(
+                        this@AccountFlowActivity,
+                        PendingSignup(mail, result.accountId, pkce.verifier)
+                    )
                     intent.putExtra(EXTRA_EMAIL, mail)
                     intent.putExtra(EXTRA_ACCOUNT_ID, result.accountId)
                     UserPrefs.setIdentityHeld(this@AccountFlowActivity, true)
@@ -284,10 +326,18 @@ class AccountFlowActivity : AppCompatActivity() {
                 is AuthCall.Ok -> {
                     intent.putExtra(EXTRA_EMAIL, mail)
                     intent.putExtra(EXTRA_ACCOUNT_ID, result.tokens.accountId)
-                    intent.putExtra(EXTRA_ACCESS, result.tokens.accessToken)
-                    rememberCloud(result.tokens.accountId, result.tokens.accessToken, result.tokens.expiresInSeconds, result.tokens.emailVerified)
+                    rememberCloud(result.tokens.accountId, result.tokens.accessToken, result.tokens.expiresInSeconds, result.tokens.emailVerified, result.tokens.refreshToken)
                     UserPrefs.setIdentityHeld(this@AccountFlowActivity, true)
-                    if (result.tokens.emailVerified) bind(Screen.SECURE_IDENTITY) else bind(Screen.VERIFY_EMAIL)
+                    if (result.tokens.emailVerified) {
+                        PendingSignupStore.clear(this@AccountFlowActivity)
+                        bind(Screen.SECURE_IDENTITY)
+                    } else {
+                        PendingSignupStore.save(
+                            this@AccountFlowActivity,
+                            PendingSignup(mail, result.tokens.accountId, pkce.verifier)
+                        )
+                        bind(Screen.VERIFY_EMAIL)
+                    }
                 }
             }
         }
@@ -308,6 +358,13 @@ class AccountFlowActivity : AppCompatActivity() {
                 is AuthCall.Failed -> {
                     if (result.reason == "network") {
                         status.setText(R.string.account_error_network)
+                    } else if (result.reason == "rate_limited") {
+                        armResendCooldown(result.retryAfterSeconds)
+                        status.text = explain(result.reason, result.retryAfterSeconds)
+                    } else if (result.reason == "email_unverified") {
+                        intent.putExtra(EXTRA_EMAIL, mail)
+                        status.setText(R.string.account_verify_body)
+                        if (screen != Screen.VERIFY_EMAIL) bind(Screen.VERIFY_EMAIL)
                     } else {
                         if (result.reason != "cloud_auth_not_configured") limiter.recordFailure(System.currentTimeMillis())
                         status.text = explain(result.reason)
@@ -320,6 +377,13 @@ class AccountFlowActivity : AppCompatActivity() {
     }
 
     private fun applyLogin(result: AuthCall.Ok, status: TextView) {
+        if (!result.tokens.emailVerified) {
+            intent.putExtra(EXTRA_EMAIL, PendingSignupStore.read(this)?.email.orEmpty())
+            status.setText(R.string.account_verify_body)
+            bind(Screen.VERIFY_EMAIL)
+            return
+        }
+        val pending = PendingSignupStore.read(this)
         val mesh = UserPrefs.readIdentity(this)?.let {
             val profile = UserPrefs.readProfile(this)
             MeshMaterial.from(it, profile?.userId ?: "user")
@@ -343,14 +407,23 @@ class AccountFlowActivity : AppCompatActivity() {
         when (login.bind) {
             com.tharmesh.account.AccountSession.Bind.KEEP_LOCAL_IDENTITY -> {
                 UserPrefs.setIdentityHeld(this, false)
+                PendingSignupStore.clear(this)
                 status.setText(R.string.account_signin_body)
                 goHome()
             }
             com.tharmesh.account.AccountSession.Bind.NEEDS_RECOVERY_OR_NEW_IDENTITY -> {
                 UserPrefs.setIdentityHeld(this, true)
                 intent.putExtra(EXTRA_ACCOUNT_ID, result.tokens.accountId)
-                intent.putExtra(EXTRA_ACCESS, result.tokens.accessToken)
-                bind(Screen.RECOVER)
+                val next = AccountActivation.afterVerifiedSignIn(
+                    hasMeshIdentity = false,
+                    pendingSignupOnThisPhone = pending != null
+                )
+                if (next == AccountActivation.AfterVerifiedSignIn.SECURE_IDENTITY) {
+                    PendingSignupStore.clear(this)
+                    bind(Screen.SECURE_IDENTITY)
+                } else {
+                    bind(Screen.RECOVER)
+                }
             }
             com.tharmesh.account.AccountSession.Bind.REFUSE_SILENT_REPLACEMENT -> {
                 status.setText(R.string.account_error_conflict)
@@ -688,45 +761,58 @@ class AccountFlowActivity : AppCompatActivity() {
         status.text = EnrollmentQr.encodeCertificate(cert)
     }
 
-    private fun refreshVerification(email: EditText, status: TextView) {
-        val access = intent.getStringExtra(EXTRA_ACCESS)
-        if (access.isNullOrBlank()) {
-            status.setText(R.string.account_error_not_configured)
+    private fun resend(email: EditText, status: TextView) {
+        if (System.currentTimeMillis() < resendBlockedUntilMs) {
+            paintResendCooldown()
             return
         }
-        lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                AuthBackend.fetchUser(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access)
-            }
-            when (result) {
-                is AuthCall.Ok -> if (result.tokens.emailVerified) bind(Screen.SECURE_IDENTITY) else status.setText(R.string.account_verify_body)
-                is AuthCall.PendingVerification -> status.setText(R.string.account_verify_body)
-                is AuthCall.Failed -> status.text = explain(result.reason)
-            }
-        }
-    }
-
-    private fun resend(email: EditText, status: TextView) {
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 AuthBackend.resendVerification(
                     http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, email.text.toString()
                 )
             }
-            status.text = when (result) {
-                is AuthCall.Failed -> explain(result.reason)
-                else -> getString(R.string.account_verify_body)
+            when (result) {
+                is AuthCall.Failed -> {
+                    if (result.reason == "rate_limited") armResendCooldown(result.retryAfterSeconds)
+                    status.text = explain(result.reason, result.retryAfterSeconds)
+                }
+                else -> {
+                    armResendCooldown(60)
+                    status.setText(R.string.account_verify_sent)
+                }
             }
         }
     }
 
-    private fun rememberCloud(accountId: String, access: String, expiresIn: Long, verified: Boolean) {
+    private fun armResendCooldown(retryAfterSeconds: Long?) {
+        val wait = (retryAfterSeconds ?: 60L).coerceIn(1L, 3600L)
+        resendBlockedUntilMs = System.currentTimeMillis() + wait * 1000L
+        paintResendCooldown()
+    }
+
+    private fun paintResendCooldown() {
+        if (screen != Screen.VERIFY_EMAIL) return
+        val button = findViewById<TextView>(R.id.account_secondary)
+        val left = ((resendBlockedUntilMs - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
+        if (left > 0L) {
+            button.isEnabled = false
+            button.text = getString(R.string.account_resend_wait, left.toInt())
+            handler.postDelayed(resendTick, 1000L)
+        } else {
+            button.isEnabled = true
+            button.setText(R.string.account_action_resend)
+        }
+    }
+
+    private fun rememberCloud(accountId: String, access: String, expiresIn: Long, verified: Boolean, refresh: String = "") {
         val now = System.currentTimeMillis()
         CloudSessionStore.write(
             this,
             InstallRecord(
                 accountId = accountId,
                 accessToken = access,
+                refreshToken = refresh.ifBlank { null },
                 tokenExpiresAtMs = now + expiresIn * 1000L,
                 emailVerified = verified,
                 cloud = if (expiresIn <= 0L) CloudCredential.TOKEN_EXPIRED else CloudCredential.ACTIVE,
@@ -736,13 +822,18 @@ class AccountFlowActivity : AppCompatActivity() {
         )
     }
 
-    private fun explain(reason: String): String {
+    private fun explain(reason: String, retryAfterSeconds: Long? = null): String {
         return when (reason) {
             "cloud_auth_not_configured" -> getString(R.string.account_error_not_configured)
             "network" -> getString(R.string.account_error_network)
             "invalid_credentials_shape", "invalid_handle" -> getString(R.string.account_error_invalid)
             "handle_taken", "email_taken" -> getString(R.string.account_error_handle)
             "email_unverified" -> getString(R.string.account_verify_body)
+            "rate_limited" -> getString(
+                R.string.account_error_email_rate_limited,
+                (retryAfterSeconds ?: 60L).toInt()
+            )
+            "callback_rejected" -> getString(R.string.account_error_callback)
             "unauthorized" -> getString(R.string.login_failed_fmt, "session expired")
             else -> getString(R.string.login_failed_fmt, reason)
         }

@@ -1,8 +1,10 @@
 # Cloud account configuration
 
-Live Supabase auth is **not** configured in this repository. The debug build
-succeeds with the values empty. Sign-up and sign-in then return
-`cloud_auth_not_configured` and do not invent a user.
+A debug APK built on a machine without `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+returns `cloud_auth_not_configured`. That is the build, not the hosted project.
+CI passes the repository variables into BuildConfig. A blank `local.properties`
+entry does not hide those variables. The publishable key is not parsed as a JWT.
+Trailing whitespace and a trailing slash on the URL are trimmed. `http://` is rejected.
 
 ## Values the app reads
 
@@ -32,6 +34,19 @@ This repository has no GitHub Environment, so the Android job does not set
 the build until that environment exists and the job names it.
 
 `google-services.json` is gitignored and is not required for this HTTP client.
+
+## URL configuration (owner action in the Supabase dashboard)
+
+Authentication → URL Configuration. The default Site URL `http://localhost:3000` is why the confirmation email never opens the app.
+
+Set both of these exactly:
+
+- **Site URL:** `tharmesh://auth/callback`
+- **Additional Redirect URLs:** `tharmesh://auth/callback`
+
+Save. The app also sends `redirect_to=tharmesh://auth/callback` on signup and resend. Supabase still refuses a redirect that is not on that allow-list, and the email link is built from the Site URL, so the dashboard values are required.
+
+Built-in email rate limits return HTTP 429. The app shows that, honors `Retry-After` when Supabase sends it, and disables Resend for the cooldown. It does not retry the send by itself. For real use, configure custom SMTP under Authentication → Emails. The built-in mailer is only enough for a few messages an hour.
 
 ## Dashboard steps that are not in this repo
 

@@ -6,6 +6,7 @@
 package com.tharmesh.account
 
 import org.json.JSONObject
+import java.net.URLEncoder
 
 /**
  * Cloud account directory. Mesh transport does not call this.
@@ -14,7 +15,7 @@ import org.json.JSONObject
  * URL and anon key come from the build config. Empty values fail closed.
  */
 fun interface HttpTransport {
-    data class Response(val code: Int, val body: String)
+    data class Response(val code: Int, val body: String, val retryAfterSeconds: Long? = null)
     fun post(url: String, headers: Map<String, String>, body: String): Response
 
     /** GoTrue's user lookup is a GET. Default keeps older post-only fakes compiling. */
@@ -32,7 +33,7 @@ data class AuthTokens(
 sealed class AuthCall {
     data class Ok(val tokens: AuthTokens) : AuthCall()
     data class PendingVerification(val accountId: String) : AuthCall()
-    data class Failed(val reason: String) : AuthCall()
+    data class Failed(val reason: String, val retryAfterSeconds: Long? = null) : AuthCall()
 }
 
 /**
@@ -55,7 +56,7 @@ object SupabaseHeaders {
         extra: Map<String, String> = emptyMap()
     ): Map<String, String> {
         val headers = LinkedHashMap<String, String>()
-        headers["apikey"] = apiKey
+        headers["apikey"] = apiKey.trim()
         headers["Content-Type"] = "application/json"
         val bearer = userBearer(apiKey, userAccessToken)
         if (bearer != null) headers["Authorization"] = bearer
@@ -95,13 +96,15 @@ object AuthBackend {
         anonKey: String,
         email: String,
         password: String,
-        metadata: Map<String, String> = emptyMap()
+        metadata: Map<String, String> = emptyMap(),
+        codeChallenge: String? = null
     ): AuthCall {
         return call(
             http, baseUrl, anonKey, email, password,
             path = "/auth/v1/signup",
-            query = "",
-            metadata = metadata
+            query = redirectQuery(),
+            metadata = metadata,
+            codeChallenge = codeChallenge
         )
     }
 
@@ -129,18 +132,46 @@ object AuthBackend {
 
     fun resendVerification(http: HttpTransport, baseUrl: String, anonKey: String, email: String): AuthCall {
         if (!configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        val url = baseUrl.trimEnd('/') + "/auth/v1/resend"
+        val url = baseUrl.trim().trimEnd('/') + "/auth/v1/resend" + redirectQuery()
         val body = JSONObject().put("type", "signup").put("email", email.trim()).toString()
         val response = try {
             http.post(url, SupabaseHeaders.build(anonKey), body)
         } catch (ignored: Throwable) {
             return AuthCall.Failed("network")
         }
-        return if (response.code in 200..299) {
+        return mapResponse(response) {
             AuthCall.Ok(AuthTokens("", "", 0L))
-        } else {
-            AuthCall.Failed(errorReason(response.body) ?: "http_${response.code}")
         }
+    }
+
+    /** Confirms the email from the link's token_hash. Does not follow a browser redirect. */
+    fun verifyTokenHash(
+        http: HttpTransport,
+        baseUrl: String,
+        anonKey: String,
+        tokenHash: String,
+        type: String
+    ): AuthCall {
+        if (!configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
+        if (tokenHash.isBlank() || type.isBlank()) return AuthCall.Failed("callback_rejected")
+        val url = baseUrl.trim().trimEnd('/') + "/auth/v1/verify"
+        val body = JSONObject().put("token_hash", tokenHash).put("type", type).toString()
+        return postAuth(http, url, anonKey, body, allowEmptyToken = false)
+    }
+
+    /** Exchanges the PKCE code from the app link. The verifier never leaves this phone. */
+    fun exchangePkce(
+        http: HttpTransport,
+        baseUrl: String,
+        anonKey: String,
+        code: String,
+        codeVerifier: String
+    ): AuthCall {
+        if (!configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
+        if (code.isBlank() || codeVerifier.isBlank()) return AuthCall.Failed("callback_rejected")
+        val url = baseUrl.trim().trimEnd('/') + "/auth/v1/token?grant_type=pkce"
+        val body = JSONObject().put("auth_code", code).put("code_verifier", codeVerifier).toString()
+        return postAuth(http, url, anonKey, body, allowEmptyToken = false)
     }
 
     fun fetchUser(http: HttpTransport, baseUrl: String, anonKey: String, accessToken: String): AuthCall {
@@ -148,15 +179,32 @@ object AuthBackend {
         if (SupabaseHeaders.userBearer(anonKey, accessToken) == null) {
             return AuthCall.Failed("unauthorized")
         }
-        val url = baseUrl.trimEnd('/') + "/auth/v1/user"
+        val url = baseUrl.trim().trimEnd('/') + "/auth/v1/user"
         val response = try {
             http.get(url, SupabaseHeaders.build(anonKey, accessToken))
         } catch (ignored: Throwable) {
             return AuthCall.Failed("network")
         }
         if (response.code == 401) return AuthCall.Failed("unauthorized")
-        if (response.code !in 200..299) return AuthCall.Failed(errorReason(response.body) ?: "http_${response.code}")
-        return parseTokens(response.body, allowEmptyToken = true)
+        if (response.code !in 200..299) {
+            return mapResponse(response) { AuthCall.Failed("bad_response") }
+        }
+        val parsed = parseTokens(response.body, allowEmptyToken = true)
+        val verified = emailConfirmed(response.body)
+        return when (parsed) {
+            is AuthCall.PendingVerification -> if (verified) {
+                AuthCall.Ok(AuthTokens(parsed.accountId, accessToken, 0L, true, ""))
+            } else {
+                parsed
+            }
+            is AuthCall.Ok -> parsed.copy(
+                tokens = parsed.tokens.copy(
+                    emailVerified = parsed.tokens.emailVerified || verified,
+                    accessToken = parsed.tokens.accessToken.ifBlank { accessToken }
+                )
+            )
+            else -> parsed
+        }
     }
 
     fun refresh(http: HttpTransport, baseUrl: String, apiKey: String, refreshToken: String): AuthCall {
@@ -168,7 +216,9 @@ object AuthBackend {
     }
 
     fun configured(baseUrl: String, anonKey: String): Boolean {
-        return baseUrl.isNotBlank() && anonKey.isNotBlank() && baseUrl.trim().startsWith("https://")
+        val url = baseUrl.trim().trimEnd('/')
+        val key = anonKey.trim()
+        return key.isNotEmpty() && url.startsWith("https://") && url.length > "https://".length
     }
 
     private fun call(
@@ -179,7 +229,8 @@ object AuthBackend {
         password: String,
         path: String,
         query: String,
-        metadata: Map<String, String> = emptyMap()
+        metadata: Map<String, String> = emptyMap(),
+        codeChallenge: String? = null
     ): AuthCall {
         if (!configured(baseUrl, anonKey)) {
             return AuthCall.Failed("cloud_auth_not_configured")
@@ -187,8 +238,12 @@ object AuthBackend {
         if (!email.contains("@") || password.length < 8) {
             return AuthCall.Failed("invalid_credentials_shape")
         }
-        val url = baseUrl.trimEnd('/') + path + query
+        val url = baseUrl.trim().trimEnd('/') + path + query
         val payload = JSONObject().put("email", email.trim()).put("password", password)
+        if (!codeChallenge.isNullOrBlank()) {
+            payload.put("code_challenge", codeChallenge)
+            payload.put("code_challenge_method", "s256")
+        }
         if (metadata.isNotEmpty()) {
             val data = JSONObject()
             for ((k, v) in metadata) data.put(k, v)
@@ -209,11 +264,24 @@ object AuthBackend {
         } catch (ignored: Throwable) {
             return AuthCall.Failed("network")
         }
+        return mapResponse(response) { parseTokens(response.body, allowEmptyToken) }
+    }
+
+    private fun mapResponse(response: HttpTransport.Response, onSuccess: () -> AuthCall): AuthCall {
         if (response.code == 401) return AuthCall.Failed("unauthorized")
-        if (response.code !in 200..299) {
-            return AuthCall.Failed(errorReason(response.body) ?: "http_${response.code}")
+        val reason = errorReason(response.body)
+        if (response.code == 429 || reason == "rate_limited") {
+            return AuthCall.Failed("rate_limited", response.retryAfterSeconds)
         }
-        return parseTokens(response.body, allowEmptyToken)
+        if (response.code !in 200..299) {
+            return AuthCall.Failed(reason ?: "http_${response.code}")
+        }
+        return onSuccess()
+    }
+
+    private fun redirectQuery(): String {
+        val encoded = URLEncoder.encode(AuthRedirect.CALLBACK, "UTF-8")
+        return "?redirect_to=$encoded"
     }
 
     private fun errorReason(body: String): String? {
@@ -225,11 +293,28 @@ object AuthBackend {
                 description.contains("Email not confirmed")
             ) {
                 "email_unverified"
+            } else if (
+                code.contains("over_request_rate_limit") ||
+                code.contains("over_email_send_rate_limit") ||
+                description.contains("rate limit")
+            ) {
+                "rate_limited"
             } else {
                 null
             }
         } catch (ignored: Throwable) {
             null
+        }
+    }
+
+    private fun emailConfirmed(body: String): Boolean {
+        return try {
+            val json = JSONObject(body)
+            val user = if (json.has("user") && json.opt("user") is JSONObject) json.getJSONObject("user") else json
+            val confirmed = user.optString("email_confirmed_at", "")
+            confirmed.isNotBlank() && confirmed != "null"
+        } catch (ignored: Throwable) {
+            false
         }
     }
 

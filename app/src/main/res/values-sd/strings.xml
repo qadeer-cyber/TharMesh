@@ -23,7 +23,7 @@
     <string name="account_security_title">اڪائونٽ جي حفاظت</string>
     <string name="account_create_body">اي ميل ۽ گهٽ ۾ گهٽ ۸ اکرن جو پاسورڊ. فون نمبر نه گهرجي. هينڊل منفرد آهي ۽ پوءِ نه مٽندو.</string>
     <string name="account_signin_body">سائن ان هن فون جي موجوده ميش چاٻي نه مٽائي، ۽ نئين چاٻي نه ٺاهي.</string>
-    <string name="account_verify_body">اي ميل جو لنڪ کوليو. لنڪ کان اڳ به ميش آف لائن هلي سگهي ٿي. بحالي جي اپ لوڊ تصديق کان پوءِ ٿئي ٿي.</string>
+    <string name="account_verify_body">تصديق جو لنڪ هن فون تي کوليو، پوءِ پاسورڊ سان سائن ان ڪريو. ان کان اڳ ميش نه کلي.</string>
     <string name="account_recover_body">پراڻي فون جي بحالي واري چاٻي لکو. غلط چاٻي ڪجهه نه مٽائي. صرف لاگ ان چاٻي واپس نه آڻي.</string>
     <string name="account_secure_body">هن فون جي ميش چاٻي اها ئي رهي جنهن تي رابطا ڀروسو ڪن. اڪائونٽ چاٻي الڳ آهي ۽ هن ڊوائيس جي تصديق ڪري.</string>
     <string name="account_save_body">هي چاٻي لکو. اها سرور تي نه رکي ويندي ۽ ٻيهر نه ڏيکاري ويندي.</string>
@@ -42,7 +42,12 @@
     <string name="settings_appearance_ocean">سامونڊي نيرو</string>
     <string name="settings_appearance_rose">گلابي</string>
     <string name="chat_action_delete_confirm">هن فون تي هي چيٽ ڊاهيو؟ رابطو ۽ تصديق ٿيل چاٻي رهندا. هن فون جا نياپا هٽي ويندا.</string>
-    <string name="account_error_not_configured">هن بلڊ ۾ ڪلائوڊ سائن ان ترتيب ناهي. ڪو اڪائونٽ نه ٺهيو. Supabase پتو ۽ چاٻي شامل ڪريو، پوءِ ٻيهر ڪوشش ڪريو.</string>
+    <string name="account_error_not_configured">هن نقل ۾ SUPABASE_URL ۽ SUPABASE_ANON_KEY نه آهن. ڪو اڪائونٽ نه ٺهيو. CI وارو APK لڳايو، يا local.properties ۾ ٻئي لکي ٻيهر ٺاهيو.</string>
+    <string name="account_action_finish_signin">ختم ڪرڻ لاءِ سائن ان</string>
+    <string name="account_verify_sent">تصديقي اي ميل موڪلي وئي. لنڪ هن فون تي کوليو، پوءِ سائن ان ڪريو.</string>
+    <string name="account_resend_wait">%1$d سيڪنڊن ۾ ٻيهر موڪليو</string>
+    <string name="account_error_email_rate_limited">Supabase اي ميل محدود ڪري رهيو آهي. %1$d سيڪنڊ انتظار ڪريو. وڌيڪ اي ميل نه موڪلي وئي.</string>
+    <string name="account_error_callback">هي لنڪ ٿارميش جي تصديق نه آهي. ڪو اڪائونٽ فعال نه ٿيو.</string>
     <string name="account_error_wrong_recovery">هي بحالي واري چاٻي نه کلي. هن فون جون چاٻيون نه مٽيون.</string>
     <string name="account_status_token_expired">ڪلائوڊ ٽوڪن ختم ٿي ويو. توهان سائن آئوٽ نه آهيو. ميش سڃاڻپ هن فون تي آهي.</string>
     <string name="account_offline_body">هي انسٽال نيٽ ورڪ کان سواءِ مجاز رهي ٿو. ختم ٿيل ڪلائوڊ ٽوڪن سائن آئوٽ ناهي. جيڪو ڊوائيس ٻيهر نه ڳنڍجي، سرور ان کي رد نه ٿو ڪري سگهي.</string>

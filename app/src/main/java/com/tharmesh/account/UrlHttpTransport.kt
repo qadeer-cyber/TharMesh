@@ -35,9 +35,10 @@ class UrlHttpTransport : HttpTransport {
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
         }
         val code = connection.responseCode
+        val retryAfter = connection.getHeaderField("Retry-After")?.trim()?.toLongOrNull()
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         connection.disconnect()
-        return HttpTransport.Response(code, text)
+        return HttpTransport.Response(code, text, retryAfter)
     }
 }

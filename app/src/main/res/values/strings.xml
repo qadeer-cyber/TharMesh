@@ -201,7 +201,7 @@
     <string name="account_signin_title">Sign in</string>
     <string name="account_signin_body">Signing in does not replace the mesh key already on this phone, and it does not create one.</string>
     <string name="account_verify_title">Email verification</string>
-    <string name="account_verify_body">Open the link in the email. You can use the mesh offline before the link is opened. Recovery upload waits until the email is verified.</string>
+    <string name="account_verify_body">Open the confirmation link on this phone, then sign in with your password. This install does not join the mesh until that sign-in succeeds.</string>
     <string name="account_recover_title">Recover account</string>
     <string name="account_recover_body">Enter the recovery key from the phone that created it. A wrong key changes nothing. Login alone does not restore a key.</string>
     <string name="account_secure_title">Secure your identity</string>
@@ -226,6 +226,11 @@
     <string name="account_action_sign_in">Sign in</string>
     <string name="account_action_resend">Resend verification email</string>
     <string name="account_action_checked">I opened the email link</string>
+    <string name="account_action_finish_signin">Sign in to finish</string>
+    <string name="account_verify_sent">Verification email sent. Open the link on this phone, then sign in.</string>
+    <string name="account_resend_wait">Resend in %1$d s</string>
+    <string name="account_error_email_rate_limited">Supabase is limiting email sends. Wait %1$d seconds. No extra email was sent.</string>
+    <string name="account_error_callback">That link is not a TharMesh confirmation. No account was activated.</string>
     <string name="account_action_continue_offline">Continue offline</string>
     <string name="account_action_restore">Restore with recovery key</string>
     <string name="account_action_protect">Protect the key already on this phone</string>
@@ -239,7 +244,7 @@
     <string name="account_enroll_accepted">This phone accepted the certificate. The mesh key was not replaced.</string>
     <string name="account_confirm_new_key">I understand this is a new key, not my previous one, and contacts must verify it again.</string>
     <string name="account_confirm_first_key">This phone has no earlier TharMesh key to restore.</string>
-    <string name="account_error_not_configured">Cloud sign-in is not configured on this build. No account was created. Add the Supabase URL and anon key, then try again.</string>
+    <string name="account_error_not_configured">This copy of the app was built without SUPABASE_URL and SUPABASE_ANON_KEY. No account was created. Install the CI debug APK, or set both in local.properties and rebuild. A blank value is not a configured project.</string>
     <string name="account_error_rate_limited">Too many attempts. Wait and try again.</string>
     <string name="account_error_invalid">Check the email, password (8 or more characters), and handle.</string>
     <string name="account_error_handle">That handle is already used, or it is not 3–20 letters, digits, or underscores.</string>

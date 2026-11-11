@@ -65,7 +65,13 @@ class LoginActivity : AppCompatActivity() {
             return
         }
         createBtn.setOnClickListener {
-            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.CREATE))
+            val pending = com.tharmesh.account.PendingSignupStore.read(this)
+            val screen = if (pending != null) {
+                AccountFlowActivity.Screen.VERIFY_EMAIL
+            } else {
+                AccountFlowActivity.Screen.CREATE
+            }
+            startActivity(AccountFlowActivity.intent(this, screen))
         }
         signInBtn.setOnClickListener {
             startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.SIGN_IN))

@@ -55,6 +55,20 @@
 
         <activity android:name="com.tharmesh.ui.auth.LoginActivity" />
         <activity android:name="com.tharmesh.ui.account.AccountFlowActivity" />
+        <activity
+            android:name="com.tharmesh.ui.account.AuthCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="tharmesh"
+                    android:host="auth"
+                    android:path="/callback" />
+            </intent-filter>
+        </activity>
         <activity android:name="com.tharmesh.ui.status.StatusActivity" />
         <activity android:name="com.tharmesh.ui.groups.GroupsActivity" />
         <activity android:name="com.tharmesh.ui.contacts.ScanQrActivity" />

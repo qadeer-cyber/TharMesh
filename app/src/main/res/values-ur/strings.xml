@@ -23,7 +23,7 @@
     <string name="account_security_title">اکاؤنٹ کی حفاظت</string>
     <string name="account_create_body">ای میل اور کم از کم ۸ حروف کا پاس ورڈ۔ فون نمبر نہیں چاہیے۔ ہینڈل منفرد ہے اور بعد میں نہیں بدلے گا۔</string>
     <string name="account_signin_body">سائن ان اس فون کی موجودہ میش کلید نہیں بدلتا، اور نئی کلید نہیں بناتا۔</string>
-    <string name="account_verify_body">ای میل کا لنک کھولیں۔ لنک سے پہلے بھی میش آف لائن چل سکتا ہے۔ بحالی کی اپ لوڈ تصدیق کے بعد ہوتی ہے۔</string>
+    <string name="account_verify_body">تصدیق کا لنک اسی فون پر کھولیں، پھر پاس ورڈ سے سائن ان کریں۔ اس سے پہلے میش نہیں کھلتا۔</string>
     <string name="account_recover_body">پرانی فون کی بحالی کلید لکھیں۔ غلط کلید کچھ نہیں بدلتی۔ صرف لاگ اِن کلید واپس نہیں لاتا۔</string>
     <string name="account_secure_body">اس فون کی میش کلید وہی رہتی ہے جس پر رابطے بھروسہ کرتے ہیں۔ اکاؤنٹ کلید الگ ہے اور اس آلہ کی تصدیق کرتی ہے۔</string>
     <string name="account_save_body">یہ کلید لکھ لیں۔ یہ سرور پر محفوظ نہیں ہوگی اور دوبارہ نہیں دکھائی جائے گی۔</string>
@@ -42,7 +42,12 @@
     <string name="settings_appearance_ocean">سمندری نیلا</string>
     <string name="settings_appearance_rose">گلابی</string>
     <string name="chat_action_delete_confirm">اس فون پر یہ چیٹ حذف کریں؟ رابطہ اور تصدیق شدہ کلید رہیں گے۔ اس فون کے پیغامات ہٹ جائیں گے۔</string>
-    <string name="account_error_not_configured">اس بلڈ میں کلاؤڈ سائن ان ترتیب نہیں۔ کوئی اکاؤنٹ نہیں بنا۔ Supabase پتہ اور کلید شامل کریں، پھر دوبارہ کوشش کریں۔</string>
+    <string name="account_error_not_configured">اس نقل میں SUPABASE_URL اور SUPABASE_ANON_KEY نہیں۔ کوئی اکاؤنٹ نہیں بنا۔ CI والا APK لگائیں، یا local.properties میں دونوں لکھ کر دوبارہ بنائیں۔</string>
+    <string name="account_action_finish_signin">ختم کرنے کے لیے سائن ان</string>
+    <string name="account_verify_sent">تصدیقی ای میل بھیج دی گئی۔ لنک اسی فون پر کھولیں، پھر سائن ان کریں۔</string>
+    <string name="account_resend_wait">%1$d سیکنڈ میں دوبارہ بھیجیں</string>
+    <string name="account_error_email_rate_limited">Supabase ای میل محدود کر رہا ہے۔ %1$d سیکنڈ انتظار کریں۔ اضافی ای میل نہیں بھیجی گئی۔</string>
+    <string name="account_error_callback">یہ لنک تھارمیش کی تصدیق نہیں۔ کوئی اکاؤنٹ فعال نہیں ہوا۔</string>
     <string name="account_error_wrong_recovery">یہ بحالی کلید نہیں کھلی۔ اس فون کی کلیدیں نہیں بدلیں۔</string>
     <string name="account_status_token_expired">کلاؤڈ ٹوکن ختم ہو گیا۔ آپ سائن آؤٹ نہیں۔ میش شناخت اسی فون پر ہے۔</string>
     <string name="account_offline_body">یہ انسٹال بغیر نیٹ ورک کے مجاز رہتا ہے۔ ختم شدہ کلاؤڈ ٹوکن سائن آؤٹ نہیں۔ جو آلہ دوبارہ نہ جڑے، سرور اسے منسوخ نہیں کر سکتا۔</string>

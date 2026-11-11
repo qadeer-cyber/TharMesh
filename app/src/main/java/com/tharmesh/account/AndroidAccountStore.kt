@@ -165,6 +165,10 @@ object CloudSessionStore {
             .orEmpty()
     }
 
+    fun readEmailVerified(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(EMAIL_VERIFIED, false)
+    }
+
     fun readCloud(context: Context): CloudCredential {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(STATE, null)
         return raw?.let { runCatching { CloudCredential.valueOf(it) }.getOrNull() } ?: CloudCredential.NONE
