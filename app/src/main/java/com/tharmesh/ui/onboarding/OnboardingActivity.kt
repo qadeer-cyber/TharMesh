@@ -229,7 +229,7 @@ class OnboardingActivity : AppCompatActivity() {
                 showStep(2)
                 return@setOnClickListener
             }
-            val missing = NearbyPermissions.required.filter { perm ->
+            val missing = NearbyPermissions.toRequest().filter { perm ->
                 ContextCompat.checkSelfPermission(this, perm) !=
                     PackageManager.PERMISSION_GRANTED
             }

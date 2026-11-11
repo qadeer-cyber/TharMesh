@@ -291,6 +291,48 @@ class MessageRepository(
         retryPolicy.hydrate(seed)
     }
 
+    private fun persistRetryStateBlocking(bundleId: String) {
+        val p = retryStatePersistence ?: return
+        val state = retryPolicy.currentState(bundleId) ?: return
+        try {
+            p.save(bundleId, state, isPriority(bundleId))
+        } catch (ignored: Throwable) {
+        }
+    }
+
+    /**
+     * Legacy outbound rows whose cached payload is not a sealed envelope are
+     * pulled back to [MessageStatus.AWAITING_KEY] and deleted from the mesh
+     * cache. Returns the rows that are still safe to retry.
+     */
+    private fun quarantineUnsealedOutbound(pending: List<MessageEntity>): List<MessageEntity> {
+        if (peerKeyRing == null) return pending
+        val kept = ArrayList<MessageEntity>(pending.size)
+        for (msg in pending) {
+            val bid = msg.bundleId
+            if (bid.isNullOrEmpty()) {
+                kept.add(msg)
+                continue
+            }
+            val payload = mesh.localPayload(bid)
+            if (payload != null && !com.tharmesh.crypto.SealedEnvelope.looksSealed(payload)) {
+                mesh.dropLocalBundle(bid)
+                val updated = db.messageDao().holdForIdentity(myUserId(), bid)
+                if (updated > 0) {
+                    db.conversationDao().setLastMessage(
+                        msg.peerUserId,
+                        msg.body,
+                        msg.timestamp,
+                        MessageStatus.AWAITING_KEY
+                    )
+                }
+                continue
+            }
+            kept.add(msg)
+        }
+        return kept
+    }
+
     private fun persistRetryState(bundleId: String) {
         val p = retryStatePersistence ?: return
         val state = retryPolicy.currentState(bundleId) ?: return
@@ -562,7 +604,7 @@ class MessageRepository(
             if (isFirstChat) onFirstChatStarted(toUserId)
             if (effectivePriority) {
                 retryPolicy.markOriginated(bundleId, ts, RetryConfig.SOS)
-                persistRetryState(bundleId)
+                persistRetryStateBlocking(bundleId)
             }
             return SendResult(messageId, bundleId)
         }
@@ -702,10 +744,10 @@ class MessageRepository(
             if (updated > 0) {
                 db.conversationDao().setLastMessage(peer, msg.body, msg.timestamp, MessageStatus.QUEUED)
             }
-            if (!priority) {
-                retryPolicy.markOriginated(bid, ts, null)
+            if (retryPolicy.currentState(bid) == null) {
+                retryPolicy.markOriginated(bid, ts, if (priority) RetryConfig.SOS else null)
             }
-            persistRetryState(bid)
+            persistRetryStateBlocking(bid)
             mesh.broadcastOutbound(bundle)
         }
     }
@@ -1063,6 +1105,13 @@ class MessageRepository(
     fun startStoreAndForwardLoop() {
         if (retryJob?.isActive == true) return
         retryJob = scope.launch(Dispatchers.IO) {
+            // Cold start: reseal anything left in the clear, then release
+            // rows that were waiting on a verified key, before the first delay.
+            try {
+                quarantineUnsealedOutbound(db.messageDao().pendingOutbound(myUserId()))
+                releaseAwaitingIdentity(null)
+            } catch (ignored: Throwable) {
+            }
             while (true) {
                 delay(retryConfig.tickIntervalMs)
                 try {
@@ -1093,9 +1142,10 @@ class MessageRepository(
      * stuck-recovery path.
      */
     internal fun runRetryTick(nowMs: Long, pending: List<MessageEntity>) {
+        val sendable = quarantineUnsealedOutbound(pending)
         runRetryTickStandalone(
             nowMs = nowMs,
-            pending = pending,
+            pending = sendable,
             retryPolicy = retryPolicy,
             onRetryAttempt = onRetryAttempt,
             onStuckSendingRecovered = onStuckSendingRecovered,

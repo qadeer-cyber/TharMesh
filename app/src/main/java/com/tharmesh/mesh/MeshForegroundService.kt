@@ -10,6 +10,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -45,7 +46,23 @@ class MeshForegroundService : Service() {
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .build()
-        startForeground(NOTIFICATION_ID, notification)
+        // connectedDevice matches Nearby / Bluetooth. API 29+ takes the type
+        // in the call. If a device rejects the type (manifest mismatch on an
+        // older target), fall back so the process is not killed for missing
+        // startForeground.
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                )
+            } catch (ignored: Throwable) {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
         return START_STICKY
     }
 

@@ -36,8 +36,12 @@
          Normal-protection permission, granted at install time. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Keeps Nearby advertising alive when the UI is backgrounded. -->
+    <!-- Keeps Nearby advertising alive when the UI is backgrounded.
+         connectedDevice is the type Android 14+ expects for Bluetooth/Wi-Fi
+         peer links. POST_NOTIFICATIONS is requested at runtime on API 33+. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name="com.tharmesh.TharMeshApp"
@@ -81,7 +85,8 @@
 
         <service
             android:name="com.tharmesh.mesh.MeshForegroundService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 
 </manifest>

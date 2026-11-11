@@ -166,6 +166,7 @@ class TharMeshApp : Application() {
             identity = identity,
             peerTrustStore = peerTrustStore,
             requireVerifiedIdentity = true,
+            refuseUnsealedLocalSend = true,
             pacer = pacer,
             onSendPaced = { peerId -> diag.recordSendPaced(peerId) },
             onSendRejected = { peerId, bundleId -> diag.recordSendRejected(peerId, bundleId) },
@@ -174,6 +175,17 @@ class TharMeshApp : Application() {
                 diag.recordRelaySent(peerId, bundleId, bytes)
             }
         )
+        engine.setDeliveryGate { bundle ->
+            val verified = peerTrustStore.trustState(bundle.srcId) is
+                PeerTrustStore.TrustState.Verified
+            val key = if (verified) keyRing.keyFor(bundle.srcId) else null
+            com.tharmesh.crypto.SecureContent.openForDisplay(
+                raw = bundle.payloadCiphertext,
+                key = key,
+                peerVerified = verified,
+                secureMode = true
+            ) != null
+        }
         val repo = MessageRepository(
             db = database,
             mesh = engine,

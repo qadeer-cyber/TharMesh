@@ -177,6 +177,22 @@ interface MessageDao {
     fun awaitingIdentity(myUserId: String, peerUserId: String): List<MessageEntity>
 
     /**
+     * Pull a legacy plaintext outbound row back to [com.tharmesh.db.MessageStatus.AWAITING_KEY]
+     * so it can be sealed before anything else transmits it. Rank-based advance
+     * cannot move backward, so this update is explicit.
+     */
+    @Query(
+        """
+        UPDATE messages
+           SET status = 'AWAITING_KEY'
+         WHERE bundleId = :bundleId
+           AND fromUserId = :myUserId
+           AND status IN ('QUEUED', 'SENDING', 'SENT', 'FAILED')
+        """
+    )
+    fun holdForIdentity(myUserId: String, bundleId: String): Int
+
+    /**
      * Flip a QUEUED-or-SENDING row to FAILED on a transport-layer send error. Skips
      * rows that are already past SENDING (SENT/DELIVERED/READ) so a late Error on a
      * retry doesn't regress a successfully-delivered message. Returns rows affected.
