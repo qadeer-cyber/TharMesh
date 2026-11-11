@@ -245,7 +245,7 @@ object AuthBackend {
         if (!configured(baseUrl, anonKey)) {
             return AuthCall.Failed("cloud_auth_not_configured")
         }
-        if (!email.contains("@") || password.length < 8) {
+        if (!email.contains("@") || password.isEmpty() || (path.endsWith("/signup") && password.length < 8)) {
             return AuthCall.Failed("invalid_credentials_shape")
         }
         val url = baseUrl.trim().trimEnd('/') + path + query
@@ -282,8 +282,6 @@ object AuthBackend {
         if (response.code in 200..299) return onSuccess()
         val mapped = AuthErrors.classify(response.body, response.code)
         val reason = when {
-            response.code == 401 &&
-                (mapped.reason == "unrecognized" || mapped.reason == "invalid_credentials") -> "unauthorized"
             mapped.reason != "unrecognized" -> mapped.reason
             response.code == 401 -> "unauthorized"
             else -> "unrecognized"

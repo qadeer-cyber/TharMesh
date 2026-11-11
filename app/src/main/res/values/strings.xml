@@ -715,4 +715,7 @@
     <string name="about_link_url_whatsapp" translatable="false">https://whatsapp.com/channel/0029Vb7JXorLikg9Msl6qB2B</string>
     <string name="about_link_no_handler">No app to open this link</string>
     <string name="about_avatar_cd">Founder portrait</string>
+    <string name="account_error_email_delivery">The authentication service could not send your email. Try again later or contact TharMesh support.</string>
+    <string name="account_error_redirect_configuration">The authentication service rejected the app callback. Contact TharMesh support.</string>
+    <string name="account_error_server">The authentication service is temporarily unavailable. Try again in a moment.</string>
 </resources>

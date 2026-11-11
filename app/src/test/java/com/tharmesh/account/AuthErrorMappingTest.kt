@@ -68,6 +68,25 @@ class AuthErrorMappingTest {
     }
 
     @Test
+    fun actionableFailuresPreserveStatusAndProviderCode() {
+        assertSignIn(401, """{"error_code":"invalid_credentials"}""", "invalid_credentials", "invalid_credentials")
+        assertSignIn(403, """{"error_code":"email_address_not_authorized"}""", "email_delivery_failed", "email_address_not_authorized")
+        assertSignIn(400, """{"error_code":"redirect_to_not_allowed"}""", "redirect_not_allowed", "redirect_to_not_allowed")
+        assertSignIn(503, "", "server_error", "http_503")
+        val limited = post(429, "", 45L) as AuthCall.Failed
+        assertEquals("rate_limited", limited.reason)
+        assertEquals(45L, limited.retryAfterSeconds)
+    }
+
+    @Test
+    fun legacyShortPasswordIsSentToServerForSignIn() {
+        val result = AuthBackend.signIn(
+            fixed(401, """{"error_code":"invalid_credentials"}"""), base, apiKey, "a@b.co", "short"
+        ) as AuthCall.Failed
+        assertEquals("invalid_credentials", result.reason)
+    }
+
+    @Test
     fun diagnostic_dropsEmailsAndTokens() {
         val leaked = AuthErrors.classify(
             "{\"msg\":\"nope for person@example.com\",\"error\":\"eyJhbGciOi.secret\"}",

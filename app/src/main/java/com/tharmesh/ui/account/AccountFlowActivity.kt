@@ -829,6 +829,9 @@ class AccountFlowActivity : AppCompatActivity() {
         val message = when (reason) {
             "cloud_auth_not_configured" -> getString(R.string.account_error_not_configured)
             "network" -> getString(R.string.account_error_network)
+            "email_delivery_failed" -> getString(R.string.account_error_email_delivery)
+            "redirect_not_allowed" -> getString(R.string.account_error_redirect_configuration)
+            "server_error" -> getString(R.string.account_error_server)
             "invalid_credentials_shape", "invalid_handle" -> getString(R.string.account_error_invalid)
             "handle_taken", "email_taken" -> getString(R.string.account_error_handle)
             "email_unverified" -> getString(R.string.account_error_email_unverified)
