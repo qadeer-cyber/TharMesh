@@ -72,10 +72,13 @@ import java.security.SecureRandom
 class AccountFlowActivity : AppCompatActivity() {
 
     enum class Screen {
-        CREATE, SIGN_IN, VERIFY_EMAIL, RECOVER, SECURE_IDENTITY, SAVE_RECOVERY,
+        CREATE, SIGN_IN, VERIFY_EMAIL, EMAIL_OTP, GOOGLE, RECOVER, SECURE_IDENTITY, SAVE_RECOVERY,
         DEVICES, OFFLINE, SECURITY
     }
 
+    private val otpPrefs by lazy { getSharedPreferences("tharmesh_email_otp", MODE_PRIVATE) }
+    private var authBusy = false
+    private val googleAuth by lazy { com.tharmesh.auth.GoogleAuthService(this) }
     private val http = UrlHttpTransport()
     private val random = SecureRandom()
     private lateinit var screen: Screen
@@ -84,7 +87,7 @@ class AccountFlowActivity : AppCompatActivity() {
     private var pendingEnrollment: com.tharmesh.account.EnrollmentRequest? = null
     private var resendBlockedUntilMs: Long = 0L
     private val handler = Handler(Looper.getMainLooper())
-    private val resendTick = Runnable { paintResendCooldown() }
+    private val resendTick = Runnable { if (screen == Screen.EMAIL_OTP) paintOtpCooldown() else paintResendCooldown() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Appearance.applyTheme(this)
@@ -98,6 +101,7 @@ class AccountFlowActivity : AppCompatActivity() {
         }
         findViewById<TextView>(R.id.account_back).setOnClickListener { finish() }
         bind(screen)
+        if (screen == Screen.GOOGLE && savedInstanceState == null) launchGoogle()
         intent.getStringExtra(EXTRA_AUTH_REASON)?.let { reason ->
             findViewById<TextView>(R.id.account_status).text = explain(reason, diagnostic = reason)
         }
@@ -123,7 +127,11 @@ class AccountFlowActivity : AppCompatActivity() {
         val secondary = findViewById<TextView>(R.id.account_secondary)
         val tertiary = findViewById<TextView>(R.id.account_tertiary)
         val status = findViewById<TextView>(R.id.account_status)
-        listOf(f1, f2, f3, f4).forEach { it.visibility = View.GONE; it.text = null }
+        listOf(f1, f2, f3, f4).forEach { it.visibility = View.GONE; it.text = null; it.isEnabled = true }
+        f2.filters = emptyArray()
+        f2.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        f2.isSaveEnabled = false
+        primary.isEnabled = true
         confirm.visibility = View.GONE
         confirm.isChecked = false
         secret.visibility = View.GONE
@@ -138,6 +146,44 @@ class AccountFlowActivity : AppCompatActivity() {
         secondary.isEnabled = true
 
         when (next) {
+            Screen.GOOGLE -> {
+                title.setText(R.string.login_continue_with_google)
+                body.setText(R.string.account_google_body)
+                primary.setText(R.string.login_continue_with_google)
+                primary.setOnClickListener { launchGoogle() }
+            }
+            Screen.EMAIL_OTP -> {
+                title.setText(R.string.account_otp_title)
+                val email = otpPrefs.getString("email", null)
+                body.setText(if (email == null) R.string.account_otp_request_body else R.string.account_otp_verify_body)
+                show(f1, R.string.account_field_email)
+                f1.setText(email)
+                f1.isEnabled = email == null
+                if (email == null) {
+                    primary.setText(R.string.account_otp_send)
+                    primary.setOnClickListener { requestOtp(f1.text.toString().trim(), status) }
+                    if (otpPrefs.getLong("retry", 0L) > System.currentTimeMillis()) paintOtpCooldown()
+                } else {
+                    show(f2, R.string.account_otp_code)
+                    f2.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                    f2.filters = arrayOf(android.text.InputFilter.LengthFilter(6))
+                    f2.isSaveEnabled = false
+                    f2.requestFocus()
+                    primary.setText(R.string.account_otp_verify)
+                    primary.setOnClickListener { verifyOtp(email, f2.text.toString(), status) }
+                    secondary.visibility = View.VISIBLE
+                    secondary.setOnClickListener { requestOtp(email, status) }
+                    tertiary.visibility = View.VISIBLE
+                    tertiary.setText(R.string.account_otp_change)
+                    tertiary.setOnClickListener {
+                        if (!authBusy) {
+                            otpPrefs.edit().remove("email").apply()
+                            bind(Screen.EMAIL_OTP)
+                        }
+                    }
+                    paintOtpCooldown()
+                }
+            }
             Screen.CREATE -> {
                 title.setText(R.string.account_create_title)
                 body.setText(R.string.account_create_body)
@@ -273,6 +319,101 @@ class AccountFlowActivity : AppCompatActivity() {
         }
     }
 
+    private fun launchGoogle() {
+        if (authBusy) return
+        val googleIntent = googleAuth.silentSignInIntent()
+        if (googleIntent == null) {
+            findViewById<TextView>(R.id.account_status).setText(R.string.login_missing_oauth)
+            return
+        }
+        startActivityForResult(googleIntent, 7001)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 7001 || screen != Screen.GOOGLE || resultCode != android.app.Activity.RESULT_OK) return
+        val status = findViewById<TextView>(R.id.account_status)
+        val token = googleAuth.idTokenFromIntent(data).getOrNull()
+        if (token == null) {
+            status.setText(R.string.account_google_failed)
+            return
+        }
+        runVerification(status) {
+            AuthBackend.signInWithGoogleIdToken(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, token)
+        }
+    }
+
+    private fun requestOtp(email: String, status: TextView) {
+        if (authBusy || otpPrefs.getLong("retry", 0L) > System.currentTimeMillis()) return
+        authBusy = true
+        status.setText(R.string.account_otp_sending)
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                AuthBackend.requestEmailOtp(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, email)
+            }
+            authBusy = false
+            when (result) {
+                is AuthCall.Ok -> {
+                    otpPrefs.edit().putString("email", email)
+                        .putLong("retry", System.currentTimeMillis() + 60_000L).apply()
+                    bind(Screen.EMAIL_OTP)
+                }
+                is AuthCall.Failed -> {
+                    if (result.reason == "rate_limited") {
+                        val delay = (result.retryAfterSeconds ?: 60L).coerceIn(1L, 3600L)
+                        otpPrefs.edit().putLong("retry", System.currentTimeMillis() + delay * 1000L).apply()
+                        paintOtpCooldown()
+                    }
+                    status.text = explain(result.reason, result.retryAfterSeconds, result.diagnostic)
+                }
+                else -> status.setText(R.string.account_google_failed)
+            }
+        }
+    }
+
+    private fun paintOtpCooldown() {
+        if (screen != Screen.EMAIL_OTP) return
+        val requesting = otpPrefs.getString("email", null) == null
+        val button = findViewById<TextView>(if (requesting) R.id.account_primary else R.id.account_secondary)
+        val left = ((otpPrefs.getLong("retry", 0L) - System.currentTimeMillis() + 999L) / 1000L).coerceAtLeast(0L)
+        button.isEnabled = left == 0L
+        if (left > 0L) {
+            button.text = getString(R.string.account_resend_wait, left.toInt())
+            handler.removeCallbacks(resendTick)
+            handler.postDelayed(resendTick, 1000L)
+        } else {
+            button.setText(if (requesting) R.string.account_otp_send else R.string.account_action_resend)
+        }
+    }
+
+    private fun verifyOtp(email: String, code: String, status: TextView) {
+        runVerification(status) {
+            AuthBackend.verifyEmailOtp(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, email, code)
+        }
+    }
+
+    private fun runVerification(status: TextView, verify: () -> AuthCall) {
+        if (authBusy) return
+        authBusy = true
+        status.setText(R.string.account_otp_checking)
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { verify() }
+            authBusy = false
+            when (result) {
+                is AuthCall.Ok -> {
+                    if (!result.tokens.emailVerified) {
+                        status.setText(R.string.account_error_email_unverified)
+                        return@launch
+                    }
+                    otpPrefs.edit().remove("email").apply()
+                    applyLogin(result, status)
+                }
+                is AuthCall.Failed -> status.text = explain(result.reason, result.retryAfterSeconds, result.diagnostic)
+                else -> status.setText(R.string.account_error_email_unverified)
+            }
+        }
+    }
+
     private fun createAccount(
         email: EditText,
         password: EditText,
@@ -387,6 +528,13 @@ class AccountFlowActivity : AppCompatActivity() {
             return
         }
         val pending = PendingSignupStore.read(this)
+        val boundAccount = CloudSessionStore.readAccountId(this)
+        if (boundAccount != null && boundAccount != result.tokens.accountId &&
+            UserPrefs.readIdentity(this) != null
+        ) {
+            status.setText(R.string.account_error_conflict)
+            return
+        }
         val mesh = UserPrefs.readIdentity(this)?.let {
             val profile = UserPrefs.readProfile(this)
             MeshMaterial.from(it, profile?.userId ?: "user")
@@ -419,7 +567,7 @@ class AccountFlowActivity : AppCompatActivity() {
                 intent.putExtra(EXTRA_ACCOUNT_ID, result.tokens.accountId)
                 val next = AccountActivation.afterVerifiedSignIn(
                     hasMeshIdentity = false,
-                    pendingSignupOnThisPhone = pending != null
+                    pendingSignupOnThisPhone = pending?.accountId == result.tokens.accountId
                 )
                 if (next == AccountActivation.AfterVerifiedSignIn.SECURE_IDENTITY) {
                     PendingSignupStore.clear(this)
@@ -648,7 +796,7 @@ class AccountFlowActivity : AppCompatActivity() {
         pendingRecord = record
         val accountId = record.accountId ?: "local"
         record.recoverySealed?.let { CloudSessionStore.writeRecovery(this, RecoveryUpload.body(accountId, it)) }
-        CloudSessionStore.write(this, record)
+        CloudSessionStore.completeIdentity(this, record)
         TharMeshApp.get().ensureMeshReady()
         bind(Screen.SAVE_RECOVERY)
     }
@@ -657,7 +805,7 @@ class AccountFlowActivity : AppCompatActivity() {
         val record = pendingRecord
         val sealed = record?.recoverySealed
         val accountId = record?.accountId
-        val access = intent.getStringExtra(EXTRA_ACCESS)
+        val access = CloudSessionStore.readAccessToken(this)
         if (sealed == null || accountId.isNullOrBlank() || access.isNullOrBlank() ||
             !AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
         ) {
@@ -836,7 +984,10 @@ class AccountFlowActivity : AppCompatActivity() {
             "handle_taken", "email_taken" -> getString(R.string.account_error_handle)
             "email_unverified" -> getString(R.string.account_error_email_unverified)
             "invalid_credentials" -> getString(R.string.account_error_invalid_credentials)
-            "otp_expired" -> getString(R.string.account_error_otp_expired)
+            "otp_invalid" -> getString(R.string.account_otp_invalid)
+            "otp_expired" -> getString(
+                if (screen == Screen.EMAIL_OTP) R.string.account_otp_expired else R.string.account_error_otp_expired
+            )
             "rate_limited" -> getString(
                 R.string.account_error_email_rate_limited,
                 (retryAfterSeconds ?: 60L).toInt()

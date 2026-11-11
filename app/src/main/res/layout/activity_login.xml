@@ -56,12 +56,11 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/login_google_button"
-            style="@style/TmButton.Ghost"
+            style="@style/TmButton.Primary"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:text="@string/login_continue_with_google"
             android:textAllCaps="false"
-            app:backgroundTint="@null"
             app:icon="@drawable/ic_google"
             app:iconGravity="textStart"
             app:iconPadding="12dp"
@@ -69,7 +68,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/login_create_button"
-            style="@style/TmButton.Primary"
+            style="@style/TmButton.Ghost"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginTop="12dp"

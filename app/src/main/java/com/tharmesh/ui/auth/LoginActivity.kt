@@ -14,12 +14,10 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import tharmesh.app.BuildConfig
 import tharmesh.app.R
-import com.tharmesh.TharMeshApp
 import com.tharmesh.account.AuthBackend
 import com.tharmesh.account.RegistrationGate
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
-import com.tharmesh.data.UserProfile
 import com.tharmesh.ui.account.AccountFlowActivity
 import com.tharmesh.ui.main.MainActivity
 import com.tharmesh.ui.onboarding.OnboardingActivity
@@ -69,7 +67,7 @@ class LoginActivity : AppCompatActivity() {
             val screen = if (pending != null) {
                 AccountFlowActivity.Screen.VERIFY_EMAIL
             } else {
-                AccountFlowActivity.Screen.CREATE
+                AccountFlowActivity.Screen.EMAIL_OTP
             }
             startActivity(AccountFlowActivity.intent(this, screen))
         }
@@ -81,59 +79,8 @@ class LoginActivity : AppCompatActivity() {
             status.setText(R.string.login_missing_oauth)
         }
         googleBtn.setOnClickListener {
-            val intent = googleAuth.silentSignInIntent()
-            if (intent != null) {
-                startActivityForResult(intent, REQUEST_GOOGLE_SIGN_IN)
-            } else {
-                status.setText(R.string.login_missing_oauth)
-            }
+            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.GOOGLE))
         }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_GOOGLE_SIGN_IN) {
-            val result = googleAuth.profileFromIntent(data)
-            val status: TextView = findViewById(R.id.login_status)
-            result.onSuccess { profile ->
-                finishWith(profile)
-            }.onFailure { e ->
-                status.text = getString(R.string.login_failed_fmt, e.message ?: "")
-            }
-        }
-    }
-
-    private fun finishWith(profile: UserProfile) {
-        val freshMesh = UserPrefs.readIdentity(this) == null
-        if (freshMesh && profile.authProvider == UserPrefs.PROVIDER_GOOGLE) {
-            // Google sign-in must not mint a mesh key by itself.
-            UserPrefs.setIdentityHeld(this, true)
-        }
-        UserPrefs.saveProfile(this, profile)
-        if (freshMesh && profile.authProvider == UserPrefs.PROVIDER_GOOGLE) {
-            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.SECURE_IDENTITY))
-            finish()
-            return
-        }
-        // Stage 8.4 \u2014 do NOT start the mesh *transport* here (i.e. don't
-        // call ensureMeshStarted): if a returning user has Nearby
-        // permissions already granted but has not yet accepted the
-        // current Terms version, starting the transport would mean we
-        // begin advertising / discovering / processing inbound bundles
-        // before the compliance gate. The transport is now started
-        // exclusively in [TermsActivity.routeOnward] (via the targeted
-        // activities) and [MainActivity.onCreate], both of which only
-        // run once [UserPrefs.hasAcceptedCurrentTerms] is true.
-        //
-        // We DO still need to construct the mesh graph (engine,
-        // repository, etc.) here so that downstream screens like
-        // [com.tharmesh.ui.onboarding.OnboardingActivity] can access
-        // [TharMeshApp.repository] during onboarding step 3 (QR scan).
-        // [TharMeshApp.ensureMeshReady] is permission-safe and
-        // transport-safe \u2014 it only constructs objects in memory
-        // and starts no advertising / discovery.
-        TharMeshApp.get().ensureMeshReady()
-        goToNext()
     }
 
     /**
@@ -166,7 +113,4 @@ class LoginActivity : AppCompatActivity() {
         finish()
     }
 
-    companion object {
-        private const val REQUEST_GOOGLE_SIGN_IN = 7001
-    }
 }

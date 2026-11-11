@@ -153,6 +153,17 @@ object CloudSessionStore {
         editor.apply()
     }
 
+    fun readAccountId(context: Context): String? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(ACCOUNT, null)
+
+    fun completeIdentity(context: Context, record: InstallRecord) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(LOCAL, record.localAuth.name)
+            .putString("account_public", record.account?.publicKeyBase64)
+            .apply()
+    }
+
     fun readRefreshToken(context: Context): String {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString("refresh_token", "")

@@ -134,6 +134,25 @@ object AuthBackend {
         return postAuth(http, url, anonKey, body, allowEmptyToken = false)
     }
 
+    fun requestEmailOtp(http: HttpTransport, baseUrl: String, apiKey: String, email: String): AuthCall {
+        if (!configured(baseUrl, apiKey)) return AuthCall.Failed("cloud_auth_not_configured")
+        if (!email.contains("@")) return AuthCall.Failed("email_address_invalid")
+        val payload = JSONObject().put("email", email.trim()).put("create_user", true)
+        val response = try {
+            http.post(baseUrl.trim().trimEnd('/') + "/auth/v1/otp", SupabaseHeaders.build(apiKey), payload.toString())
+        } catch (ignored: Exception) {
+            return AuthCall.Failed("network")
+        }
+        return mapResponse(response) { AuthCall.Ok(AuthTokens("", "", 0L)) }
+    }
+
+    fun verifyEmailOtp(http: HttpTransport, baseUrl: String, apiKey: String, email: String, code: String): AuthCall {
+        if (!configured(baseUrl, apiKey)) return AuthCall.Failed("cloud_auth_not_configured")
+        if (!email.contains("@") || !code.matches(Regex("[0-9]{6}"))) return AuthCall.Failed("otp_invalid")
+        val payload = JSONObject().put("email", email.trim()).put("type", "email").put("token", code)
+        return postAuth(http, baseUrl.trim().trimEnd('/') + "/auth/v1/verify", apiKey, payload.toString(), false)
+    }
+
     fun resendVerification(http: HttpTransport, baseUrl: String, anonKey: String, email: String): AuthCall {
         if (!configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
         val url = baseUrl.trim().trimEnd('/') + "/auth/v1/resend" + redirectQuery()

@@ -171,7 +171,7 @@
     <string name="login_ready">Tap Continue with Google to create your profile.</string>
     <string name="login_missing_oauth">Google sign-in not configured in this build — use Continue without an account.</string>
     <string name="login_failed_fmt">Sign-in failed: %1$s</string>
-    <string name="login_create_account">Create account</string>
+    <string name="login_create_account">Continue with email</string>
     <string name="login_sign_in">Sign in</string>
     <string name="login_offline_note">Mesh messaging does not use the cloud. Register once, then this phone works offline.</string>
     <string name="login_registration_required">A TharMesh account is required on a new install. This build will not create a stand-in account.</string>
@@ -718,4 +718,17 @@
     <string name="account_error_email_delivery">The authentication service could not send your email. Try again later or contact TharMesh support.</string>
     <string name="account_error_redirect_configuration">The authentication service rejected the app callback. Contact TharMesh support.</string>
     <string name="account_error_server">The authentication service is temporarily unavailable. Try again in a moment.</string>
+    <string name="account_google_body">Verify your Google account with TharMesh to continue.</string>
+    <string name="account_google_failed">Google verification could not be completed. Try again.</string>
+    <string name="account_otp_title">Continue with email</string>
+    <string name="account_otp_request_body">Enter your email to receive a six-digit code.</string>
+    <string name="account_otp_verify_body">Enter or paste the six-digit code from your email.</string>
+    <string name="account_otp_send">Send code</string>
+    <string name="account_otp_code">Six-digit code</string>
+    <string name="account_otp_verify">Verify code</string>
+    <string name="account_otp_change">Use a different email</string>
+    <string name="account_otp_sending">Requesting code…</string>
+    <string name="account_otp_checking">Verifying…</string>
+    <string name="account_otp_invalid">Enter the six-digit code from your email.</string>
+    <string name="account_otp_expired">This code is expired or invalid. Request a new code and try again.</string>
 </resources>
