@@ -145,7 +145,18 @@ object CloudSessionStore {
         } else {
             editor.putString("access_token", record.accessToken)
         }
+        if (record.refreshToken.isNullOrBlank()) {
+            editor.remove("refresh_token")
+        } else {
+            editor.putString("refresh_token", record.refreshToken)
+        }
         editor.apply()
+    }
+
+    fun readRefreshToken(context: Context): String {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("refresh_token", "")
+            .orEmpty()
     }
 
     fun readAccessToken(context: Context): String {
@@ -183,6 +194,7 @@ object CloudSessionStore {
     fun clearTokens(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove("access_token")
+            .remove("refresh_token")
             .remove(EXPIRES)
             .putString(STATE, CloudCredential.SIGNED_OUT.name)
             .apply()

@@ -35,6 +35,58 @@ sealed class AuthCall {
     data class Failed(val reason: String) : AuthCall()
 }
 
+/**
+ * Header rules for the Supabase publishable key (`sb_publishable_...`).
+ * The key is not a JWT and is never placed in `Authorization`.
+ * A bearer token is attached only for a distinct user access token.
+ */
+object SupabaseHeaders {
+    fun userBearer(apiKey: String, userAccessToken: String?): String? {
+        val token = userAccessToken?.trim().orEmpty()
+        if (token.isEmpty()) return null
+        if (token == apiKey.trim()) return null
+        if (token.startsWith("sb_publishable_") || token.startsWith("sb_secret_")) return null
+        return "Bearer $token"
+    }
+
+    fun build(
+        apiKey: String,
+        userAccessToken: String? = null,
+        extra: Map<String, String> = emptyMap()
+    ): Map<String, String> {
+        val headers = LinkedHashMap<String, String>()
+        headers["apikey"] = apiKey
+        headers["Content-Type"] = "application/json"
+        val bearer = userBearer(apiKey, userAccessToken)
+        if (bearer != null) headers["Authorization"] = bearer
+        for ((k, v) in extra) headers[k] = v
+        return headers
+    }
+}
+
+/**
+ * After HTTP 401, refresh the cloud session or end it.
+ * The mesh signing key on [InstallRecord.mesh] is not part of this decision.
+ */
+object CloudAuthSession {
+    fun onUnauthorized(record: InstallRecord, refreshResult: AuthCall?): InstallRecord {
+        if (refreshResult is AuthCall.Ok && refreshResult.tokens.accessToken.isNotBlank()) {
+            val expires = if (refreshResult.tokens.expiresInSeconds > 0) {
+                System.currentTimeMillis() + refreshResult.tokens.expiresInSeconds * 1000L
+            } else {
+                record.tokenExpiresAtMs
+            }
+            return record.copy(
+                accessToken = refreshResult.tokens.accessToken,
+                refreshToken = refreshResult.tokens.refreshToken.ifBlank { record.refreshToken },
+                cloud = CloudCredential.ACTIVE,
+                tokenExpiresAtMs = expires
+            )
+        }
+        return IdentityLifecycle.cloudSignOut(record)
+    }
+}
+
 object AuthBackend {
 
     fun signUp(
@@ -80,28 +132,39 @@ object AuthBackend {
         val url = baseUrl.trimEnd('/') + "/auth/v1/resend"
         val body = JSONObject().put("type", "signup").put("email", email.trim()).toString()
         val response = try {
-            http.post(url, authHeaders(anonKey), body)
+            http.post(url, SupabaseHeaders.build(anonKey), body)
         } catch (ignored: Throwable) {
             return AuthCall.Failed("network")
         }
         return if (response.code in 200..299) {
             AuthCall.Ok(AuthTokens("", "", 0L))
         } else {
-            AuthCall.Failed("http_${response.code}")
+            AuthCall.Failed(errorReason(response.body) ?: "http_${response.code}")
         }
     }
 
     fun fetchUser(http: HttpTransport, baseUrl: String, anonKey: String, accessToken: String): AuthCall {
         if (!configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        if (accessToken.isBlank()) return AuthCall.Failed("missing_account_id")
+        if (SupabaseHeaders.userBearer(anonKey, accessToken) == null) {
+            return AuthCall.Failed("unauthorized")
+        }
         val url = baseUrl.trimEnd('/') + "/auth/v1/user"
         val response = try {
-            http.get(url, authHeaders(anonKey, accessToken))
+            http.get(url, SupabaseHeaders.build(anonKey, accessToken))
         } catch (ignored: Throwable) {
             return AuthCall.Failed("network")
         }
-        if (response.code !in 200..299) return AuthCall.Failed("http_${response.code}")
+        if (response.code == 401) return AuthCall.Failed("unauthorized")
+        if (response.code !in 200..299) return AuthCall.Failed(errorReason(response.body) ?: "http_${response.code}")
         return parseTokens(response.body, allowEmptyToken = true)
+    }
+
+    fun refresh(http: HttpTransport, baseUrl: String, apiKey: String, refreshToken: String): AuthCall {
+        if (!configured(baseUrl, apiKey)) return AuthCall.Failed("cloud_auth_not_configured")
+        if (refreshToken.isBlank()) return AuthCall.Failed("unauthorized")
+        val url = baseUrl.trimEnd('/') + "/auth/v1/token?grant_type=refresh_token"
+        val body = JSONObject().put("refresh_token", refreshToken).toString()
+        return postAuth(http, url, apiKey, body, allowEmptyToken = false)
     }
 
     fun configured(baseUrl: String, anonKey: String): Boolean {
@@ -142,20 +205,32 @@ object AuthBackend {
         allowEmptyToken: Boolean
     ): AuthCall {
         val response = try {
-            http.post(url, authHeaders(anonKey), body)
+            http.post(url, SupabaseHeaders.build(anonKey), body)
         } catch (ignored: Throwable) {
             return AuthCall.Failed("network")
         }
-        if (response.code !in 200..299) return AuthCall.Failed("http_${response.code}")
+        if (response.code == 401) return AuthCall.Failed("unauthorized")
+        if (response.code !in 200..299) {
+            return AuthCall.Failed(errorReason(response.body) ?: "http_${response.code}")
+        }
         return parseTokens(response.body, allowEmptyToken)
     }
 
-    private fun authHeaders(anonKey: String, bearer: String = anonKey): Map<String, String> {
-        return mapOf(
-            "apikey" to anonKey,
-            "Authorization" to "Bearer $bearer",
-            "Content-Type" to "application/json"
-        )
+    private fun errorReason(body: String): String? {
+        return try {
+            val json = JSONObject(body)
+            val code = json.optString("error_code", json.optString("error", ""))
+            val description = json.optString("error_description", "") + json.optString("msg", "")
+            if (code.contains("email_not_confirmed") || description.contains("email_not_confirmed") ||
+                description.contains("Email not confirmed")
+            ) {
+                "email_unverified"
+            } else {
+                null
+            }
+        } catch (ignored: Throwable) {
+            null
+        }
     }
 
     private fun parseTokens(body: String, allowEmptyToken: Boolean): AuthCall {

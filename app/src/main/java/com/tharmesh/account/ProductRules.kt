@@ -143,7 +143,7 @@ object DirectoryLookup {
         accessToken: String,
         query: String
     ): Result {
-        if (!AuthBackend.configured(baseUrl, anonKey) || accessToken.isBlank()) {
+        if (!AuthBackend.configured(baseUrl, anonKey)) {
             return Result.Unavailable("cloud_auth_not_configured")
         }
         val prefix = query.trim().lowercase()
@@ -156,11 +156,7 @@ object DirectoryLookup {
         val response = try {
             http.get(
                 url,
-                mapOf(
-                    "apikey" to anonKey,
-                    "Authorization" to "Bearer $accessToken",
-                    "Accept" to "application/json"
-                )
+                SupabaseHeaders.build(anonKey, accessToken, mapOf("Accept" to "application/json"))
             )
         } catch (ignored: Throwable) {
             return Result.Unavailable("network")

@@ -336,7 +336,10 @@ class AccountFlowActivity : AppCompatActivity() {
             expiresAtMs = expiresAt,
             now = now
         )
-        CloudSessionStore.write(this, login.record)
+        CloudSessionStore.write(
+            this,
+            login.record.copy(refreshToken = result.tokens.refreshToken.ifBlank { null })
+        )
         when (login.bind) {
             com.tharmesh.account.AccountSession.Bind.KEEP_LOCAL_IDENTITY -> {
                 UserPrefs.setIdentityHeld(this, false)
@@ -739,6 +742,8 @@ class AccountFlowActivity : AppCompatActivity() {
             "network" -> getString(R.string.account_error_network)
             "invalid_credentials_shape", "invalid_handle" -> getString(R.string.account_error_invalid)
             "handle_taken", "email_taken" -> getString(R.string.account_error_handle)
+            "email_unverified" -> getString(R.string.account_verify_body)
+            "unauthorized" -> getString(R.string.login_failed_fmt, "session expired")
             else -> getString(R.string.login_failed_fmt, reason)
         }
     }

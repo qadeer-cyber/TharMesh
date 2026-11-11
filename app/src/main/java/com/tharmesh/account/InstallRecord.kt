@@ -55,6 +55,7 @@ data class InstallRecord(
     val cloud: CloudCredential = CloudCredential.NONE,
     val tokenExpiresAtMs: Long? = null,
     val accessToken: String? = null,
+    val refreshToken: String? = null,
     val holdMeshGeneration: Boolean = false,
     val recoverySealed: IdentityRecovery.SealedIdentity? = null,
     val deviceCertificateB64: String? = null
@@ -163,6 +164,7 @@ object InstallRecordCodec {
         o.put("cloud", record.cloud.name)
         if (record.tokenExpiresAtMs != null) o.put("tokenExpiresAtMs", record.tokenExpiresAtMs)
         o.put("accessToken", record.accessToken)
+        o.put("refreshToken", record.refreshToken)
         o.put("holdMeshGeneration", record.holdMeshGeneration)
         record.recoverySealed?.let {
             o.put(
@@ -228,6 +230,7 @@ object InstallRecordCodec {
                 cloud = CloudCredential.valueOf(o.getString("cloud")),
                 tokenExpiresAtMs = if (o.has("tokenExpiresAtMs")) o.getLong("tokenExpiresAtMs") else null,
                 accessToken = o.optString("accessToken", null),
+                refreshToken = o.optString("refreshToken", null),
                 holdMeshGeneration = o.optBoolean("holdMeshGeneration", false),
                 recoverySealed = sealed,
                 deviceCertificateB64 = o.optString("deviceCertificateB64", null)

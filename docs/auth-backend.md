@@ -11,9 +11,11 @@ PostgREST `/rest/v1/`. SQL is in `supabase/schema.sql`. No Supabase SDK is
 compiled in, because this tree is Gradle 6.5 and Android Gradle Plugin 4.1.3.
 
 Empty `SUPABASE_URL` or `SUPABASE_ANON_KEY`, or a URL that is not `https://`,
-returns `cloud_auth_not_configured` and does not create a session. The anon
-key is a public client key. It is not an admin secret. It is still not
-committed. Service-role keys are not used and must not be put in the app.
+returns `cloud_auth_not_configured` and does not create a session. The value
+in `SUPABASE_ANON_KEY` is the publishable client key (`sb_publishable_...`).
+It is sent only as the `apikey` header. It is not decoded as a JWT and it is
+not copied into `Authorization`. A bearer header is added only for a user
+access token. Service-role keys are not used and must not be put in the app.
 
 ## Why Supabase, not Firebase
 

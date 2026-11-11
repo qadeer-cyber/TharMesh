@@ -238,6 +238,7 @@ object IdentityLifecycle {
         return record.copy(
             cloud = CloudCredential.SIGNED_OUT,
             accessToken = null,
+            refreshToken = null,
             tokenExpiresAtMs = null
         )
     }

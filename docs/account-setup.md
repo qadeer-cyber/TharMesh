@@ -11,13 +11,22 @@ of the same name:
 
 ```
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_ANON_KEY=YOUR_ANON_KEY
+SUPABASE_ANON_KEY=sb_publishable_...
 GOOGLE_WEB_CLIENT_ID=YOUR_GOOGLE_OAUTH_WEB_CLIENT_ID
 ```
 
-`SUPABASE_URL` must be `https`. The anon key is the public client key from
-Project Settings → API. Do not put the service-role key in the app, in Gradle,
-or in git.
+`SUPABASE_URL` must be `https`. `SUPABASE_ANON_KEY` is the publishable client
+key (`sb_publishable_...`), not a legacy JWT and not the service-role key.
+The app sends it only in the `apikey` header. `Authorization: Bearer` is
+reserved for a user access token after sign-in.
+
+GitHub Actions reads the same names from repository secrets, then variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `GOOGLE_WEB_CLIENT_ID` (optional; the Google button stays disabled when it is empty)
+
+Add them under Settings → Secrets and variables → Actions. Do not commit them.
 
 `google-services.json` is gitignored and is not required for this HTTP client.
 

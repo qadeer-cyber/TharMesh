@@ -36,7 +36,7 @@ object SupabaseDirectory {
             .put("display_name", displayName.trim())
         if (avatar != null) body.put("avatar_url", avatar)
         val handleBody = JSONObject().put("handle", normalized).put("account_id", accountId)
-        val headers = writeHeaders(anonKey, accessToken)
+        val headers = writeHeaders(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
         val handleResult = post(http, baseUrl.trimEnd('/') + "/rest/v1/handles", headers, handleBody.toString())
         if (handleResult is AuthCall.Failed) return handleResult
         return post(
@@ -59,10 +59,11 @@ object SupabaseDirectory {
         if (sealed.kdf != IdentityRecovery.KDF_SCRYPT) return AuthCall.Failed("bad_blob")
         val json = RecoveryUpload.body(accountId, sealed)
         if (!RlsPolicy.recoveryAccepts(json)) return AuthCall.Failed("bad_blob")
+        val headers = writeHeaders(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
         return post(
             http,
             baseUrl.trimEnd('/') + "/rest/v1/recovery_blobs",
-            writeHeaders(anonKey, accessToken),
+            headers,
             json
         )
     }
@@ -83,20 +84,21 @@ object SupabaseDirectory {
             .put("device_public_key", certificate.devicePublicKey)
             .put("certificate", EnrollmentQr.encodeCertificate(certificate))
             .toString()
+        val headers = writeHeaders(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
         return post(
             http,
             baseUrl.trimEnd('/') + "/rest/v1/devices",
-            writeHeaders(anonKey, accessToken),
+            headers,
             body
         )
     }
 
-    private fun writeHeaders(anonKey: String, accessToken: String): Map<String, String> {
-        return mapOf(
-            "apikey" to anonKey,
-            "Authorization" to "Bearer $accessToken",
-            "Content-Type" to "application/json",
-            "Prefer" to "resolution=merge-duplicates"
+    private fun writeHeaders(apiKey: String, accessToken: String): Map<String, String>? {
+        if (SupabaseHeaders.userBearer(apiKey, accessToken) == null) return null
+        return SupabaseHeaders.build(
+            apiKey,
+            accessToken,
+            mapOf("Prefer" to "resolution=merge-duplicates")
         )
     }
 

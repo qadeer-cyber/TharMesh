@@ -23,6 +23,10 @@ jobs:
       GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
       ANDROID_COMPILE_SDK: "30"
       ANDROID_BUILD_TOOLS: "30.0.3"
+      # Public client values only. Never a service-role key. Empty is a valid fail-closed build.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+      GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -69,6 +73,29 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME"
           test -x "$JAVA_HOME/bin/java"
           "$JAVA_HOME/bin/java" -version 2>&1 | grep -q '"11' || { echo "JAVA_HOME is not JDK 11"; exit 1; }
+
+      - name: Report whether cloud client values are present
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            echo "supabase_configured=true"
+          else
+            echo "supabase_configured=false"
+          fi
+          if [ -n "$GOOGLE_WEB_CLIENT_ID" ]; then
+            echo "google_web_client_configured=true"
+          else
+            echo "google_web_client_configured=false"
+          fi
+
+      - name: Supabase auth health
+        if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''
+        run: |
+          code=$(curl -sS -o /tmp/supabase-auth-health.json -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL%/}/auth/v1/health")
+          echo "auth_health_http=${code}"
+          echo "live_signup_executed=false"
+          rm -f /tmp/supabase-auth-health.json
 
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
