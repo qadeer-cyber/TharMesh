@@ -79,10 +79,31 @@
                 android:text="Contact" />
 
             <TextView
+                android:id="@+id/text_pin"
+                style="@style/Text.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/chat_row_pinned"
+                android:textColor="?attr/tmNeonGreen"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/text_mute"
+                style="@style/Text.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/chat_row_muted"
+                android:textColor="?attr/tmTextSecondary"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/text_time"
                 style="@style/Text.Caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
                 android:text="10:30" />
         </LinearLayout>
 

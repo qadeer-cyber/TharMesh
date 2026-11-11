@@ -169,6 +169,12 @@
     <string name="login_offline_note">Mesh messaging does not use the cloud. Register once, then this phone works offline.</string>
     <string name="login_registration_required">A TharMesh account is required on a new install. This build will not create a stand-in account.</string>
     <string name="new_chat_action_search_username">Search by username</string>
+    <string name="new_chat_scan_hint">Scan their TharMesh QR and compare the fingerprint before you trust the key.</string>
+    <string name="new_chat_nearby_hint">Phones on this mesh right now. This is range, not an account lookup.</string>
+    <string name="new_chat_username_hint_row">Looks up a registered name. A match is not a nearby phone.</string>
+    <string name="new_chat_userid_hint">Open a chat with a permanent TharMesh ID you already have.</string>
+    <string name="chat_row_pinned">Pinned</string>
+    <string name="chat_row_muted">Muted</string>
     <string name="new_chat_username_hint">Username</string>
     <string name="new_chat_directory_unavailable">The account directory is not set up on this build. No user was invented. Nearby people and saved contacts still work.</string>
     <string name="new_chat_directory_not_nearby">A registered account is not the same as a phone that is nearby. Mesh delivery still needs a verified contact in range.</string>

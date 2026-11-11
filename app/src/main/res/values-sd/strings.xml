@@ -49,4 +49,10 @@
     <string name="account_reset_warning">هي نئين ميش چاٻي آهي. هي پراڻي چاٻي ناهي. رابطن کي ٻيهر تصديق ڪرڻي پوندي.</string>
     <string name="settings_account_sign_out">ڪلائوڊ مان سائن آئوٽ</string>
     <string name="settings_account_sign_out_kept">ڪلائوڊ سيشن ختم. هن فون جي ميش چاٻي رکي وئي.</string>
+    <string name="new_chat_scan_hint">انهن جو ٿارميش QR اسڪين ڪريو ۽ چاٻي تي ڀروسو ڪرڻ کان اڳ نشان ڀيٽيو.</string>
+    <string name="new_chat_nearby_hint">هن وقت هن ميش تي فون. هي رينج آهي، اڪائونٽ ڳولا نه.</string>
+    <string name="new_chat_username_hint_row">رجسٽرڊ نالو ڳولي ٿو. ميلاپ جو مطلب ويجهو فون نه آهي.</string>
+    <string name="new_chat_userid_hint">اهڙي مستقل ٿارميش سڃاڻپ سان چيٽ کوليو جيڪا اڳ ۾ ئي اوهان وٽ هجي.</string>
+    <string name="chat_row_pinned">پن</string>
+    <string name="chat_row_muted">خاموش</string>
 </resources>

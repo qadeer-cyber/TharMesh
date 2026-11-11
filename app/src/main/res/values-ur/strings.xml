@@ -49,4 +49,10 @@
     <string name="account_reset_warning">یہ نئی میش کلید ہے۔ یہ پرانی کلید نہیں۔ رابطوں کو دوبارہ تصدیق کرنی ہوگی۔</string>
     <string name="settings_account_sign_out">کلاؤڈ سے سائن آؤٹ</string>
     <string name="settings_account_sign_out_kept">کلاؤڈ سیشن ختم۔ اس فون کی میش کلید رکھی گئی۔</string>
+    <string name="new_chat_scan_hint">ان کا تھارمیش QR اسکین کریں اور کلید پر بھروسہ کرنے سے پہلے نشان ملا کر دیکھیں۔</string>
+    <string name="new_chat_nearby_hint">اس وقت اسی میش پر فون۔ یہ رینج ہے، اکاؤنٹ تلاش نہیں۔</string>
+    <string name="new_chat_username_hint_row">رجسٹرڈ نام ڈھونڈتا ہے۔ مماثلت کا مطلب قریبی فون نہیں۔</string>
+    <string name="new_chat_userid_hint">ایسی مستقل تھارمیش شناخت سے چیٹ کھولیں جو آپ کے پاس پہلے سے ہو۔</string>
+    <string name="chat_row_pinned">پن</string>
+    <string name="chat_row_muted">خاموش</string>
 </resources>

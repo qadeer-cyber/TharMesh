@@ -492,6 +492,7 @@ class MessagesFragment : Fragment() {
                 }
             }
 
+            adapter.setFlags(flags)
             adapter.submitList(filtered)
             empty.visibility = if (filtered.isEmpty()) View.VISIBLE else View.GONE
         }
@@ -583,6 +584,8 @@ class MessagesFragment : Fragment() {
 
         private val items: MutableList<ConversationEntity> = mutableListOf()
         private var onlineUserIds: Set<String> = emptySet()
+        private var pinnedIds: Set<String> = emptySet()
+        private var mutedIds: Set<String> = emptySet()
         private val avatars = intArrayOf(
             R.drawable.bg_avatar,
             R.drawable.bg_avatar_green,
@@ -593,6 +596,11 @@ class MessagesFragment : Fragment() {
             items.clear()
             items.addAll(list)
             notifyDataSetChanged()
+        }
+
+        fun setFlags(flags: com.tharmesh.account.ChatFlags) {
+            pinnedIds = flags.pinned
+            mutedIds = flags.muted
         }
 
         /**
@@ -632,6 +640,8 @@ class MessagesFragment : Fragment() {
             } else {
                 holder.unread.visibility = View.GONE
             }
+            holder.pin.visibility = if (conv.userId in pinnedIds) View.VISIBLE else View.GONE
+            holder.mute.visibility = if (conv.userId in mutedIds) View.VISIBLE else View.GONE
             // Stage 9.2 — per-row online halo + status dot. Conversations are
             // keyed by peerId; we light the halo when that peerId is in the
             // online set and feed the dot the same status (Connected when
@@ -661,6 +671,8 @@ class MessagesFragment : Fragment() {
             val preview: TextView = itemView.findViewById(R.id.text_preview)
             val time: TextView = itemView.findViewById(R.id.text_time)
             val unread: TextView = itemView.findViewById(R.id.text_unread)
+            val pin: TextView = itemView.findViewById(R.id.text_pin)
+            val mute: TextView = itemView.findViewById(R.id.text_mute)
         }
     }
 }

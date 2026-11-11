@@ -29,6 +29,23 @@ class LayoutReconstructionTest {
     }
 
     @Test
+    fun chatsList_showsPinMuteAndExplainsNewChatActions() {
+        val row = read("layout/item_chat.xml")
+        assertTrue(row.contains("@+id/text_pin"))
+        assertTrue(row.contains("@+id/text_mute"))
+        assertTrue(row.contains("@string/chat_row_pinned"))
+        val sheet = read("layout/sheet_new_chat.xml")
+        assertTrue(sheet.contains("@+id/new_chat_action_scan"))
+        assertTrue(sheet.contains("@+id/new_chat_action_nearby"))
+        assertTrue(sheet.contains("@+id/new_chat_action_username"))
+        assertTrue(sheet.contains("@+id/new_chat_action_userid"))
+        assertTrue(sheet.contains("@string/new_chat_nearby_hint"))
+        assertTrue(sheet.contains("@string/new_chat_username_hint_row"))
+        assertTrue(sheet.contains("@drawable/ic_wifi"))
+        assertTrue(sheet.contains("android:minHeight=\"64dp\""))
+    }
+
+    @Test
     fun radialGlows_doNotUseThemeAttributes() {
         for (name in listOf(
             "drawable/bg_nav_pill_glow.xml",

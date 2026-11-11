@@ -18,6 +18,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import tharmesh.app.R
 import com.tharmesh.TharMeshApp
+import com.tharmesh.data.ChatFlagStore
 import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.db.MessageStatus
@@ -143,6 +144,9 @@ class ChatsActivity : AppCompatActivity() {
             } else {
                 holder.unread.visibility = View.GONE
             }
+            val flags = ChatFlagStore.read(holder.itemView.context)
+            holder.pin.visibility = if (conv.userId in flags.pinned) View.VISIBLE else View.GONE
+            holder.mute.visibility = if (conv.userId in flags.muted) View.VISIBLE else View.GONE
             holder.itemView.setOnClickListener { onClick(conv) }
         }
 
@@ -154,6 +158,8 @@ class ChatsActivity : AppCompatActivity() {
             val preview: TextView = itemView.findViewById(R.id.text_preview)
             val time: TextView = itemView.findViewById(R.id.text_time)
             val unread: TextView = itemView.findViewById(R.id.text_unread)
+            val pin: TextView = itemView.findViewById(R.id.text_pin)
+            val mute: TextView = itemView.findViewById(R.id.text_mute)
         }
     }
 }
