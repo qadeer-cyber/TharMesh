@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Dark-mode variant of [drawable/bg_pulse_red.xml]. See the light copy
+  for the Android 9 compat note.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="radial"
+        android:gradientRadius="80%p"
+        android:startColor="@color/tm_dark_glow_danger_20"
+        android:endColor="@android:color/transparent" />
+    <corners android:radius="24dp" />
+</shape>

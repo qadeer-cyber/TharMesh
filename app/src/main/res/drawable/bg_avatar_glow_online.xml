@@ -7,11 +7,18 @@
   neon-green centred behind the avatar to fully transparent at the outer
   edge — soft halo, not an outline.
 -->
+<!--
+  See [drawable/bg_nav_pill_glow.xml] for why `<gradient>` uses a direct
+  `@color/` reference instead of `?attr/...` — the API 28 theme-apply
+  path strips `gradientRadius` from radial gradients that reference
+  themed colors, crashing inflation. Dark-mode override lives in
+  `drawable-night/bg_avatar_glow_online.xml`.
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
     <gradient
         android:type="radial"
         android:gradientRadius="60%p"
-        android:startColor="?attr/tmGlowGreen20"
+        android:startColor="@color/tm_light_glow_green_20"
         android:endColor="@android:color/transparent" />
 </shape>

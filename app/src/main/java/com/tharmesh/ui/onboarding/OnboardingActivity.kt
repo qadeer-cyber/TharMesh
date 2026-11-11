@@ -25,6 +25,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.tharmesh.TharMeshApp
 import com.tharmesh.data.UserPrefs
+import com.tharmesh.diagnostics.CrashReporter
 import com.tharmesh.permissions.NearbyPermissions
 import com.tharmesh.ui.contacts.MyQrActivity
 import com.tharmesh.ui.contacts.ScanQrActivity
@@ -90,7 +91,17 @@ class OnboardingActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (CrashReporter.hasPendingCrash(this)) {
+            startActivity(
+                Intent(this, com.tharmesh.diagnostics.CrashViewerActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            finish()
+            return
+        }
+        CrashReporter.checkpoint("onboarding.onCreate.start")
         setContentView(R.layout.activity_onboarding)
+        CrashReporter.checkpoint("onboarding.onCreate.contentSet")
         title = ""
 
         flipper = findViewById(R.id.flipper)
@@ -104,6 +115,7 @@ class OnboardingActivity : AppCompatActivity() {
         bindStepMesh()
         bindStepFirstContact()
         showStep(0)
+        CrashReporter.checkpoint("onboarding.onCreate.end")
     }
 
     private fun showStep(index: Int) {

@@ -15,6 +15,7 @@ import tharmesh.app.R
 import com.tharmesh.TharMeshApp
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
+import com.tharmesh.diagnostics.CrashReporter
 import com.tharmesh.data.UserProfile
 import com.tharmesh.ui.main.MainActivity
 import com.tharmesh.ui.onboarding.OnboardingActivity
@@ -31,6 +32,17 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Relaunch-after-crash routing. See [MainActivity.onCreate] — if
+        // the previous run wrote a crash file, bail out into the bare-bones
+        // [CrashViewerActivity] so the user can see + report the trace.
+        if (CrashReporter.hasPendingCrash(this)) {
+            startActivity(
+                Intent(this, com.tharmesh.diagnostics.CrashViewerActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            finish()
+            return
+        }
         if (UserPrefs.hasProfile(this)) {
             goToNext()
             return
@@ -96,7 +108,9 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun finishWith(profile: UserProfile) {
+        CrashReporter.checkpoint("login.finishWith.start provider=" + profile.authProvider)
         UserPrefs.saveProfile(this, profile)
+        CrashReporter.checkpoint("login.profile.saved")
         // Stage 8.4 \u2014 do NOT start the mesh *transport* here (i.e. don't
         // call ensureMeshStarted): if a returning user has Nearby
         // permissions already granted but has not yet accepted the
@@ -115,6 +129,7 @@ class LoginActivity : AppCompatActivity() {
         // transport-safe \u2014 it only constructs objects in memory
         // and starts no advertising / discovery.
         TharMeshApp.get().ensureMeshReady()
+        CrashReporter.checkpoint("login.mesh.ready")
         goToNext()
     }
 
@@ -141,6 +156,7 @@ class LoginActivity : AppCompatActivity() {
             else ->
                 MainActivity::class.java
         }
+        CrashReporter.checkpoint("login.goToNext -> " + target.simpleName)
         val next = Intent(this, target)
         next.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(next)

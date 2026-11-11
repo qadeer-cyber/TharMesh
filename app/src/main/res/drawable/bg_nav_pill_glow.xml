@@ -6,6 +6,14 @@
 
   Order matters: glow drawn first (under the pill), then the solid pill on
   top so the icon + label still render against a stable surface.
+
+  Compat note — on API 28 (Android 9), `GradientDrawable.applyTheme()` on
+  a drawable whose `<gradient>` references theme attrs (`?attr/...`)
+  re-parses the gradient XML but loses the `gradientRadius` attribute and
+  throws "<gradient> tag requires gradientRadius with radial type". We
+  therefore use direct `@color/...` references inside `<gradient>` and
+  provide a `drawable-night/` variant for dark mode instead of relying
+  on theme resolution.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
@@ -13,14 +21,14 @@
             <gradient
                 android:type="radial"
                 android:gradientRadius="50%p"
-                android:startColor="?attr/tmGlowGreen20"
+                android:startColor="@color/tm_light_glow_green_20"
                 android:endColor="@android:color/transparent" />
             <corners android:radius="100dp" />
         </shape>
     </item>
     <item android:left="2dp" android:right="2dp" android:top="2dp" android:bottom="2dp">
         <shape android:shape="rectangle">
-            <solid android:color="?attr/tmNeonGreenDim" />
+            <solid android:color="@color/tm_light_neon_green_dim" />
             <corners android:radius="100dp" />
         </shape>
     </item>
