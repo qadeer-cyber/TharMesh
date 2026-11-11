@@ -112,7 +112,10 @@ class ProfileActivity : AppCompatActivity() {
         val profile: UserProfile? = UserPrefs.readProfile(this)
         val name = profile?.username?.takeIf { it.isNotBlank() } ?: getString(R.string.profile_anonymous)
         displayName.text = name
-        userIdView.text = profile?.userId ?: "—"
+        userIdView.text = getString(
+            R.string.profile_permanent_id_fmt,
+            profile?.userId ?: "—"
+        )
         avatarLetter.text = name.take(1).uppercase()
 
         val status = UserPrefs.getStatus(this)

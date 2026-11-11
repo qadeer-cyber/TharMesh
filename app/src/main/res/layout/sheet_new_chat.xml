@@ -96,6 +96,19 @@
         android:textSize="15sp" />
 
     <TextView
+        android:id="@+id/new_chat_action_username"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackground"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:text="@string/new_chat_action_search_username"
+        android:textColor="?attr/tmTextPrimary"
+        android:textSize="15sp" />
+
+    <TextView
         android:id="@+id/new_chat_action_userid"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

@@ -403,8 +403,17 @@ class AccountFlowActivity : AppCompatActivity() {
                 val meshKey = CryptoIdentity.generate()
                 val accountKey = CryptoIdentity.generate()
                 val phrase = IdentityRecovery.generatePhrase(random)
-                val userId = UserPrefs.readProfile(this@AccountFlowActivity)?.userId
-                    ?: ("user-" + java.util.UUID.randomUUID().toString().take(8))
+                val userId = com.tharmesh.account.CanonicalAccount.meshUserIdForNewAccount(
+                    intent.getStringExtra(EXTRA_ACCOUNT_ID),
+                    UserPrefs.readProfile(this@AccountFlowActivity)?.userId
+                )
+                if (userId == null) {
+                    return@withContext Triple(
+                        meshKey,
+                        phrase,
+                        IdentityLifecycle.EstablishResult.Refused(InstallRecord()) as IdentityLifecycle.EstablishResult
+                    )
+                }
                 val mesh = MeshMaterial.from(meshKey, userId)
                 val outcome = IdentityLifecycle.establishOriginal(
                     record = InstallRecord(
@@ -459,8 +468,14 @@ class AccountFlowActivity : AppCompatActivity() {
                 val meshKey = CryptoIdentity.generate()
                 val accountKey = CryptoIdentity.generate()
                 val phrase = IdentityRecovery.generatePhrase(random)
-                val userId = UserPrefs.readProfile(this@AccountFlowActivity)?.userId
-                    ?: ("user-" + java.util.UUID.randomUUID().toString().take(8))
+                val userId = com.tharmesh.account.CanonicalAccount.meshUserIdForNewAccount(
+                    intent.getStringExtra(EXTRA_ACCOUNT_ID),
+                    UserPrefs.readProfile(this@AccountFlowActivity)?.userId
+                ) ?: return@withContext Triple(
+                    meshKey,
+                    phrase,
+                    IdentityLifecycle.EstablishResult.Refused(InstallRecord()) as IdentityLifecycle.EstablishResult
+                )
                 val outcome = IdentityLifecycle.explicitReset(
                     record = InstallRecord(accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)),
                     mesh = MeshMaterial.from(meshKey, userId),

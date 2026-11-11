@@ -148,6 +148,12 @@ object CloudSessionStore {
         editor.apply()
     }
 
+    fun readAccessToken(context: Context): String {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("access_token", "")
+            .orEmpty()
+    }
+
     fun readCloud(context: Context): CloudCredential {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(STATE, null)
         return raw?.let { runCatching { CloudCredential.valueOf(it) }.getOrNull() } ?: CloudCredential.NONE

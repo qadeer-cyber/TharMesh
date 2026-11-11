@@ -55,6 +55,9 @@ alter table public.recovery_blobs enable row level security;
 
 create policy profiles_select_own on public.profiles
     for select using (auth.uid() = account_id);
+-- Directory lookup. Profiles hold handle and display name only, not recovery material.
+create policy profiles_select_directory on public.profiles
+    for select using (auth.uid() is not null);
 create policy profiles_insert_own on public.profiles
     for insert with check (auth.uid() = account_id);
 create policy profiles_update_own on public.profiles

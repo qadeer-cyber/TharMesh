@@ -166,7 +166,22 @@
     <string name="login_failed_fmt">Sign-in failed: %1$s</string>
     <string name="login_create_account">Create account</string>
     <string name="login_sign_in">Sign in</string>
-    <string name="login_offline_note">Mesh messaging does not use the cloud. An account is only for a new phone.</string>
+    <string name="login_offline_note">Mesh messaging does not use the cloud. Register once, then this phone works offline.</string>
+    <string name="login_registration_required">A TharMesh account is required on a new install. This build will not create a stand-in account.</string>
+    <string name="new_chat_action_search_username">Search by username</string>
+    <string name="new_chat_username_hint">Username</string>
+    <string name="new_chat_directory_unavailable">The account directory is not set up on this build. No user was invented. Nearby people and saved contacts still work.</string>
+    <string name="new_chat_directory_not_nearby">A registered account is not the same as a phone that is nearby. Mesh delivery still needs a verified contact in range.</string>
+    <string name="new_chat_directory_empty">No registered username matched. Nothing was added.</string>
+    <string name="chat_action_pin">Pin chat</string>
+    <string name="chat_action_unpin">Unpin chat</string>
+    <string name="chat_action_archive">Archive chat</string>
+    <string name="chat_action_unarchive">Unarchive chat</string>
+    <string name="chat_action_mute">Mute notifications</string>
+    <string name="chat_action_unmute">Unmute notifications</string>
+    <string name="chat_action_delete">Delete chat</string>
+    <string name="chat_action_delete_confirm">Delete this chat on this phone? The contact and their verified key stay. Messages on this phone are removed.</string>
+    <string name="profile_permanent_id_fmt">TharMesh ID %1$s</string>
 
     <string name="account_create_title">Create account</string>
     <string name="account_create_body">Email and a password of at least 8 characters. Phone number is not used. The handle is unique and cannot be changed later.</string>

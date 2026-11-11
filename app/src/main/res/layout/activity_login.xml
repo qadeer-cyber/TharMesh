@@ -80,6 +80,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/login_anonymous_button"
+        android:visibility="gone"
             style="@style/TmButton.Ghost"
             android:layout_width="match_parent"
             android:layout_height="52dp"

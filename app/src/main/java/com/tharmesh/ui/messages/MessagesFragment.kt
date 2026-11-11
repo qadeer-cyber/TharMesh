@@ -23,9 +23,12 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.tharmesh.TharMeshApp
+import com.tharmesh.account.ChatListOrganizer
+import com.tharmesh.account.ChatRow
+import com.tharmesh.account.DeliveryGlyph
+import com.tharmesh.data.ChatFlagStore
 import com.tharmesh.data.MessageRepository
 import com.tharmesh.data.UserPrefs
-import com.tharmesh.db.MessageStatus
 import com.tharmesh.db.entity.ConversationEntity
 import com.tharmesh.mesh.MeshNode
 import com.tharmesh.permissions.PermissionMonitor
@@ -313,9 +316,12 @@ class MessagesFragment : Fragment() {
     private fun bindList(view: View) {
         val recycler: RecyclerView = view.findViewById(R.id.recycler_chats)
         empty = view.findViewById(R.id.empty_chats)
-        adapter = ChatsAdapter { conv ->
-            openChat(conv.userId, conv.title, avatarBgForPeer(conv.userId))
-        }
+        adapter = ChatsAdapter(
+            onClick = { conv ->
+                openChat(conv.userId, conv.title, avatarBgForPeer(conv.userId))
+            },
+            onLongClick = { conv -> showChatActions(conv) }
+        )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
@@ -460,11 +466,23 @@ class MessagesFragment : Fragment() {
                 emptySet()
             }
 
-            val filtered = lastConversations.filter { conv ->
-                if (q.isNotEmpty() &&
-                    !conv.title.lowercase().contains(q) &&
-                    !conv.lastMessage.lowercase().contains(q)
-                ) return@filter false
+            val flags = ChatFlagStore.read(requireContext())
+            val arranged = ChatListOrganizer.arrange(
+                lastConversations.map { conv ->
+                    ChatRow(
+                        userId = conv.userId,
+                        title = conv.title,
+                        preview = conv.lastMessage,
+                        timestamp = conv.lastTimestamp,
+                        unread = conv.unreadCount,
+                        status = conv.lastMessageStatus
+                    )
+                },
+                flags,
+                q
+            )
+            val byId = lastConversations.associateBy { it.userId }
+            val filtered = arranged.mapNotNull { byId[it.userId] }.filter { conv ->
                 when (activeFilter) {
                     Filter.ALL -> true
                     Filter.UNREAD -> conv.unreadCount > 0
@@ -476,6 +494,59 @@ class MessagesFragment : Fragment() {
             adapter.submitList(filtered)
             empty.visibility = if (filtered.isEmpty()) View.VISIBLE else View.GONE
         }
+    }
+
+    private fun showChatActions(conv: ConversationEntity) {
+        val ctx = requireContext()
+        val flags = ChatFlagStore.read(ctx)
+        val pinned = conv.userId in flags.pinned
+        val archived = conv.userId in flags.archived
+        val muted = conv.userId in flags.muted
+        val labels = arrayOf(
+            getString(if (pinned) R.string.chat_action_unpin else R.string.chat_action_pin),
+            getString(if (archived) R.string.chat_action_unarchive else R.string.chat_action_archive),
+            getString(if (muted) R.string.chat_action_unmute else R.string.chat_action_mute),
+            getString(R.string.chat_action_delete)
+        )
+        AlertDialog.Builder(ctx)
+            .setTitle(conv.title)
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> ChatFlagStore.write(
+                        ctx,
+                        flags.copy(pinned = toggle(flags.pinned, conv.userId))
+                    )
+                    1 -> ChatFlagStore.write(
+                        ctx,
+                        flags.copy(archived = toggle(flags.archived, conv.userId))
+                    )
+                    2 -> ChatFlagStore.write(
+                        ctx,
+                        flags.copy(muted = toggle(flags.muted, conv.userId))
+                    )
+                    3 -> confirmDeleteChat(conv)
+                }
+                applyFilter()
+            }
+            .show()
+    }
+
+    private fun toggle(set: Set<String>, id: String): Set<String> {
+        return if (id in set) set - id else set + id
+    }
+
+    private fun confirmDeleteChat(conv: ConversationEntity) {
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.chat_action_delete)
+            .setMessage(R.string.chat_action_delete_confirm)
+            .setPositiveButton(R.string.chat_action_delete) { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { repository.deleteLocalChat(conv.userId) }
+                    applyFilter()
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
     }
 
     private fun showDevicePicker() {
@@ -505,7 +576,8 @@ class MessagesFragment : Fragment() {
     }
 
     private class ChatsAdapter(
-        private val onClick: (ConversationEntity) -> Unit
+        private val onClick: (ConversationEntity) -> Unit,
+        private val onLongClick: (ConversationEntity) -> Unit
     ) : RecyclerView.Adapter<ChatsAdapter.VH>() {
 
         private val items: MutableList<ConversationEntity> = mutableListOf()
@@ -548,14 +620,7 @@ class MessagesFragment : Fragment() {
             holder.preview.text = conv.lastMessage.ifEmpty { "…" }
             holder.time.text = DateFormat.format("HH:mm", Date(conv.lastTimestamp))
 
-            val statusGlyph = when (conv.lastMessageStatus) {
-                MessageStatus.QUEUED,
-                MessageStatus.SENDING -> "⏳ "
-                MessageStatus.SENT -> "✓ "
-                MessageStatus.DELIVERED -> "✓✓ "
-                MessageStatus.READ -> "✓✓ "
-                else -> ""
-            }
+            val statusGlyph = DeliveryGlyph.prefix(conv.lastMessageStatus)
             if (statusGlyph.isNotEmpty()) {
                 holder.preview.text = statusGlyph + conv.lastMessage
             }
@@ -577,6 +642,10 @@ class MessagesFragment : Fragment() {
                 else com.tharmesh.ui.system.SystemStatus.Offline
             )
             holder.itemView.setOnClickListener { onClick(conv) }
+            holder.itemView.setOnLongClickListener {
+                onLongClick(conv)
+                true
+            }
         }
 
         override fun getItemCount(): Int = items.size

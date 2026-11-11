@@ -11,8 +11,11 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import tharmesh.app.BuildConfig
 import tharmesh.app.R
 import com.tharmesh.TharMeshApp
+import com.tharmesh.account.AuthBackend
+import com.tharmesh.account.RegistrationGate
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.data.UserProfile
@@ -21,10 +24,10 @@ import com.tharmesh.ui.main.MainActivity
 import com.tharmesh.ui.onboarding.OnboardingActivity
 
 /**
- * First-run gate. If a profile already exists, skip straight to [MainActivity]. Otherwise
- * show "Continue with Google" (if `BuildConfig.GOOGLE_WEB_CLIENT_ID` is configured) and
- * "Continue anonymously" (always available — kept so the app still runs without OAuth
- * credentials during development).
+ * First-run gate. An existing local profile, including older installs that
+ * never had a cloud account, goes straight in. A fresh install must register.
+ * If the account server is not configured, this screen says so and does not
+ * create a local stand-in account.
  */
 class LoginActivity : AppCompatActivity() {
 
@@ -43,51 +46,39 @@ class LoginActivity : AppCompatActivity() {
         val anonBtn: Button = findViewById(R.id.login_anonymous_button)
         val createBtn: Button = findViewById(R.id.login_create_button)
         val signInBtn: Button = findViewById(R.id.login_signin_button)
+        val cloudReady = AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+        val gate = RegistrationGate.decide(hasExistingProfile = false, cloudConfigured = cloudReady)
+        anonBtn.visibility = android.view.View.GONE
+        anonBtn.setOnClickListener {
+            status.setText(R.string.login_registration_required)
+        }
+        if (gate == RegistrationGate.Decision.BLOCKED_UNCONFIGURED) {
+            status.setText(R.string.account_error_not_configured)
+            val blocked = android.view.View.OnClickListener {
+                status.setText(R.string.account_error_not_configured)
+            }
+            createBtn.setOnClickListener(blocked)
+            signInBtn.setOnClickListener(blocked)
+            googleBtn.setOnClickListener(blocked)
+            return
+        }
         createBtn.setOnClickListener {
             startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.CREATE))
         }
         signInBtn.setOnClickListener {
             startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.SIGN_IN))
         }
-
-        if (googleAuth.isAvailable) {
-            googleBtn.isEnabled = true
-            status.text = getString(R.string.login_ready)
-            // Silent sign-in if the user was already signed in via Google earlier.
-            val cached = googleAuth.lastSignedInAccount(this)
-            if (cached != null) {
-                val sub = cached.id
-                if (sub != null) {
-                    finishWith(
-                        UserProfile(
-                            userId = UserPrefs.userIdFromGoogleSub(sub),
-                            username = cached.displayName?.takeIf { it.isNotBlank() }
-                                ?: (cached.email ?: "user"),
-                            email = cached.email,
-                            avatarUrl = cached.photoUrl?.toString(),
-                            authProvider = UserPrefs.PROVIDER_GOOGLE
-                        )
-                    )
-                    return
-                }
-            }
-        } else {
+        if (!googleAuth.isAvailable) {
             googleBtn.isEnabled = false
-            status.text = getString(R.string.login_missing_oauth)
+            status.setText(R.string.login_missing_oauth)
         }
-
         googleBtn.setOnClickListener {
             val intent = googleAuth.silentSignInIntent()
             if (intent != null) {
                 startActivityForResult(intent, REQUEST_GOOGLE_SIGN_IN)
             } else {
-                status.text = getString(R.string.login_missing_oauth)
+                status.setText(R.string.login_missing_oauth)
             }
-        }
-
-        anonBtn.setOnClickListener {
-            val profile = UserPrefs.ensureProfile(this)
-            finishWith(profile.copy(authProvider = UserPrefs.PROVIDER_ANONYMOUS))
         }
     }
 
