@@ -8,91 +8,169 @@ package com.tharmesh.account
 import com.tharmesh.identity.Base64Url
 import java.security.SecureRandom
 import javax.crypto.Cipher
-import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Client-side seal for an identity private key. The recovery phrase never
- * leaves the device as part of the ciphertext. A server that stores
- * [SealedIdentity] cannot open it.
+ * Client-side seal for identity key material. The recovery secret is not
+ * written into the ciphertext. A server that stores [SealedIdentity] cannot
+ * open it.
+ *
+ * New seals use scrypt (N = 2^14, r = 8, p = 1, 16 MiB) and a 128-bit secret.
+ * The earlier PBKDF2-HMAC-SHA256 seal still opens so a blob from that path is
+ * not discarded. New callers must use [seal], which does not take an iteration
+ * count. PBKDF2 at 100 000 iterations is not memory-hard, and the 24-word
+ * phrase generator it shipped with was about 36 bits.
  */
 object IdentityRecovery {
 
-    const val KDF: String = "PBKDF2-HMAC-SHA256"
-    const val DEFAULT_ITERATIONS: Int = 100_000
+    const val KDF_SCRYPT: String = "scrypt"
+    const val KDF_PBKDF2: String = "PBKDF2-HMAC-SHA256"
+    const val SCRYPT_N: Int = 16_384
+    const val SCRYPT_R: Int = 8
+    const val SCRYPT_P: Int = 1
+
     private const val KEY_BITS: Int = 256
     private const val IV_LEN: Int = 12
     private const val SALT_LEN: Int = 16
     private const val TAG_BITS: Int = 128
     private val AAD: ByteArray = "TharMesh-identity-v1".toByteArray(Charsets.UTF_8)
 
-    private val words: List<String> = listOf(
-        "amber", "banyan", "cedar", "desert", "ember", "falcon", "granite", "harbor",
-        "indigo", "jasper", "kettle", "lotus", "marble", "north", "oasis", "pearl",
-        "quartz", "river", "saffron", "thorn", "umber", "valley", "willow", "yarrow"
-    )
-
     data class SealedIdentity(
         val kdf: String,
         val iterations: Int,
         val saltB64: String,
         val ivB64: String,
-        val ciphertextB64: String
+        val ciphertextB64: String,
+        val r: Int = SCRYPT_R,
+        val p: Int = SCRYPT_P
     )
 
-    fun generatePhrase(random: SecureRandom = SecureRandom(), wordCount: Int = 8): String {
-        val count = wordCount.coerceIn(6, 12)
-        return (1..count).joinToString(" ") { words[random.nextInt(words.size)] }
+    /**
+     * 128-bit secret, displayed as eight groups of four hex digits.
+     * The groups are formatting. [normalize] accepts them with or without dashes.
+     */
+    fun generatePhrase(random: SecureRandom = SecureRandom()): String {
+        val raw = ByteArray(16)
+        random.nextBytes(raw)
+        val hex = buildString(32) {
+            for (b in raw) append("%02x".format(b.toInt() and 0xFF))
+        }
+        return hex.chunked(4).joinToString("-")
     }
 
+    /** New seals. [n], [rParam], and [pParam] default to the production scrypt cost. */
     fun seal(
-        privateKeyBase64: String,
+        plaintext: String,
         phrase: String,
-        iterations: Int = DEFAULT_ITERATIONS,
-        random: SecureRandom = SecureRandom()
+        random: SecureRandom = SecureRandom(),
+        n: Int = SCRYPT_N,
+        rParam: Int = SCRYPT_R,
+        pParam: Int = SCRYPT_P
     ): SealedIdentity {
-        require(iterations >= 1_000) { "iterations" }
+        require(n >= 2 && n and (n - 1) == 0)
+        require(rParam >= 1 && pParam >= 1)
         val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
         val iv = ByteArray(IV_LEN).also { random.nextBytes(it) }
-        val key = derive(phrase, salt, iterations)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
-        cipher.updateAAD(AAD)
-        val ct = cipher.doFinal(privateKeyBase64.toByteArray(Charsets.UTF_8))
+        val key = scryptKey(phrase, salt, n, rParam, pParam)
         return SealedIdentity(
-            kdf = KDF,
-            iterations = iterations,
+            kdf = KDF_SCRYPT,
+            iterations = n,
             saltB64 = Base64Url.encode(salt),
             ivB64 = Base64Url.encode(iv),
-            ciphertextB64 = Base64Url.encode(ct)
+            ciphertextB64 = Base64Url.encode(encrypt(key, iv, plaintext)),
+            r = rParam,
+            p = pParam
         )
     }
 
-    /** Returns the private-key blob, or null when the phrase or framing is wrong. */
+    /**
+     * Legacy seal kept so blobs produced with PBKDF2 can be reproduced in tests
+     * and opened by [open]. Not used for new recovery blobs.
+     */
+    fun seal(
+        plaintext: String,
+        phrase: String,
+        iterations: Int,
+        random: SecureRandom
+    ): SealedIdentity {
+        require(iterations >= 1_000)
+        val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
+        val iv = ByteArray(IV_LEN).also { random.nextBytes(it) }
+        val key = pbkdf2Key(phrase, salt, iterations)
+        return SealedIdentity(
+            kdf = KDF_PBKDF2,
+            iterations = iterations,
+            saltB64 = Base64Url.encode(salt),
+            ivB64 = Base64Url.encode(iv),
+            ciphertextB64 = Base64Url.encode(encrypt(key, iv, plaintext)),
+            r = 0,
+            p = 0
+        )
+    }
+
+    /** Returns the plaintext, or null when the secret or the framing is wrong. */
     fun open(sealed: SealedIdentity, phrase: String): String? {
-        if (sealed.kdf != KDF || sealed.iterations < 1_000) return null
         val salt = Base64Url.decode(sealed.saltB64) ?: return null
         val iv = Base64Url.decode(sealed.ivB64) ?: return null
         val ct = Base64Url.decode(sealed.ciphertextB64) ?: return null
         if (iv.size != IV_LEN || salt.isEmpty() || ct.isEmpty()) return null
+        val key = when (sealed.kdf) {
+            KDF_SCRYPT -> {
+                if (sealed.iterations < 2 || sealed.r < 1 || sealed.p < 1) return null
+                scryptKey(phrase, salt, sealed.iterations, sealed.r, sealed.p)
+            }
+            KDF_PBKDF2 -> {
+                if (sealed.iterations < 1_000) return null
+                pbkdf2Key(phrase, salt, sealed.iterations)
+            }
+            else -> return null
+        }
         return try {
-            val key = derive(phrase, salt, sealed.iterations)
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
-            cipher.updateAAD(AAD)
-            String(cipher.doFinal(ct), Charsets.UTF_8)
+            String(decrypt(key, iv, ct), Charsets.UTF_8)
         } catch (ignored: Throwable) {
             null
         }
     }
 
-    private fun derive(phrase: String, salt: ByteArray, iterations: Int): SecretKeySpec {
-        val normalized = phrase.trim().lowercase().replace(Regex("\\s+"), " ")
-        val spec = PBEKeySpec(normalized.toCharArray(), salt, iterations, KEY_BITS)
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val bytes = factory.generateSecret(spec).encoded
+    fun normalize(phrase: String): String {
+        val collapsed = phrase.trim().lowercase().replace(Regex("\\s+"), " ")
+        return if (' ' in collapsed) collapsed else collapsed.replace("-", "")
+    }
+
+    private fun scryptKey(phrase: String, salt: ByteArray, n: Int, r: Int, p: Int): SecretKeySpec {
+        val bytes = Scrypt.derive(
+            normalize(phrase).toByteArray(Charsets.UTF_8),
+            salt,
+            n,
+            r,
+            p,
+            KEY_BITS / 8
+        )
         return SecretKeySpec(bytes, "AES")
+    }
+
+    private fun pbkdf2Key(phrase: String, salt: ByteArray, iterations: Int): SecretKeySpec {
+        val bytes = Scrypt.pbkdf2(
+            normalize(phrase).toByteArray(Charsets.UTF_8),
+            salt,
+            iterations,
+            KEY_BITS / 8
+        )
+        return SecretKeySpec(bytes, "AES")
+    }
+
+    private fun encrypt(key: SecretKeySpec, iv: ByteArray, plaintext: String): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+        cipher.updateAAD(AAD)
+        return cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun decrypt(key: SecretKeySpec, iv: ByteArray, ct: ByteArray): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+        cipher.updateAAD(AAD)
+        return cipher.doFinal(ct)
     }
 }

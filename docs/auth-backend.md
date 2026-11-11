@@ -1,0 +1,47 @@
+# Account backend
+
+## Decision
+
+**Supabase Auth (GoTrue over HTTPS) plus Postgres Row Level Security.**
+
+The client speaks `/auth/v1/signup`, `/auth/v1/token?grant_type=password`,
+`/auth/v1/token?grant_type=id_token` (Google), `/auth/v1/resend`, and
+`/auth/v1/user`. Profile, handle, device, and recovery rows go through
+PostgREST `/rest/v1/`. SQL is in `supabase/schema.sql`. No Supabase SDK is
+compiled in, because this tree is Gradle 6.5 and Android Gradle Plugin 4.1.3.
+
+Empty `SUPABASE_URL` or `SUPABASE_ANON_KEY`, or a URL that is not `https://`,
+returns `cloud_auth_not_configured` and does not create a session. The anon
+key is a public client key. It is not an admin secret. It is still not
+committed. Service-role keys are not used and must not be put in the app.
+
+## Why Supabase, not Firebase
+
+Both products can do email, Google, and email verification without a phone
+number. The constraint that matters here is the toolchain and who operates it.
+
+| | Supabase | Firebase |
+| --- | --- | --- |
+| Android fit on AGP 4.1.3 | HTTPS from the app. No Gradle plugin. | Current `google-services` / Firebase BoM does not fit AGP 4.1.3. A hand-written Identity Toolkit client would, but it would be a second HTTP stack next to GoTrue, which is already in this branch. |
+| Authorization rules in git | Postgres RLS, plain SQL, reviewed in `supabase/schema.sql`. | Firestore rules. Also reviewable, but they need the Firebase CLI and a project file the Gradle plugin expects. |
+| Uniqueness | `handles.handle` unique constraint. The database rejects the duplicate. The client cannot be the only check. | A transaction on `handles/{handle}` can do the same. |
+| Abuse | GoTrue's built-in rate limits, plus the app's `AuthRateLimiter` (8 failures / 15 minutes). Hosted projects should also turn on captcha and leaked-password protection in the Supabase dashboard. There is no App Check equivalent until that dashboard toggle exists. | App Check is stronger on Play-distributed Android builds. We do not have a Firebase project, and App Check would not run without one. |
+| Cost for a solo founder | Free tier covers auth and a few small rows per user (profile, devices, one ciphertext). No always-on server to run. | Auth for email and Google is free. Firestore's free quota would also cover these rows. Phone auth is the expensive Firebase product; we do not use it. |
+| Maintenance | One hosted project, SQL the repo already contains. | A second console, `google-services.json`, and a plugin this AGP cannot load. |
+
+Firebase was the closer match to the existing Google Sign-In button, and its
+Auth REST API would also fail closed without a project. It is rejected because
+the official Android integration fights the toolchain, and the GoTrue client,
+tests, and draft PR already exist. Replacing them would discard a working
+fail-closed path without a project to point either product at.
+
+Google Sign-In stays. When a Supabase URL is present, the Google ID token is
+sent to GoTrue as `grant_type=id_token`. When it is absent, the existing local
+Google profile path still runs and the screen says cloud link is not configured.
+That local profile is not a Supabase session.
+
+## What is not claimed
+
+No Supabase project is configured in this repository. Unit tests use
+`HttpTransport` fakes and `SimulatedAccountDirectory` (`LABEL = "SIMULATED"`).
+A simulated success is not live authentication. Live sign-in has not been executed.
