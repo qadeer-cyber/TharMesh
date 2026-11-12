@@ -297,14 +297,15 @@ class MessagesFragment : Fragment() {
             view.findViewById<Button>(R.id.chip_filter_trusted) to Filter.TRUSTED
         )
         for ((btn, filter) in chips) {
+            androidx.core.view.ViewCompat.setBackgroundTintList(btn, null)
             btn.setOnClickListener {
                 activeFilter = filter
-                chips.forEach { (b, f) -> b.isActivated = (f == filter) }
+                chips.forEach { (b, f) -> b.isActivated = (f == filter); b.isSelected = b.isActivated }
                 applyFilter()
             }
         }
         // Initial state.
-        chips.forEach { (b, f) -> b.isActivated = (f == activeFilter) }
+        chips.forEach { (b, f) -> b.isActivated = (f == activeFilter); b.isSelected = b.isActivated }
 
         view.findViewById<FrameLayout>(R.id.chip_filter_plus).setOnClickListener {
             // Stage 6.1 — `+` chip is a discoverable affordance; future
