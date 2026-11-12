@@ -291,6 +291,15 @@ class AccountFlowActivity : AppCompatActivity() {
                     secret.visibility = View.GONE
                     uploadRecovery(status)
                 }
+                secondary.visibility = View.VISIBLE
+                secondary.setText(R.string.account_recovery_later)
+                secondary.setOnClickListener {
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setMessage(R.string.account_recovery_defer_warning)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(R.string.account_recovery_continue) { _, _ -> goHome() }
+                        .show()
+                }
             }
             Screen.DEVICES -> {
                 title.setText(R.string.account_devices_title)
@@ -592,8 +601,9 @@ class AccountFlowActivity : AppCompatActivity() {
                     pendingSignupOnThisPhone = pending?.accountId == result.tokens.accountId
                 )
                 if (next == AccountActivation.AfterVerifiedSignIn.SECURE_IDENTITY) {
-                    PendingSignupStore.clear(this)
+                    intent.putExtra(EXTRA_EMAIL, pending?.email)
                     bind(Screen.SECURE_IDENTITY)
+                    createFirstIdentity(status)
                 } else {
                     bind(Screen.RECOVER)
                 }
@@ -645,10 +655,12 @@ class AccountFlowActivity : AppCompatActivity() {
     }
 
     private fun createFirstIdentity(status: TextView) {
+        if (authBusy) return
         if (UserPrefs.readIdentity(this) != null) {
             status.setText(R.string.account_error_conflict)
             return
         }
+        authBusy = true
         lifecycleScope.launch {
             val built = withContext(Dispatchers.Default) {
                 val meshKey = CryptoIdentity.generate()
@@ -684,6 +696,7 @@ class AccountFlowActivity : AppCompatActivity() {
                 )
                 Triple(meshKey, phrase, outcome)
             }
+            authBusy = false
             val (meshKey, phrase, outcome) = built
             val created = (outcome as? IdentityLifecycle.EstablishResult.Created) ?: run {
                 status.setText(R.string.account_error_conflict)
@@ -709,6 +722,7 @@ class AccountFlowActivity : AppCompatActivity() {
                 )
             )
             UserPrefs.setIdentityHeld(this@AccountFlowActivity, false)
+            PendingSignupStore.clear(this@AccountFlowActivity)
             finishSeal(created.record, phrase, status)
         }
     }

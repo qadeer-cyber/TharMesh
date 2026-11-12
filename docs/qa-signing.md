@@ -10,20 +10,38 @@ signing are separate. Only use the QA private key for controlled test builds.
    Enter a strong password at the prompt. PKCS12 uses the store password for
    the key as well. Retain an encrypted, access-controlled backup and keep
    the password separately.
-2. In repository Settings → Secrets and variables → Actions, create
-   `THARMESH_QA_KEYSTORE_BASE64` with the single-line base64 of the PKCS12
-   file, plus `THARMESH_QA_STORE_PASSWORD`, `THARMESH_QA_KEY_ALIAS`, and
-   `THARMESH_QA_KEY_PASSWORD`. Base64 is reversible. Handle it like the
-   original key and clear the clipboard after entry.
-3. Run `keytool -list -v -storetype PKCS12 -keystore tharmesh-qa.p12 -alias tharmesh-qa`.
-   Set the Actions variable `THARMESH_QA_CERT_SHA256` to the public SHA-256
-   fingerprint. Set `THARMESH_QA_SIGNING_ENABLED` to `true` to enable the
-   QA steps on trusted same-repository changes. Keep signing secrets available
-   only to workflows and contributors you trust.
-4. Run Android CI twice on reviewed changes. Both runs must publish
-   `tharmesh-app-qa` and show the same certificate SHA-1 and SHA-256. An
-   enabled QA job fails when credentials are missing or the digest differs.
-   The workflow leaves ordinary debug artifacts separately identified.
+2. In GitHub repository **Settings → Environments**, create
+   `tharmesh-qa-signing`. Select **Selected branches and tags** and add only
+   the branch `cursor/universal-account-0939`. Add a trusted required reviewer,
+   enable **Prevent self-review** when another reviewer is available, and
+   disable administrator bypass. Keep the repository opt-in variable off
+   until these protections are verified. If approval rules are unavailable,
+   leave signing disabled until an equivalent trusted approval gate is in place.
+3. In PowerShell, with GitHub CLI authenticated as a repository administrator,
+   run the following from the directory holding the keystore. The password
+   commands prompt for input. Enter the PKCS#12 password at both prompts.
+
+   ```powershell
+   $repo = "qadeer-cyber/TharMesh"
+   $environment = "tharmesh-qa-signing"
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path .\tharmesh-qa.p12).Path)) |
+     gh secret set THARMESH_QA_KEYSTORE_BASE64 --repo $repo --env $environment
+   "tharmesh-qa" | gh secret set THARMESH_QA_KEY_ALIAS --repo $repo --env $environment
+   gh secret set THARMESH_QA_STORE_PASSWORD --repo $repo --env $environment
+   gh secret set THARMESH_QA_KEY_PASSWORD --repo $repo --env $environment
+   keytool -list -v -storetype PKCS12 -keystore .\tharmesh-qa.p12 -alias tharmesh-qa
+   ```
+
+   Keep all four secrets scoped to the environment. If any were previously
+   provisioned as repository secrets, remove the repository-scoped copies
+   before enabling QA.
+4. Set the environment variable `THARMESH_QA_CERT_SHA256` to the public
+   SHA-256 fingerprint printed by keytool. Then set the repository Actions
+   variable `THARMESH_QA_SIGNING_ENABLED` to `true`.
+5. Review the full source SHA, including build scripts, before approving the
+   signed QA job on a push to the configured branch. The PR event never
+   starts the environment job. Repeat on two reviewed pushes and compare the
+   public fingerprints included in both `tharmesh-app-qa` artifacts.
 
 ## Google
 
