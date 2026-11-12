@@ -68,7 +68,27 @@ object AndroidAccountKeyBox {
     private const val PREFS = "tharmesh_account_keybox"
     private const val KEY_BLOB = "sealed_account_private"
 
-    fun seal(context: Context, accountPrivateKeyBase64: String): Boolean {
+    fun seal(context: Context, accountPrivateKeyBase64: String): Boolean =
+        sealSlot(context, KEY_BLOB, accountPrivateKeyBase64)
+
+    @Synchronized
+    fun stageMeshIdentity(context: Context, accountId: String, allowCreate: Boolean): CryptoIdentity? {
+        val slot = "mesh_stage_$accountId"
+        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains(slot)
+        if (stored || !allowCreate) return readMeshIdentity(context, accountId)
+        val identity = CryptoIdentity.generate()
+        val payload = org.json.JSONObject().put("private", identity.privateKeyBase64)
+            .put("public", identity.publicKeyBase64).toString()
+        return if (sealSlot(context, slot, payload)) identity else null
+    }
+
+    fun readMeshIdentity(context: Context, accountId: String): CryptoIdentity? = runCatching {
+        val payload = openSlot(context, "mesh_stage_$accountId") ?: return null
+        val json = org.json.JSONObject(payload)
+        CryptoIdentity.fromBase64(json.getString("private"), json.getString("public"))
+    }.getOrNull()
+
+    private fun sealSlot(context: Context, slot: String, accountPrivateKeyBase64: String): Boolean {
         return try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, aesKey())
@@ -78,18 +98,19 @@ object AndroidAccountKeyBox {
             val stored = AccountKeySeal.bytesToStore(true, packed, accountPrivateKeyBase64) ?: return false
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()
-                .putString(KEY_BLOB, stored)
-                .apply()
-            true
+                .putString(slot, stored)
+                .commit()
         } catch (ignored: Throwable) {
             false
         }
     }
 
-    fun open(context: Context): String? {
+    fun open(context: Context): String? = openSlot(context, KEY_BLOB)
+
+    private fun openSlot(context: Context, slot: String): String? {
         return try {
             val packedB64 = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(KEY_BLOB, null) ?: return null
+                .getString(slot, null) ?: return null
             val packed = Base64Url.decode(packedB64) ?: return null
             val (iv, ct) = AccountKeySeal.unpack(packed) ?: return null
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")

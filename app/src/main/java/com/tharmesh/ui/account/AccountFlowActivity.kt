@@ -39,6 +39,7 @@ import com.tharmesh.account.CloudSessionStore
 import com.tharmesh.account.DeviceEnrollment
 import com.tharmesh.account.EnrollmentQr
 import com.tharmesh.account.HandlePolicy
+import com.tharmesh.account.IdentityProvisioning
 import com.tharmesh.account.IdentityLifecycle
 import com.tharmesh.account.IdentityOrigin
 import com.tharmesh.account.IdentityRecovery
@@ -78,6 +79,8 @@ class AccountFlowActivity : AppCompatActivity() {
 
     private val otpPrefs by lazy { getSharedPreferences("tharmesh_email_otp", MODE_PRIVATE) }
     private var authBusy = false
+    private var canonicalRecovery = false
+    private var expectedRecoveryKey: String? = null
     private val googleAuth by lazy { com.tharmesh.auth.GoogleAuthService(this) }
     private val http = UrlHttpTransport()
     private val random = SecureRandom()
@@ -244,6 +247,10 @@ class AccountFlowActivity : AppCompatActivity() {
                     } else {
                         resetIdentity(status)
                     }
+                }
+                if (canonicalRecovery) {
+                    secondary.visibility = View.GONE
+                    confirm.visibility = View.GONE
                 }
                 primary.setOnClickListener { restore(f1, f2, status) }
             }
@@ -558,10 +565,10 @@ class AccountFlowActivity : AppCompatActivity() {
             bind(Screen.VERIFY_EMAIL)
             return
         }
-        val pending = PendingSignupStore.read(this)
-        val boundAccount = CloudSessionStore.readAccountId(this)
+        val canonicalAccount = UserPrefs.canonicalMeshAccount(this)
+        val boundAccount = canonicalAccount ?: CloudSessionStore.readAccountId(this)
         if (boundAccount != null && boundAccount != result.tokens.accountId &&
-            UserPrefs.readIdentity(this) != null
+            (canonicalAccount != null || UserPrefs.readIdentity(this) != null)
         ) {
             status.setText(R.string.account_error_conflict)
             return
@@ -596,20 +603,52 @@ class AccountFlowActivity : AppCompatActivity() {
             com.tharmesh.account.AccountSession.Bind.NEEDS_RECOVERY_OR_NEW_IDENTITY -> {
                 UserPrefs.setIdentityHeld(this, true)
                 intent.putExtra(EXTRA_ACCOUNT_ID, result.tokens.accountId)
-                val next = AccountActivation.afterVerifiedSignIn(
-                    hasMeshIdentity = false,
-                    pendingSignupOnThisPhone = pending?.accountId == result.tokens.accountId
-                )
-                if (next == AccountActivation.AfterVerifiedSignIn.SECURE_IDENTITY) {
-                    intent.putExtra(EXTRA_EMAIL, pending?.email)
-                    bind(Screen.SECURE_IDENTITY)
-                    createFirstIdentity(status)
-                } else {
-                    bind(Screen.RECOVER)
-                }
+                provisionIdentity(result, status)
             }
             com.tharmesh.account.AccountSession.Bind.REFUSE_SILENT_REPLACEMENT -> {
                 status.setText(R.string.account_error_conflict)
+            }
+        }
+    }
+
+    private fun provisionIdentity(auth: AuthCall.Ok, status: TextView) {
+        if (authBusy) return
+        authBusy = true
+        val button = findViewById<TextView>(R.id.account_primary)
+        button.isEnabled = false
+        status.setText(R.string.account_provisioning)
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                IdentityProvisioning(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, auth.tokens)
+                    .activate { allowCreate ->
+                        AndroidAccountKeyBox.stageMeshIdentity(this@AccountFlowActivity, auth.tokens.accountId, allowCreate)
+                    }
+            }
+            authBusy = false
+            button.isEnabled = true
+            when (outcome) {
+                is IdentityProvisioning.Result.Activated -> {
+                    val userId = com.tharmesh.account.CanonicalAccount.meshUserIdForNewAccount(auth.tokens.accountId, null)
+                    if (userId == null || !UserPrefs.activateCanonicalIdentity(
+                            this@AccountFlowActivity, auth.tokens.accountId, userId, outcome.identity.publicKeyBase64
+                        )
+                    ) {
+                        status.setText(R.string.account_error_conflict)
+                        return@launch
+                    }
+                    PendingSignupStore.clear(this@AccountFlowActivity)
+                    goHome()
+                }
+                is IdentityProvisioning.Result.RecoveryRequired -> {
+                    canonicalRecovery = true
+                    expectedRecoveryKey = outcome.canonicalKey
+                    bind(Screen.RECOVER)
+                }
+                IdentityProvisioning.Result.Retry -> {
+                    status.setText(R.string.account_provisioning_retry)
+                    button.setText(R.string.account_action_provisioning_retry)
+                    button.setOnClickListener { provisionIdentity(auth, status) }
+                }
             }
         }
     }
@@ -796,6 +835,10 @@ class AccountFlowActivity : AppCompatActivity() {
             is IdentityLifecycle.RestoreResult.Malformed -> status.setText(R.string.account_error_wrong_recovery)
             is IdentityLifecycle.RestoreResult.Restored -> {
                 val mesh = result.record.mesh ?: return
+                if (canonicalRecovery && expectedRecoveryKey != mesh.publicKeyBase64) {
+                    status.setText(R.string.account_error_conflict)
+                    return
+                }
                 val identity = CryptoIdentity.fromBase64(mesh.privateKeyBase64, mesh.publicKeyBase64) ?: return
                 if (!UserPrefs.writeIdentity(this, identity, allowReplace = false)) {
                     status.setText(R.string.account_error_conflict)

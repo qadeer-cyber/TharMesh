@@ -30,6 +30,7 @@ object UserPrefs {
     private const val KEY_AVATAR = "avatar_url"
     private const val KEY_PROVIDER = "auth_provider"
     private const val KEY_AUTHENTICATED = "authenticated"
+    private const val KEY_CANONICAL_MESH_ACCOUNT = "canonical_mesh_account"
     private const val KEY_PRIVATE_KEY = "identity_private_key_b64"
     private const val KEY_PUBLIC_KEY = "identity_public_key_b64"
     private const val KEY_FINGERPRINT = "identity_fingerprint"
@@ -131,6 +132,7 @@ object UserPrefs {
         KEY_AVATAR,
         KEY_PROVIDER,
         KEY_AUTHENTICATED,
+        KEY_CANONICAL_MESH_ACCOUNT,
         KEY_PRIVATE_KEY,
         KEY_PUBLIC_KEY,
         KEY_FINGERPRINT,
@@ -309,6 +311,9 @@ object UserPrefs {
             return false
         }
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_CANONICAL_MESH_ACCOUNT)) {
+            return existing?.publicKeyBase64 == identity.publicKeyBase64
+        }
         prefs.edit()
             .putString(KEY_PRIVATE_KEY, identity.privateKeyBase64)
             .putString(KEY_PUBLIC_KEY, identity.publicKeyBase64)
@@ -383,6 +388,9 @@ object UserPrefs {
     @Synchronized
     fun ensureIdentity(context: Context): CryptoIdentity {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_CANONICAL_MESH_ACCOUNT)) {
+            return checkNotNull(readIdentity(context)) { "Canonical identity requires recovery" }
+        }
         val priv = prefs.getString(KEY_PRIVATE_KEY, null)
         val pub = prefs.getString(KEY_PUBLIC_KEY, null)
         if (!priv.isNullOrBlank() && !pub.isNullOrBlank()) {
@@ -408,9 +416,34 @@ object UserPrefs {
         return identity
     }
 
+    fun canonicalMeshAccount(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_CANONICAL_MESH_ACCOUNT, null)
+
+    @Synchronized
+    fun activateCanonicalIdentity(context: Context, accountId: String, userId: String, publicKey: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val active = prefs.getString(KEY_CANONICAL_MESH_ACCOUNT, null)
+        if (active == accountId) return readIdentity(context)?.publicKeyBase64 == publicKey
+        if (active != null || prefs.contains(KEY_PRIVATE_KEY) || readProfile(context) != null) return false
+        val identity = com.tharmesh.account.AndroidAccountKeyBox.readMeshIdentity(context, accountId)
+        if (identity?.publicKeyBase64 != publicKey) return false
+        return prefs.edit()
+            .putString(KEY_CANONICAL_MESH_ACCOUNT, accountId)
+            .putString(KEY_USER_ID, userId)
+            .putString(KEY_USERNAME, "TharMesh user")
+            .putString(KEY_PROVIDER, PROVIDER_EMAIL)
+            .putBoolean(KEY_AUTHENTICATED, true)
+            .putBoolean(KEY_IDENTITY_HOLD, false)
+            .putBoolean(KEY_ONBOARDED, true)
+            .commit()
+    }
+
     /** Read-only — returns null if no identity has been generated yet. */
     fun readIdentity(context: Context): CryptoIdentity? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val canonical = prefs.getString(KEY_CANONICAL_MESH_ACCOUNT, null)
+        if (canonical != null) return com.tharmesh.account.AndroidAccountKeyBox.readMeshIdentity(context, canonical)
         val priv = prefs.getString(KEY_PRIVATE_KEY, null) ?: return null
         val pub = prefs.getString(KEY_PUBLIC_KEY, null) ?: return null
         return CryptoIdentity.fromBase64(priv, pub)

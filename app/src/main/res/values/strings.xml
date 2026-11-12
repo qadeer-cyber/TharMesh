@@ -734,4 +734,7 @@
     <string name="account_recovery_later">Set up recovery later</string>
     <string name="account_recovery_defer_warning">If you lose this phone before saving your recovery key and encrypted backup, your original messaging identity may be impossible to recover.</string>
     <string name="account_recovery_continue">Continue to TharMesh</string>
+    <string name="account_provisioning">Setting up your secure account…</string>
+    <string name="account_provisioning_retry">Secure setup is temporarily unavailable. Try again when connected.</string>
+    <string name="account_action_provisioning_retry">Retry secure setup</string>
 </resources>
