@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  WhatsApp-style filter chip. Colour cue is carried by the chip's text
-  colour (see color/chip_filter_text.xml); the background stays neutral
-  in both states so a row of chips reads as a single rhythmic group
-  instead of a row of saturated badges.
+  Filter chips use readable theme text and a clear selected outline.
 
-  Selected: very pale tinted fill + soft hairline.
+  Selected: neutral fill + high-contrast visible outline.
   Unselected: surface-2 fill + softer hairline.
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_activated="true">
         <shape android:shape="rectangle">
-            <solid android:color="?attr/tmNeonGreenDim" />
-            <stroke android:width="1dp" android:color="?attr/tmStrokeSoft" />
+            <solid android:color="?attr/tmBg2" />
+            <stroke android:width="2dp" android:color="?attr/tmTextPrimary" />
             <corners android:radius="100dp" />
         </shape>
     </item>

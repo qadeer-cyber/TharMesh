@@ -187,28 +187,28 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <Button
+                <androidx.appcompat.widget.AppCompatButton
                     android:id="@+id/chip_filter_all"
                     style="@style/TmChip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/chat_filter_all" />
 
-                <Button
+                <androidx.appcompat.widget.AppCompatButton
                     android:id="@+id/chip_filter_unread"
                     style="@style/TmChip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/chat_filter_unread" />
 
-                <Button
+                <androidx.appcompat.widget.AppCompatButton
                     android:id="@+id/chip_filter_nearby"
                     style="@style/TmChip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/chat_filter_nearby" />
 
-                <Button
+                <androidx.appcompat.widget.AppCompatButton
                     android:id="@+id/chip_filter_trusted"
                     style="@style/TmChip.Filter"
                     android:layout_width="wrap_content"
