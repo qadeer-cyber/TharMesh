@@ -50,3 +50,24 @@ It exercises the real Web Crypto implementation with mocked HTTP.
 Database replay, race behavior, and grants require isolated Supabase
 integration testing. Keep admission disabled until Android integration,
 legacy-client rollout controls, and device enrollment invariants are complete.
+
+## Directory write guard and local database validation
+
+Migration 003 adds restrictive device policies for admitted accounts.
+Their ordinary client credentials cannot insert, update, or delete device
+records. Historical accounts keep their existing policy behavior. Keep
+admission disabled until the trusted device enrollment path is available.
+
+Run the PostgreSQL assertions in an isolated PGlite instance with a
+minimal Auth schema. No hosted project is contacted:
+
+```bash
+npm install --prefix /tmp/tharmesh-postgres @electric-sql/pglite@0.5.16
+NODE_PATH=/tmp/tharmesh-postgres/node_modules node --test supabase/tests/identity-database.test.cjs
+node --test supabase/tests/identity-proof.test.mjs
+```
+
+The fixture uses a single database session. It does not substitute for
+multi-session concurrency, hosted Supabase JWT integration, or Android
+device validation. Existing recovery ciphertext copied elsewhere remains
+decryptable with its original secret even if the live backup is replaced.
