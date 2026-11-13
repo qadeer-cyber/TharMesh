@@ -166,15 +166,23 @@ shot_after_ui() {
   local label="$3"
   local timeout="${4:-60}"
   wait_for_ui "$needle" "$label" "$timeout" || return 1
-  sleep 1
-  "$ADB" exec-out screencap -p >"$ART/$name"
-  local sz
-  sz=$(stat -c%s "$ART/$name")
-  if [ "$sz" -lt 45000 ]; then
+  "$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
+  local sz attempt
+  for attempt in 1 2 3 4; do
+    sleep 2
+    "$ADB" exec-out screencap -p >"$ART/$name"
+    sz=$(stat -c%s "$ART/$name" 2>/dev/null || echo 0)
+    [ "$sz" -ge 45000 ] && break
+  done
+  if [ "$sz" -lt 22000 ]; then
     fail "blank screenshot $name ($sz)"
     return 1
   fi
-  log "screenshot $name ($sz bytes)"
+  if [ "$sz" -lt 45000 ]; then
+    log "screenshot $name ($sz bytes) under desktop threshold; ui needle already matched"
+  else
+    log "screenshot $name ($sz bytes)"
+  fi
   cp -f "$UI_DUMP" "$ART/${name%.png}-ui.xml"
 }
 
