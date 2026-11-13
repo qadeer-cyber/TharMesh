@@ -83,4 +83,5 @@
     <string name="status_unavailable_body">اسٹیٹس کہانیاں دستیاب نہیں۔ میش اور آفت کی حالت الرٹس ٹیب پر ہے۔</string>
     <string name="contacts_empty_hint">QR اسکین کریں یا دعوت لکھیں۔ محفوظ رابطہ قریبی فون نہیں۔</string>
     <string name="contacts_screen_hint">آپ کے محفوظ لوگ۔ قریبی فون آلات والے ٹیب پر ہیں۔</string>
+    <string name="account_otp_resend">نیا کوڈ بھیجیں</string>
 </resources>

@@ -83,4 +83,5 @@
     <string name="status_unavailable_body">اسٽيٽس ڪهاڻيون موجود نه آهن. ميش ۽ آفت جي حالت الرٽس ٽيب تي آهي.</string>
     <string name="contacts_empty_hint">QR اسڪين ڪريو يا دعوت لکو. محفوظ رابطو ويجهو فون نه آهي.</string>
     <string name="contacts_screen_hint">اوهان جا محفوظ ماڻهو. ويجهو فون ڊوائيس واري ٽيب تي آهن.</string>
+    <string name="account_otp_resend">نئون ڪوڊ موڪليو</string>
 </resources>

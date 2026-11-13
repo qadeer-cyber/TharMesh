@@ -98,6 +98,16 @@ class LayoutPreviewActivity : AppCompatActivity() {
                 visibility = View.GONE
             }
         }
+        if (name == "otp_code") {
+            findViewById<TextView>(R.id.account_secondary)?.apply {
+                visibility = View.VISIBLE
+                setText(R.string.account_otp_resend)
+            }
+            findViewById<TextView>(R.id.account_tertiary)?.apply {
+                visibility = View.VISIBLE
+                setText(R.string.account_otp_change)
+            }
+        }
     }
 
     private fun seedChat() {

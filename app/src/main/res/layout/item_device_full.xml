@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_composer"
+    android:background="@drawable/bg_panel"
     android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
     android:layout_marginBottom="@dimen/tm_space_s"

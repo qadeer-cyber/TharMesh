@@ -419,7 +419,7 @@ class AccountFlowActivity : AppCompatActivity() {
             handler.removeCallbacks(resendTick)
             handler.postDelayed(resendTick, 1000L)
         } else {
-            button.setText(if (requesting) R.string.account_otp_send else R.string.account_action_resend)
+            button.setText(if (requesting) R.string.account_otp_send else R.string.account_otp_resend)
         }
     }
 

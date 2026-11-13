@@ -727,6 +727,7 @@
     <string name="account_otp_code">Six-digit code</string>
     <string name="account_otp_verify">Verify code</string>
     <string name="account_otp_change">Use a different email</string>
+    <string name="account_otp_resend">Send a new code</string>
     <string name="account_otp_sending">Requesting code…</string>
     <string name="account_otp_checking">Verifying…</string>
     <string name="account_otp_invalid">Enter the six-digit code from your email.</string>
