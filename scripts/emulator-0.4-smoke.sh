@@ -22,7 +22,7 @@ if ! "$ADB" devices | grep -q emulator; then
   done
 fi
 
-APK="$ROOT/app/build/outputs/apk/debug/app-debug.apk"
+APK="$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
 if [ ! -f "$APK" ]; then
   (cd "$ROOT" && ./gradlew assembleDebug -q)
 fi
@@ -41,6 +41,8 @@ capture devices OCEAN false devices-ocean-light.png
 capture devices ROSE true devices-rose-dark.png
 capture rotate_recovery OCEAN false recovery-ocean-light.png
 capture rotate_recovery ROSE true recovery-rose-dark.png
+capture rotation_auth OCEAN false rotation-auth-ocean-light.png
+capture rotation_auth ROSE true rotation-auth-rose-dark.png
 
 # Offline relaunch: seed identity prefs via app process (debug-only helper activity).
 "$ADB" shell am force-stop "$PKG"

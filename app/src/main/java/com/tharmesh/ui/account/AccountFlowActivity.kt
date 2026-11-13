@@ -39,6 +39,7 @@ import com.tharmesh.account.CloudSessionStore
 import com.tharmesh.account.DeviceDirectory
 import com.tharmesh.account.DeviceEnrollment
 import com.tharmesh.account.ServerFreshAuth
+import com.tharmesh.account.TrustedRecoveryRotate
 import com.tharmesh.account.RecoveryRotationStage
 import com.tharmesh.account.EnrollmentReplayGuard
 import com.tharmesh.account.EnrollmentQr
@@ -99,6 +100,8 @@ class AccountFlowActivity : AppCompatActivity() {
     private var legacyReconcileMessage: LegacyReconciliation.Decision =
         LegacyReconciliation.Decision.REQUIRES_RECOVERY_OR_ENROLLMENT
     private var cloudDevices: List<DeviceDirectory.DeviceRow> = emptyList()
+    /** null = loading, true = server list confirmed, false = fetch failed. */
+    private var cloudDevicesConfirmed: Boolean? = null
     private var localDeviceId: String? = null
     private var resendBlockedUntilMs: Long = 0L
     private val handler = Handler(Looper.getMainLooper())
@@ -779,15 +782,20 @@ class AccountFlowActivity : AppCompatActivity() {
                     canonicalRecovery = true
                     expectedRecoveryKey = outcome.canonicalKey
                     val local = UserPrefs.readIdentity(this@AccountFlowActivity)
+                    val accessTok = CloudSessionStore.readAccessToken(this@AccountFlowActivity)
                     val evidence = withContext(Dispatchers.IO) {
-                        val access = CloudSessionStore.readAccessToken(this@AccountFlowActivity)
-                        if (access.isNullOrBlank()) null
+                        if (accessTok.isNullOrBlank()) null
                         else DeviceDirectory.fetchEvidence(
                             http,
                             BuildConfig.SUPABASE_URL,
                             BuildConfig.SUPABASE_ANON_KEY,
-                            access
+                            accessTok
                         )
+                    }
+                    if (!accessTok.isNullOrBlank() && evidence == null) {
+                        legacyReconcileMessage = LegacyReconciliation.Decision.CONFLICT
+                        bind(Screen.LEGACY_RECONCILE)
+                        return@launch
                     }
                     val serverState = evidence?.identityState
                         ?: if (outcome.canonicalKey == null) "legacy_unknown" else "recovery_required"
@@ -1071,18 +1079,42 @@ class AccountFlowActivity : AppCompatActivity() {
             status.setText(R.string.account_saved_local_only)
             return
         }
+        val staged = RecoveryRotationStage.read(this)
+        val expectedGen = staged?.expectedGeneration
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                SupabaseDirectory.putRecovery(
-                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY,
-                    access, accountId, sealed
+            val generation = expectedGen ?: withContext(Dispatchers.IO) {
+                TrustedRecoveryRotate.fetchGeneration(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access
+                )
+            } ?: 0
+            val fresh = withContext(Dispatchers.IO) {
+                ServerFreshAuth.isFreshOnServer(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access
                 )
             }
-            if (result is AuthCall.Ok) {
-                RecoveryRotationStage.clear(this@AccountFlowActivity)
-                status.setText(R.string.account_uploaded)
-            } else {
-                status.setText(R.string.account_rotate_upload_pending)
+            if (!fresh) {
+                status.setText(
+                    if (staged != null) R.string.account_reauth_required
+                    else R.string.account_reauth_required_upload
+                )
+                return@launch
+            }
+            val result = withContext(Dispatchers.IO) {
+                TrustedRecoveryRotate.upload(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY,
+                    access, sealed, generation
+                )
+            }
+            when (result) {
+                is AuthCall.Ok -> {
+                    RecoveryRotationStage.clear(this@AccountFlowActivity)
+                    status.setText(R.string.account_uploaded)
+                }
+                is AuthCall.Failed -> when (result.reason) {
+                    "generation_conflict" -> status.setText(R.string.account_rotate_upload_conflict)
+                    "fresh_auth_required" -> status.setText(R.string.account_reauth_required_upload)
+                    else -> status.setText(R.string.account_rotate_upload_pending)
+                }
             }
         }
     }
@@ -1206,6 +1238,7 @@ class AccountFlowActivity : AppCompatActivity() {
         val prefix = if (finger.isNullOrBlank()) getString(R.string.account_devices_body)
         else getString(R.string.account_devices_body) + "\n\n" + getString(R.string.account_devices_current, finger)
         if (access.isNullOrBlank() || !AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)) {
+            cloudDevicesConfirmed = null
             body.text = prefix + "\n\n" + getString(R.string.account_devices_list_offline)
             return
         }
@@ -1214,6 +1247,8 @@ class AccountFlowActivity : AppCompatActivity() {
         secondary.visibility = View.VISIBLE
         secondary.setText(R.string.account_action_revoke)
         secondary.setOnClickListener { revokeCloudDevice(f2, status) }
+        cloudDevicesConfirmed = null
+        body.text = prefix + "\n\n" + getString(R.string.account_devices_list_loading)
         val selfPub = AndroidDeviceKey.loadOrCreate()?.publicKeyBase64
         lifecycleScope.launch {
             val rows = withContext(Dispatchers.IO) {
@@ -1221,12 +1256,19 @@ class AccountFlowActivity : AppCompatActivity() {
                     http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, selfPub
                 )
             }
-            cloudDevices = rows ?: emptyList()
+            if (rows == null) {
+                cloudDevicesConfirmed = false
+                cloudDevices = emptyList()
+                body.text = prefix + "\n\n" + getString(R.string.account_devices_list_unconfirmed)
+                return@launch
+            }
+            cloudDevicesConfirmed = true
+            cloudDevices = rows
             localDeviceId = UserPrefs.readIdentity(this@AccountFlowActivity)?.fingerprint?.take(16)
             val listing = if (cloudDevices.isEmpty()) getString(R.string.account_devices_list_empty)
             else cloudDevices.joinToString("\n") { row ->
                 val mark = if (row.revoked) getString(R.string.account_devices_status_revoked)
-                else getString(R.string.account_devices_status_active)
+                else getString(R.string.account_devices_status_linked)
                 val current = if (row.isCurrent) " " + getString(R.string.account_devices_label_current) else ""
                 "• ${row.deviceId} — $mark$current"
             }
@@ -1245,13 +1287,29 @@ class AccountFlowActivity : AppCompatActivity() {
             return
         }
         lifecycleScope.launch {
+            val fresh = withContext(Dispatchers.IO) {
+                ServerFreshAuth.isFreshOnServer(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access
+                )
+            }
+            if (!fresh) {
+                status.setText(R.string.account_reauth_required_revoke)
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
                 DeviceDirectory.revoke(
                     http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, id
                 )
             }
             status.setText(
-                if (result is AuthCall.Ok) R.string.account_devices_revoked else R.string.account_error_revoke_device
+                when (result) {
+                    is AuthCall.Ok -> R.string.account_devices_revoked
+                    is AuthCall.Failed -> when (result.reason) {
+                        "http_401", "fresh_auth_required" -> R.string.account_reauth_required_revoke
+                        else -> R.string.account_error_revoke_device
+                    }
+                    else -> R.string.account_error_revoke_device
+                }
             )
             refreshCloudDevices(status)
         }
@@ -1293,11 +1351,20 @@ class AccountFlowActivity : AppCompatActivity() {
             return
         }
         lifecycleScope.launch {
+            val expectedGen = withContext(Dispatchers.IO) {
+                CloudSessionStore.readAccessToken(this@AccountFlowActivity)?.let { tok ->
+                    TrustedRecoveryRotate.fetchGeneration(
+                        http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, tok
+                    )
+                }
+            } ?: 0
             val outcome = withContext(Dispatchers.Default) {
                 RecoveryRotation.rotate(mesh.privateKeyBase64, mesh.publicKeyBase64, random)
             }
             pendingPhrase = outcome.phrase
-            RecoveryRotationStage.save(this@AccountFlowActivity, outcome.phrase, outcome.sealed, accountId)
+            RecoveryRotationStage.save(
+                this@AccountFlowActivity, outcome.phrase, outcome.sealed, accountId, expectedGen
+            )
             pendingRecord = InstallRecord(
                 accountId = accountId,
                 mesh = MeshMaterial.from(

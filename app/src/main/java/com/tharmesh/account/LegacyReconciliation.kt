@@ -36,6 +36,7 @@ object LegacyReconciliation {
     }
 
     fun decide(evidence: Evidence): Decision {
+        if (evidence.serverState == "evidence_unavailable") return Decision.CONFLICT
         if (evidence.explicitResetCommitted) return Decision.RESET_PRECLUDES_LEGACY_RESTORE
         val localPub = evidence.localMesh?.publicKeyBase64
         val canonical = evidence.canonicalMeshPublicKey?.takeIf { it.isNotBlank() }

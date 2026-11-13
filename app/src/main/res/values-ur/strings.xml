@@ -103,5 +103,13 @@
     <string name="account_rotate_recovery_body">نیا بحالی جملہ ملے گا اور نئی مہر والا بیک اپ اپ لوڈ ہوگا۔ پرانے بیک اپ پرانے جملے سے کھل سکتے ہیں۔</string>
     <string name="account_devices_lost_hint">فون کھو گیا ہو تو یہاں منسوخ کریں اور نئی انسٹال پر بحالی کلید استعمال کریں۔ منسوخی دوسرے فون کا ڈیٹا نہیں مٹاتی۔</string>
     <string name="account_reauth_required">بحالی کی کلید بدلنے سے پہلے دوبارہ سائن ان کریں۔</string>
+    <string name="account_reauth_required_upload">بحالی بیک اپ اپ لوڈ سے پہلے دوبارہ سائن ان کریں۔</string>
+    <string name="account_reauth_required_revoke">آلہ منسوخ کرنے سے پہلے دوبارہ سائن ان کریں۔</string>
+    <string name="account_rotation_auth_title">حالیہ سائن ان ضروری</string>
+    <string name="account_rotation_auth_body">کلید کی تبدیلی اور منسوخی کے لیے حالیہ سائن ان (تقریباً ۱۵ منٹ) چاہیے۔ دوبارہ سائن ان کر کے کوشش کریں۔</string>
+    <string name="account_devices_status_linked">منسلک (سرور تصدیق شدہ)</string>
+    <string name="account_devices_list_loading">سرور سے آلوں کی فہرست لوڈ ہو رہی ہے…</string>
+    <string name="account_devices_list_unconfirmed">آلات کی فہرست تصدیق نہیں ہو سکی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔</string>
+    <string name="account_rotate_upload_conflict">سرور بیک اپ بدل چکا ہے۔ اسٹیج شدہ کلید رد کریں یا دوبارہ اپ لوڈ کریں۔</string>
     <string name="account_action_revoke">آلہ منسوخ کریں</string>
 </resources>

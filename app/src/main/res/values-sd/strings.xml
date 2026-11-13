@@ -103,5 +103,13 @@
     <string name="account_rotate_recovery_body">نئون بحالي جملو ملندو ۽ نئون مهر ٿيل بيڪ اپ اپلوڊ ٿيندو. پراڻا بيڪ اپ پراڻي چاٻي سان کلي سگهن ٿا.</string>
     <string name="account_devices_lost_hint">فون وڃي ويو هجي ته هتي منسوخ ڪريو ۽ نئي انسٽال تي بحالي واري چاٻي استعمال ڪريو. منسوخي ٻئي فون جو ڊيٽا نه مٽائي.</string>
     <string name="account_reauth_required">بحالي جي چاٻي مٽائڻ کان اڳ ٻيهر سائن ان ڪريو.</string>
+    <string name="account_reauth_required_upload">بحالي بيڪ اپ اپلوڊ کان اڳ ٻيهر سائن ان ڪريو.</string>
+    <string name="account_reauth_required_revoke">ڊوائيس منسوخ ڪرڻ کان اڳ ٻيهر سائن ان ڪريو.</string>
+    <string name="account_rotation_auth_title">تازو سائن ان گھرجي</string>
+    <string name="account_rotation_auth_body">مٽاسٽا ۽ منسوخي لاءِ تازو سائن ان (تقريباً ۱۵ منٽ) گھرجي. ٻيهر سائن ان ڪري ڇاڙي ڪوشش ڪريو.</string>
+    <string name="account_devices_status_linked">ڳنڍيل (سرور تصديق ٿيل)</string>
+    <string name="account_devices_list_loading">سرور کان ڊوائيسن جي فهرست لوڊ ٿي رهي آهي…</string>
+    <string name="account_devices_list_unconfirmed">ڊوائيس فهرست جي تصديق نٿي ٿي سگهي. ڪنيڪشن چيڪ ڪري ٻيهر ڪوشش ڪريو.</string>
+    <string name="account_rotate_upload_conflict">سرور بيڪ اپ مٽجي چڪو آهي. اسٽيج ٿيل چاٻي رد ڪريو يا ٻيهر اپلوڊ ڪريو.</string>
     <string name="account_action_revoke">ڊوائيس منسوخ ڪريو</string>
 </resources>

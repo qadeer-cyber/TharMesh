@@ -70,6 +70,7 @@ class LayoutPreviewActivity : AppCompatActivity() {
             "otp", "otp_code" -> seedOtp(name)
             "devices" -> seedAccountDevices()
             "rotate_recovery" -> seedRotateRecovery()
+            "rotation_auth" -> seedRotationAuth()
         }
     }
 
@@ -88,6 +89,12 @@ class LayoutPreviewActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.account_title)?.setText(R.string.account_rotate_recovery_title)
         findViewById<TextView>(R.id.account_body)?.setText(R.string.account_rotate_recovery_body)
         findViewById<TextView>(R.id.account_primary)?.setText(R.string.account_rotate_recovery_action)
+    }
+
+    private fun seedRotationAuth() {
+        findViewById<TextView>(R.id.account_title)?.setText(R.string.account_rotation_auth_title)
+        findViewById<TextView>(R.id.account_body)?.setText(R.string.account_rotation_auth_body)
+        findViewById<TextView>(R.id.account_primary)?.setText(R.string.account_action_sign_in)
     }
 
     private fun seedOtp(name: String?) {
@@ -237,6 +244,7 @@ class LayoutPreviewActivity : AppCompatActivity() {
             "otp_code" to R.layout.activity_account_flow,
             "devices" to R.layout.activity_account_flow,
             "rotate_recovery" to R.layout.activity_account_flow,
+            "rotation_auth" to R.layout.activity_account_flow,
             "scanner" to R.layout.activity_scan_qr,
             "qr" to R.layout.activity_my_qr,
             "terms" to R.layout.activity_terms_gate,

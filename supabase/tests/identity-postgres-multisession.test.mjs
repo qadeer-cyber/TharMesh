@@ -88,6 +88,16 @@ function ensureDb() {
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'postgres-apply failed');
 }
 
+async function recordFreshAuth(client, userId) {
+  const ts = Math.floor(Date.now() / 1000);
+  await client.query('set role service_role');
+  await client.query('select public.tharmesh_auth_fresh_record_svc($1::uuid,$2::bigint,$3::bigint)', [
+    userId,
+    ts,
+    ts,
+  ]);
+}
+
 async function activateUser(client, userId, meshKey = KEY122) {
   await client.query('reset role');
   const nonce = (
@@ -279,13 +289,114 @@ test('local Postgres multi-session suite', async (t) => {
   });
 
   await t.test('revocation and authenticated device list', async () => {
+    await recordFreshAuth(admin, userA);
+    await withJwt(
+      admin,
+      userA,
+      'authenticated',
+      async () => {
+        const list = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
+        assert.ok(list.length >= 2);
+        const revokeId = list.find((r) => r.device_id !== 'trusted-1')?.device_id;
+        assert.ok(revokeId);
+        await admin.query('select public.tharmesh_device_revoke($1)', [revokeId]);
+        const after = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
+        assert.ok(after.find((r) => r.device_id === revokeId)?.revoked_at);
+      },
+      { commit: true }
+    );
+    stats.passed++;
+  });
+
+  await t.test('revoke without fresh auth denied', async () => {
+    await admin.query('delete from tharmesh_private.auth_freshness where account_id = $1', [userA]);
     await withJwt(admin, userA, 'authenticated', async () => {
-      const list = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
-      assert.ok(list.length >= 1);
-      const revokeId = list.find((r) => r.device_id !== 'trusted-1')?.device_id ?? 'trusted-1';
-      await admin.query('select public.tharmesh_device_revoke($1)', [revokeId]);
-      const after = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
-      assert.ok(after.find((r) => r.device_id === revokeId)?.revoked_at);
+      await assert.rejects(
+        () => admin.query('select public.tharmesh_device_revoke($1)', ['trusted-1']),
+        (e) => e.message?.includes('Fresh auth') || e.code === '42501'
+      );
+    });
+    stats.passed++;
+  });
+
+  await t.test('last active device revoke denied', async () => {
+    await recordFreshAuth(admin, userA);
+    await withJwt(admin, userA, 'authenticated', async () => {
+      const active = (
+        await admin.query(
+          'select count(*)::int as c from public.devices d where d.account_id = $1 and d.revoked_at is null',
+          [userA]
+        )
+      ).rows[0].c;
+      assert.equal(active, 1);
+      await assert.rejects(
+        () => admin.query('select public.tharmesh_device_revoke($1)', ['trusted-1']),
+        (e) => e.message?.includes('Last active') || e.code === '42501'
+      );
+    });
+    stats.passed++;
+  });
+
+  await t.test('cross-account revoke denied', async () => {
+    await recordFreshAuth(admin, userB);
+    await withJwt(admin, userB, 'authenticated', async () => {
+      await assert.rejects(
+        () => admin.query('select public.tharmesh_device_revoke($1)', ['trusted-1']),
+        (e) => e.code === '42501'
+      );
+    });
+    stats.passed++;
+  });
+
+  await t.test('recovery generation compare-and-swap', async () => {
+    await admin.query('reset role');
+    await admin.query('set role service_role');
+    const gen0 = (
+      await admin.query('select public.tharmesh_recovery_put_svc($1::uuid,$2,$3,$4,$5,$6,$7,$8,$9) as g', [
+        userA,
+        0,
+        'scrypt',
+        16384,
+        8,
+        1,
+        'c2FsdA==',
+        'aXY=',
+        'Y2lwaGVy',
+      ])
+    ).rows[0].g;
+    assert.equal(gen0, 1);
+    const gen1 = (
+      await admin.query('select public.tharmesh_recovery_put_svc($1::uuid,$2,$3,$4,$5,$6,$7,$8,$9) as g', [
+        userA,
+        1,
+        'scrypt',
+        16384,
+        8,
+        1,
+        'c2FsdDI=',
+        'aXYy',
+        'Y2lwaGVyMg==',
+      ])
+    ).rows[0].g;
+    assert.equal(gen1, 2);
+    await assert.rejects(
+      () =>
+        admin.query('select public.tharmesh_recovery_put_svc($1::uuid,$2,$3,$4,$5,$6,$7,$8,$9)', [
+          userA,
+          1,
+          'scrypt',
+          16384,
+          8,
+          1,
+          'c3RhbGU=',
+          'aXYz',
+          'Y2lwaGVyMw==',
+        ]),
+      (e) => e.code === '23505'
+    );
+    await withJwt(admin, userA, 'authenticated', async () => {
+      const g = (await admin.query('select public.tharmesh_recovery_generation() as g')).rows[0].g;
+      assert.equal(g, 2);
     });
     stats.passed++;
   });
@@ -395,6 +506,16 @@ test('local Postgres multi-session suite', async (t) => {
       () => admin.query('select public.tharmesh_enrollment_finish_svc($1::uuid,$2,$3)', [userA, nonce, 'cert:conc']),
       (e) => e.code === '42501'
     );
+    stats.passed++;
+  });
+
+  await t.test('migration idempotency re-apply 008', async () => {
+    await admin.query('reset role');
+    const mig = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120008_recovery_cas_revoke_fresh.sql'),
+      'utf8'
+    );
+    await admin.query(mig);
     stats.passed++;
   });
 

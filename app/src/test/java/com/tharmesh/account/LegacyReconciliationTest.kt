@@ -57,6 +57,21 @@ class LegacyReconciliationTest {
     }
 
     @Test
+    fun evidenceUnavailable_conflict() {
+        val d = LegacyReconciliation.decide(
+            LegacyReconciliation.Evidence(
+                serverState = "evidence_unavailable",
+                canonicalMeshPublicKey = null,
+                localMesh = null,
+                explicitResetCommitted = false,
+                cloudDeviceRows = 0,
+                cloudRecoveryBlob = false
+            )
+        )
+        assertEquals(LegacyReconciliation.Decision.CONFLICT, d)
+    }
+
+    @Test
     fun activeKeyMismatch_conflict() {
         val mesh = CryptoIdentity.generate()
         val d = LegacyReconciliation.decide(

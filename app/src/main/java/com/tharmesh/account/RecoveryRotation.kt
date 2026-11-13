@@ -22,6 +22,10 @@ object RecoveryRotation {
     fun rotate(meshPrivateKeyBase64: String, meshPublicKeyBase64: String, random: SecureRandom = SecureRandom()): Outcome {
         val phrase = IdentityRecovery.generatePhrase(random)
         val sealed = IdentityRecovery.seal(meshPrivateKeyBase64, phrase, random)
+        val opened = IdentityRecovery.open(sealed, phrase)
+        if (opened != meshPrivateKeyBase64) {
+            throw IllegalStateException("recovery_seal_mismatch")
+        }
         return Outcome(phrase, sealed, meshPublicKeyBase64)
     }
 

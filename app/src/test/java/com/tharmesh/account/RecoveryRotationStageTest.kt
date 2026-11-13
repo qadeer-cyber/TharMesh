@@ -21,7 +21,7 @@ class RecoveryRotationStageTest {
             .put("iv_b64", sealed.ivB64)
             .put("ciphertext_b64", sealed.ciphertextB64)
             .toString()
-        val staged = RecoveryRotationStage.Staged("phrase", json, "acct", 1L)
+        val staged = RecoveryRotationStage.Staged("phrase", json, "acct", 1L, 2)
         val parsed = RecoveryRotationStage.sealedFromStaged(staged)
         assertNotNull(parsed)
         assertEquals(sealed.ciphertextB64, parsed!!.ciphertextB64)
