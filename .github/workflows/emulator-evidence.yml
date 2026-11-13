@@ -42,7 +42,9 @@ jobs:
           echo 'SUBSYSTEM=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-          ls -l /dev/kvm || true
+          sudo chmod 666 /dev/kvm
+          ls -l /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
 
       - name: Set up JDK 17 (for sdkmanager only)
         uses: actions/setup-java@v4
@@ -57,8 +59,6 @@ jobs:
             platform-tools
             platforms;android-${{ env.ANDROID_COMPILE_SDK }}
             build-tools;${{ env.ANDROID_BUILD_TOOLS }}
-            emulator
-            system-images;android-30;google_apis;x86_64
 
       - name: Set up JDK 11 (for Gradle + AGP)
         uses: actions/setup-java@v4
@@ -74,6 +74,12 @@ jobs:
 
       - name: Build historical Room v6 debug APK (9fedae9)
         run: bash scripts/build-historical-debug-apk.sh "$LEGACY_SOURCE_COMMIT"
+
+      - name: Set up JDK 17 for emulator runner sdkmanager
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
       - name: Record emulator API model metadata
         run: |
@@ -93,6 +99,7 @@ jobs:
           arch: x86_64
           target: google_apis
           force-avd-creation: true
+          disable-linux-hw-accel: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
