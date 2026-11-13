@@ -12,6 +12,7 @@ on:
       - "scripts/debug-keystore-upgrade-*"
       - "scripts/build-historical-debug-apk.sh"
       - ".github/workflows/emulator-evidence.yml"
+      - ".github/scripts/run-cat6-emulator-evidence.sh"
 
 permissions:
   contents: read
@@ -75,6 +76,14 @@ jobs:
       - name: Build historical Room v6 debug APK (9fedae9)
         run: bash scripts/build-historical-debug-apk.sh "$LEGACY_SOURCE_COMMIT"
 
+      - name: Stage Room v6 APK into workspace evidence dir
+        run: |
+          mkdir -p ci-evidence
+          V6_SRC="$HISTORICAL_WORKTREE/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
+          test -f "$V6_SRC"
+          cp -f "$V6_SRC" ci-evidence/v6-room6-debug.apk
+          sha256sum ci-evidence/v6-room6-debug.apk
+
       - name: Set up JDK 17 for emulator runner sdkmanager
         uses: actions/setup-java@v4
         with:
@@ -102,17 +111,7 @@ jobs:
           disable-linux-hw-accel: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: |
-            set -euo pipefail
-            export ANDROID_HOME="${ANDROID_SDK_ROOT}"
-            export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
-            export THARMESH_EVIDENCE_DIR="${{ env.THARMESH_EVIDENCE_DIR }}"
-            export LEGACY_SOURCE_COMMIT="${{ env.LEGACY_SOURCE_COMMIT }}"
-            export SKIP_HEAD_ASSEMBLE=1
-            V6_APK="/tmp/wt-room-v6/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
-            test -f "$V6_APK"
-            bash scripts/debug-keystore-upgrade-evidence.sh "$V6_APK"
-            bash scripts/emulator-0.7-evidence-3pass.sh
+          script: bash .github/scripts/run-cat6-emulator-evidence.sh
 
       - name: Summarize gate results
         if: always()
