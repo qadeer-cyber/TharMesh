@@ -17,22 +17,23 @@ class OfflineRoomPersistenceSeedTest {
 
     @Test
     fun seedPayload_matchesEmulatorSmoke() {
-        val peerId = "peer-evidence-01"
         val now = 1_700_000_000_000L
-        val contact = ContactEntity(peerId, "Evidence Peer", "PUB", now, now)
-        val peer = PeerIdentityEntity(peerId, "PUB", "fp", now, true, now)
+        val contactA = ContactEntity("peer-evidence-01", "Evidence Peer A", "PUBA", now, now)
+        val contactB = ContactEntity("peer-evidence-02", "Evidence Peer B", "PUBB", now, now)
+        val peer = PeerIdentityEntity("peer-evidence-01", "PUBA", "fp", now, true, now)
         val msg = MessageEntity(
             fromUserId = "offline-room-user",
-            toUserId = peerId,
-            peerUserId = peerId,
-            body = "OFFLINE_PERSISTENCE_SEED",
+            toUserId = "peer-evidence-01",
+            peerUserId = "peer-evidence-01",
+            body = "OFFLINE_PERSISTENCE_SEED_A1",
             status = MessageStatus.DELIVERED,
             timestamp = now,
-            bundleId = "bundle-evidence-seed"
+            bundleId = "bundle-evidence-a1"
         )
-        assertEquals("OFFLINE_PERSISTENCE_SEED", msg.body)
+        assertEquals("OFFLINE_PERSISTENCE_SEED_A1", msg.body)
         assertEquals(MessageStatus.DELIVERED, msg.status)
         assertEquals(true, peer.verified)
-        assertEquals(peerId, contact.userId)
+        assertEquals("Evidence Peer A", contactA.displayName)
+        assertEquals("Evidence Peer B", contactB.displayName)
     }
 }

@@ -68,10 +68,17 @@ class LayoutPreviewActivity : AppCompatActivity() {
             "status" -> seedHealth()
             "contact" -> seedContact()
             "otp", "otp_code" -> seedOtp(name)
+            "account" -> seedAccountCreate()
             "devices" -> seedAccountDevices()
             "rotate_recovery" -> seedRotateRecovery()
             "rotation_auth" -> seedRotationAuth()
         }
+    }
+
+    private fun seedAccountCreate() {
+        findViewById<TextView>(R.id.account_title)?.setText(R.string.account_create_title)
+        findViewById<TextView>(R.id.account_body)?.setText(R.string.account_create_body)
+        findViewById<TextView>(R.id.account_primary)?.setText(R.string.account_action_create)
     }
 
     private fun seedAccountDevices() {
