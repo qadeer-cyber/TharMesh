@@ -7,7 +7,7 @@
 | Cloud run | [bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9](https://cursor.com/agents/bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9) |
 | `originalModelName` | **composer-2.5** |
 | Branch | `cursor/universal-account-0939` |
-| Report commit | *(post-supervisor follow-up push after `db91149`)* |
+| Report commit | `1643d72` (supervisor gate follow-up after accepted `db91149`) |
 | Supervisor accepted | **`db91149`** partial — CI [43426038834](https://github.com/qadeer-cyber/TharMesh/actions/runs/43426038834) (`fa3f8f1`); enrollment Cat 2 + staging doc; debug **cert** match; gates **1–2** not accepted |
 
 ## B — PR / CI / artifacts
