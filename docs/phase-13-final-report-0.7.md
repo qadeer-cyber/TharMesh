@@ -7,7 +7,7 @@
 | Cloud run | [bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9](https://cursor.com/agents/bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9) |
 | `originalModelName` | **composer-2.5** |
 | Branch | `cursor/universal-account-0939` |
-| Report commit | *(post–supervisor path push after `c7af23e`)* |
+| Report commit | `c288b0b` (historical Room v6 rebuild + legacy upgrade script; device gates still open) |
 | Supervisor | Accepted honest **NOT EXECUTED** on `c7af23e`; **Engineering ready = NO** until device gates close |
 
 ## B — PR / CI / artifacts
