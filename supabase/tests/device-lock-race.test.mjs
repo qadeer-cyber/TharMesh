@@ -8,10 +8,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { issueGrant, revokeWithChallenge } from './pg-test-helpers.mjs';
+import { createTestPool, issueGrant, releaseClient, revokeWithChallenge } from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest_device_lock';
 const KEY122 = 'A'.repeat(122);
 const userA = 'f1000000-0000-4000-8000-0000000000aa';
@@ -43,12 +42,7 @@ function keyMaterial() {
 
 test('revoke races enrollment_finish under account lock', async () => {
   ensureDb();
-  const pool = new Pool({
-    database: DB,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB });
   const trusted = keyMaterial();
   const admin = await pool.connect();
   try {
@@ -119,7 +113,7 @@ test('revoke races enrollment_finish under account lock', async () => {
     ).rows;
     assert.equal(devices.length, 2);
   } finally {
-    admin.release();
+    await releaseClient(admin);
     await pool.end();
   }
 });

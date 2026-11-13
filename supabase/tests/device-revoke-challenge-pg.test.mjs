@@ -12,10 +12,11 @@ import {
   issueRevokeChallenge,
   revokeViaSvc,
   revokeWithChallenge,
+  createTestPool,
+  releaseClient,
 } from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest_revoke_ch';
 const userA = 'f1000000-0000-4000-8000-0000000000a1';
 const userB = 'f1000000-0000-4000-8000-0000000000b2';
@@ -32,12 +33,7 @@ function ensureDb() {
 
 test('revoke challenge replay and expiry preserve grants and devices', async () => {
   ensureDb();
-  const pool = new Pool({
-    database: DB,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB });
   const admin = await pool.connect();
   try {
     await admin.query('reset role');
@@ -121,12 +117,7 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
 
 test('wrong challenge target not revocable via mismatched issue', async () => {
   ensureDb();
-  const pool = new Pool({
-    database: DB,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB });
   const admin = await pool.connect();
   try {
     await admin.query('reset role');

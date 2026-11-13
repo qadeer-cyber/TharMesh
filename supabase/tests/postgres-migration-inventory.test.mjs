@@ -7,11 +7,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 import { test } from 'node:test';
-
-const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
+import { createTestPool } from './pg-test-helpers.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const migDir = join(root, 'migrations');
@@ -34,12 +31,7 @@ function run(cmd, env = {}) {
 
 async function countMigrations(db) {
   const { user, password, host } = pgCreds();
-  const pool = new Pool({
-    database: db,
-    user,
-    password,
-    host,
-  });
+  const pool = createTestPool({ database: db, user, password, host });
   const client = await pool.connect();
   try {
     const rows = (await client.query('select version from tharmesh_private.schema_migrations order by version')).rows;

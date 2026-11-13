@@ -7,11 +7,7 @@ import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { createRequire } from 'node:module';
-import { blobFields, issueGrant, withServiceSession, withSession } from './pg-test-helpers.mjs';
-
-const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
+import { blobFields, createTestPool, issueGrant, withServiceSession, withSession } from './pg-test-helpers.mjs';
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest_atomic_recovery';
 const userA = 'f1000000-0000-4000-8000-0000000000a1';
 const SID = 'sess-recovery-a1';
@@ -69,12 +65,7 @@ async function commitRotate(client, account, grantId, sessionId, fields) {
 
 test('recovery grant atomic and idempotent', async () => {
   ensureDb();
-  const pool = new Pool({
-    database: DB,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB });
   const admin = await pool.connect();
   try {
     await admin.query('reset role');
@@ -171,12 +162,7 @@ test('recovery grant atomic and idempotent', async () => {
     const gB = await issueGrant(admin, userA, 'recovery_rotate', SID);
     const fields0 = { ...blobFields(userA, 0, 'race-cipher-a'), requestId: 'req-race-a-0001' };
     const fieldsB = { ...blobFields(userA, 0, 'race-cipher-b'), requestId: 'req-race-b-0001' };
-    const pool2 = new Pool({
-      database: DB,
-      user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-      password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-      host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-    });
+    const pool2 = createTestPool({ database: DB });
     const attempt = async (grantId, fields) => {
       const c = await pool2.connect();
       try {

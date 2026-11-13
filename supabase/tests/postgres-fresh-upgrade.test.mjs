@@ -8,11 +8,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 import { test } from 'node:test';
-
-const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
+import { createTestPool } from './pg-test-helpers.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const migDir = join(root, 'migrations');
@@ -66,7 +63,7 @@ test('postgres fresh + upgrade + idempotency policy', async () => {
   const upgradeDb = process.env.THARMESH_PG_UPGRADE_DB ?? 'tharmesh_pgtest_upgrade';
 
   dropCreate(freshDb);
-  const freshPool = new Pool(poolConfig(freshDb));
+  const freshPool = createTestPool(poolConfig(freshDb));
   const fresh = await freshPool.connect();
   try {
     const dev = await fresh.query('select count(*)::int as n from public.devices');
@@ -82,7 +79,7 @@ test('postgres fresh + upgrade + idempotency policy', async () => {
     await freshPool.end();
   }
 
-  const pool = new Pool(poolConfig('postgres'));
+  const pool = createTestPool(poolConfig('postgres'));
   const admin = await pool.connect();
   try {
     await admin.query(`DROP DATABASE IF EXISTS ${upgradeDb}`);
@@ -91,7 +88,7 @@ test('postgres fresh + upgrade + idempotency policy', async () => {
     admin.release();
   }
 
-  const upPool = new Pool(poolConfig(upgradeDb));
+  const upPool = createTestPool(poolConfig(upgradeDb));
   const up = await upPool.connect();
   try {
     try {

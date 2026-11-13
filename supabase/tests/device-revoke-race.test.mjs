@@ -7,10 +7,16 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { issueGrant, issueRevokeChallenge, revokeViaSvc, revokeWithChallenge } from './pg-test-helpers.mjs';
+import {
+  createTestPool,
+  issueGrant,
+  issueRevokeChallenge,
+  releaseClient,
+  revokeViaSvc,
+  revokeWithChallenge,
+} from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest_race';
 const KEY122 = 'A'.repeat(122);
 const userA = 'f1000000-0000-4000-8000-0000000000a1';
@@ -73,13 +79,13 @@ async function seedDevices(pool, count) {
     }
     return ids;
   } finally {
-    admin.release();
+    await releaseClient(admin);
   }
 }
 
 test('two devices, two simultaneous revokes: exactly one succeeds', async () => {
   ensureDb();
-  const pool = new Pool({
+  const pool = createTestPool({
     database: DB,
     user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
     password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
@@ -91,7 +97,7 @@ test('two devices, two simultaneous revokes: exactly one succeeds', async () => 
   const admin = await pool.connect();
   const g1 = await issueGrant(admin, userA, 'device_revoke', sid1);
   const g2 = await issueGrant(admin, userA, 'device_revoke', sid2);
-  admin.release();
+  await releaseClient(admin);
   const [r1, r2] = await Promise.all([
     revokeWithGrant(pool, ids[0], ids[1], g1, sid1),
     revokeWithGrant(pool, ids[1], ids[0], g2, sid2),
@@ -104,7 +110,7 @@ test('two devices, two simultaneous revokes: exactly one succeeds', async () => 
 
 test('three devices, three simultaneous revokes: two succeed', async () => {
   ensureDb();
-  const pool = new Pool({
+  const pool = createTestPool({
     database: DB,
     user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
     password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
@@ -115,7 +121,7 @@ test('three devices, three simultaneous revokes: two succeed', async () => {
   const grants = await Promise.all(
     ids.map((_, i) => issueGrant(admin, userA, 'device_revoke', `sess-race-3-${i}`))
   );
-  admin.release();
+  await releaseClient(admin);
   const results = await Promise.all(
     ids.map((id, i) => {
       const other = ids[(i + 1) % ids.length];
@@ -130,7 +136,7 @@ test('three devices, three simultaneous revokes: two succeed', async () => {
 
 test('same device revoked twice concurrently', async () => {
   ensureDb();
-  const pool = new Pool({
+  const pool = createTestPool({
     database: DB,
     user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
     password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
@@ -140,7 +146,7 @@ test('same device revoked twice concurrently', async () => {
   const admin = await pool.connect();
   const g1 = await issueGrant(admin, userA, 'device_revoke', 'sess-dup-1');
   const g2 = await issueGrant(admin, userA, 'device_revoke', 'sess-dup-2');
-  admin.release();
+  await releaseClient(admin);
   const [r1, r2] = await Promise.all([
     revokeWithGrant(pool, 'd2', 'd1', g1, 'sess-dup-1'),
     revokeWithGrant(pool, 'd2', 'd1', g2, 'sess-dup-2'),
@@ -154,7 +160,7 @@ test('same device revoked twice concurrently', async () => {
 
 test('already-revoked device returns 42501', async () => {
   ensureDb();
-  const pool = new Pool({
+  const pool = createTestPool({
     database: DB,
     user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
     password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
@@ -163,11 +169,11 @@ test('already-revoked device returns 42501', async () => {
   await seedDevices(pool, 2);
   const admin = await pool.connect();
   const g1 = await issueGrant(admin, userA, 'device_revoke', 'sess-already');
-  admin.release();
+  await releaseClient(admin);
   await revokeWithGrant(pool, 'd2', 'd1', g1, 'sess-already');
   const admin2 = await pool.connect();
   const g2 = await issueGrant(admin2, userA, 'device_revoke', 'sess-already-2');
-  admin2.release();
+  await releaseClient(admin2);
   const again = await revokeWithGrant(pool, 'd2', 'd1', g2, 'sess-already-2');
   assert.equal(again.code, '42501');
   await pool.end();
@@ -175,7 +181,7 @@ test('already-revoked device returns 42501', async () => {
 
 test('cross-account revoke denied', async () => {
   ensureDb();
-  const pool = new Pool({
+  const pool = createTestPool({
     database: DB,
     user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
     password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
@@ -192,7 +198,12 @@ test('cross-account revoke denied', async () => {
   );
   const g = await issueGrant(admin, userB, 'device_revoke', 'sess-cross-b');
   const ch = await issueRevokeChallenge(admin, userB, 'sess-cross-b', 'd1', 'd2', g);
-  admin.release();
-  await assert.rejects(() => revokeViaSvc(admin, userA, ch, 'sess-cross-b'), (e) => e.code === '42501');
+  await releaseClient(admin);
+  const cross = await pool.connect();
+  try {
+    await assert.rejects(() => revokeViaSvc(cross, userA, ch, 'sess-cross-b'), (e) => e.code === '42501');
+  } finally {
+    await releaseClient(cross);
+  }
   await pool.end();
 });

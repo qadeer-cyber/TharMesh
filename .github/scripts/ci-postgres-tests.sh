@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Category 3 Postgres tests only (no JVM/emulator).
 set -euo pipefail
+export THARMESH_PG_STATEMENT_TIMEOUT_MS="${THARMESH_PG_STATEMENT_TIMEOUT_MS:-90000}"
+export THARMESH_PG_LOCK_TIMEOUT_MS="${THARMESH_PG_LOCK_TIMEOUT_MS:-20000}"
+export THARMESH_PG_IDLE_TX_TIMEOUT_MS="${THARMESH_PG_IDLE_TX_TIMEOUT_MS:-60000}"
+export THARMESH_NODE_TEST_TIMEOUT_MS="${THARMESH_NODE_TEST_TIMEOUT_MS:-180000}"
+NODE_TEST=(node --test "--test-timeout=${THARMESH_NODE_TEST_TIMEOUT_MS}")
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 export PGHOST="${PGHOST:-localhost}"
@@ -12,10 +17,11 @@ npm install --prefix /tmp/tharmesh-pg-tests pg@8.11.3
 bash supabase/tests/postgres-ensure-test-role.sh
 
 bash supabase/tests/postgres-apply.sh tharmesh_ci_pg
-node --test supabase/tests/postgres-fresh-upgrade.test.mjs
-node --test supabase/tests/postgres-migration-inventory.test.mjs
-node --test supabase/tests/postgres-migration-privileges.test.mjs
-node supabase/tests/identity-postgres-multisession.test.mjs
+"${NODE_TEST[@]}" supabase/tests/postgres-fresh-upgrade.test.mjs
+"${NODE_TEST[@]}" supabase/tests/postgres-migration-inventory.test.mjs
+"${NODE_TEST[@]}" supabase/tests/postgres-migration-privileges.test.mjs
+"${NODE_TEST[@]}" supabase/tests/postgres-migration-authenticated-rpc-surface.test.mjs
+node --test --test-timeout="${THARMESH_NODE_TEST_TIMEOUT_MS}" supabase/tests/identity-postgres-multisession.test.mjs
 NODE_TESTS=(
   supabase/tests/recovery-bypass.test.mjs
   supabase/tests/schema-recovery-privileges.test.mjs
@@ -29,7 +35,7 @@ NODE_TESTS=(
   supabase/tests/device-revoke-crypto.test.mjs
 )
 for t in "${NODE_TESTS[@]}"; do
-  node --test "$t"
+  "${NODE_TEST[@]}" "$t"
 done
 bash supabase/tests/postgres-migration-full-apply-twice.sh tharmesh_ci_pg_idem2
 echo "ci-postgres-tests: ok"

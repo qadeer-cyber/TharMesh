@@ -8,10 +8,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { issueGrant, issueRevokeChallenge, revokeViaSvc } from './pg-test-helpers.mjs';
+import { createTestPool, issueGrant, issueRevokeChallenge, releaseClient, revokeViaSvc } from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest_revoke_approve';
 const DB_TWO = `${DB}_two`;
 const KEY122 = 'A'.repeat(122);
@@ -75,7 +74,7 @@ async function raceScenario(pool, { onlyTwoDevices }) {
   const sid = onlyTwoDevices ? 'sess-appr-2dev' : 'sess-appr-3dev';
   const grant = await issueGrant(admin, userA, 'device_revoke', sid);
   const challengeId = await issueRevokeChallenge(admin, userA, sid, 'devB', 'devA', grant);
-  admin.release();
+  await releaseClient(admin);
 
   const approve = async () => {
     const c = await pool.connect();
@@ -128,7 +127,7 @@ async function raceScenario(pool, { onlyTwoDevices }) {
     ])
   ).rows;
   const active = devices.filter((d) => d.revoked_at == null);
-  admin2.release();
+  await releaseClient(admin2);
 
   if (ra.ok && rb.ok) {
     assert.ok(pending.approval_sig_b64);
@@ -156,12 +155,7 @@ async function raceScenario(pool, { onlyTwoDevices }) {
 
 test('approve vs revoke device A (three active devices)', async () => {
   ensureDb(DB);
-  const pool = new Pool({
-    database: DB,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB });
   try {
     await raceScenario(pool, { onlyTwoDevices: false });
   } finally {
@@ -171,12 +165,7 @@ test('approve vs revoke device A (three active devices)', async () => {
 
 test('approve vs revoke device A with only two active devices', async () => {
   ensureDb(DB_TWO);
-  const pool = new Pool({
-    database: DB_TWO,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB_TWO });
   try {
     await raceScenario(pool, { onlyTwoDevices: true });
   } finally {

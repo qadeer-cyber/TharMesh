@@ -1,4 +1,40 @@
 import { createSign } from 'node:crypto';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
+
+const STMT_MS = process.env.THARMESH_PG_STATEMENT_TIMEOUT_MS ?? '90000';
+const LOCK_MS = process.env.THARMESH_PG_LOCK_TIMEOUT_MS ?? '20000';
+const IDLE_TX_MS = process.env.THARMESH_PG_IDLE_TX_TIMEOUT_MS ?? '60000';
+
+/** Pool with per-connection PG timeouts so lock waits fail instead of hanging CI. */
+export function createTestPool(options = {}) {
+  const pool = new Pool({
+    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
+    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
+    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
+    ...options,
+  });
+  const origConnect = pool.connect.bind(pool);
+  pool.connect = async () => {
+    const client = await origConnect();
+    await client.query(
+      `SET statement_timeout = '${STMT_MS}'; SET lock_timeout = '${LOCK_MS}'; SET idle_in_transaction_session_timeout = '${IDLE_TX_MS}';`
+    );
+    return client;
+  };
+  return pool;
+}
+
+export async function releaseClient(client) {
+  try {
+    await client.query('reset role');
+  } catch {
+    /* broken connection */
+  }
+  client.release();
+}
 
 export async function withServiceSession(client, userId, sessionId, fn, { commit = false } = {}) {
   await client.query('begin');

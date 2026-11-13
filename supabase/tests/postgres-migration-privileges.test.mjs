@@ -6,10 +6,7 @@ import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
+import { createTestPool } from './pg-test-helpers.mjs';
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest_privileges';
 
 function ensureDb() {
@@ -26,12 +23,7 @@ async function priv(c, obj, kind, priv) {
 
 test('migrations 001-013: authenticated privilege surface matches staging intent', async () => {
   ensureDb();
-  const pool = new Pool({
-    database: DB,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB });
   const c = await pool.connect();
   try {
     for (const p of ['INSERT', 'UPDATE', 'DELETE']) {

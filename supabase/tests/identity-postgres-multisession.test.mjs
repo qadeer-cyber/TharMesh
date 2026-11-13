@@ -9,9 +9,14 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { issueGrant, issueRevokeChallenge, revokeViaSvc, revokeWithChallenge } from './pg-test-helpers.mjs';
+import {
+  createTestPool,
+  issueGrant,
+  issueRevokeChallenge,
+  revokeViaSvc,
+  revokeWithChallenge,
+} from './pg-test-helpers.mjs';
 const require = createRequire(import.meta.url);
-const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest';
 const KEY122 = 'A'.repeat(122);
 
@@ -61,12 +66,7 @@ async function clearAborted(client) {
 }
 
 async function poolClient() {
-  const pool = new Pool({
-    database: DB,
-    user: process.env.THARMESH_PG_USER ?? 'tharmesh_runner',
-    password: process.env.THARMESH_PG_PASSWORD ?? 'pgtest_local',
-    host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
-  });
+  const pool = createTestPool({ database: DB });
   const client = await pool.connect();
   client._pool = pool;
   return client;
