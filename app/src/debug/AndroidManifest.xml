@@ -10,5 +10,8 @@
         <activity
             android:name="com.tharmesh.ui.debug.LayoutPreviewActivity"
             android:exported="true" />
+        <activity
+            android:name="com.tharmesh.ui.debug.OfflineRelaunchSmokeActivity"
+            android:exported="true" />
     </application>
 </manifest>

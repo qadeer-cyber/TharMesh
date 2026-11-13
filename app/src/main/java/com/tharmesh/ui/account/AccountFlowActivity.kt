@@ -43,6 +43,7 @@ import com.tharmesh.account.TrustedRecoveryRotate
 import com.tharmesh.account.RecoveryRotationStage
 import com.tharmesh.account.EnrollmentReplayGuard
 import com.tharmesh.account.EnrollmentQr
+import com.tharmesh.account.LegacyProvisioningEvidence
 import com.tharmesh.account.LegacyReconciliation
 import com.tharmesh.account.HandlePolicy
 import com.tharmesh.account.IdentityProvisioning
@@ -792,25 +793,24 @@ class AccountFlowActivity : AppCompatActivity() {
                             accessTok
                         )
                     }
-                    if (!accessTok.isNullOrBlank() && evidence == null) {
-                        legacyReconcileMessage = LegacyReconciliation.Decision.CONFLICT
-                        bind(Screen.LEGACY_RECONCILE)
-                        return@launch
-                    }
-                    val serverState = evidence?.identityState
-                        ?: if (outcome.canonicalKey == null) "legacy_unknown" else "recovery_required"
-                    val resetFlag = CloudSessionStore.readExplicitResetCommitted(this@AccountFlowActivity) ||
-                        (evidence?.explicitResetCommitted == true)
-                    legacyReconcileMessage = LegacyReconciliation.decide(
-                        LegacyReconciliation.Evidence(
-                            serverState = serverState,
-                            canonicalMeshPublicKey = outcome.canonicalKey ?: evidence?.meshPublicKey,
+                    val resetFlag = CloudSessionStore.readExplicitResetCommitted(this@AccountFlowActivity)
+                    when (
+                        val built = LegacyProvisioningEvidence.build(
+                            cloudAccessPresent = !accessTok.isNullOrBlank(),
+                            fetched = evidence,
+                            canonicalKeyFromOutcome = outcome.canonicalKey,
                             localMesh = local,
-                            explicitResetCommitted = resetFlag,
-                            cloudDeviceRows = evidence?.deviceCount ?: 0,
-                            cloudRecoveryBlob = evidence?.hasRecoveryBlob ?: false
+                            explicitResetCommitted = resetFlag
                         )
-                    )
+                    ) {
+                        LegacyProvisioningEvidence.BuildResult.FailClosedConflict -> {
+                            legacyReconcileMessage = LegacyReconciliation.Decision.CONFLICT
+                            bind(Screen.LEGACY_RECONCILE)
+                            return@launch
+                        }
+                        is LegacyProvisioningEvidence.BuildResult.Ready ->
+                            legacyReconcileMessage = LegacyReconciliation.decide(built.evidence)
+                    }
                     when (legacyReconcileMessage) {
                         LegacyReconciliation.Decision.KEEP_LOCAL_AND_USE_CLOUD_SESSION,
                         LegacyReconciliation.Decision.KEYS_ALREADY_ALIGNED -> {
