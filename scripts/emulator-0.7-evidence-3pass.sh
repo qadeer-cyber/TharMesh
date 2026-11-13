@@ -51,9 +51,9 @@ for run in 1 2 3; do
     echo "RESULT=FAIL (stopped at run $run; need 3 consecutive PASS)" | tee -a "$ART/emulator-3pass-summary.txt"
     exit 1
   fi
+  # Keep the single GHA emulator alive; isolation is pm clear per pass (not emu kill).
   if [ "$run" -lt 3 ]; then
-    "$ADB" emu kill >>"$EMULATOR_EVIDENCE_LOG" 2>&1 || true
-    sleep 5
+    sleep 2
   fi
 done
 
