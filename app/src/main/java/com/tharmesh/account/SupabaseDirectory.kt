@@ -47,7 +47,7 @@ object SupabaseDirectory {
         )
     }
 
-    fun putRecovery(
+   fun putRecovery(
         http: HttpTransport,
         baseUrl: String,
         anonKey: String,
@@ -55,17 +55,8 @@ object SupabaseDirectory {
         accountId: String,
         sealed: IdentityRecovery.SealedIdentity
     ): AuthCall {
-        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        if (sealed.kdf != IdentityRecovery.KDF_SCRYPT) return AuthCall.Failed("bad_blob")
-        val json = RecoveryUpload.body(accountId, sealed)
-        if (!RlsPolicy.recoveryAccepts(json)) return AuthCall.Failed("bad_blob")
-        val headers = writeHeaders(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
-        return post(
-            http,
-            baseUrl.trimEnd('/') + "/rest/v1/recovery_blobs",
-            headers,
-            json
-        )
+        // Direct PostgREST writes are denied by migration 009; use TrustedRecoveryRotate.
+        return AuthCall.Failed("recovery_direct_write_denied")
     }
 
     fun putDevice(

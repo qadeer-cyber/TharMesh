@@ -26,9 +26,9 @@ test('sensitive-auth rejects refresh-only JWT iat without fresh amr', async () =
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: account, email_confirmed_at: '2026-11-12' });
     }
-    if (url.includes('auth_fresh_record_svc')) {
+    if (url.includes('sensitive_grant_issue_svc') || url.includes('auth_fresh_record_svc')) {
       recorded++;
-      return new Response(null, { status: 204 });
+      return new Response(JSON.stringify('grant-uuid-test'), { status: 200 });
     }
     return new Response(null, { status: 404 });
   };
@@ -62,4 +62,11 @@ test('sensitive-auth rejects refresh-only JWT iat without fresh amr', async () =
   });
   assert.equal((await submit(fresh)).status, 200);
   assert.equal(recorded, 1);
+
+  const anonOnly = bearer({
+    sub: account,
+    iat: now,
+    amr: [{ method: 'anonymous', timestamp: now - 5 }],
+  });
+  assert.equal((await submit(anonOnly)).status, 403);
 });

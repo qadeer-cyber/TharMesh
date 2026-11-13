@@ -34,8 +34,10 @@ object TrustedRecoveryRotate {
         anonKey: String,
         accessToken: String,
         sealed: IdentityRecovery.SealedIdentity,
-        expectedGeneration: Int
+        expectedGeneration: Int,
+        grantId: String
     ): AuthCall {
+        if (grantId.isBlank()) return AuthCall.Failed("grant_required")
         if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
         if (sealed.kdf != IdentityRecovery.KDF_SCRYPT) return AuthCall.Failed("bad_blob")
         val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
@@ -48,6 +50,7 @@ object TrustedRecoveryRotate {
             .put("salt_b64", sealed.saltB64)
             .put("iv_b64", sealed.ivB64)
             .put("ciphertext_b64", sealed.ciphertextB64)
+            .put("grant_id", grantId)
         val response = try {
             http.post(
                 baseUrl.trimEnd('/') + "/functions/v1/recovery-rotate",

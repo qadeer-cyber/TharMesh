@@ -509,6 +509,31 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
+  await t.test('migration idempotency re-apply 009', async () => {
+    await admin.query('reset role');
+    const mig = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120009_recovery_lock_device_serialize.sql'),
+      'utf8'
+    );
+    await admin.query(mig);
+    stats.passed++;
+  });
+
+  await t.test('recovery direct insert denied for authenticated', async () => {
+    await withJwt(admin, userA, 'authenticated', async () => {
+      await assert.rejects(
+        () =>
+          admin.query(
+            `insert into public.recovery_blobs (account_id, kdf, n, r, p, salt_b64, iv_b64, ciphertext_b64, generation)
+             values ($1::uuid, 'scrypt', 16384, 8, 1, 's', 'i', 'c', 1)`,
+            [userA]
+          ),
+        (e) => String(e.message ?? '').toLowerCase().includes('permission denied') || e.code === '42501'
+      );
+    });
+    stats.passed++;
+  });
+
   await t.test('migration idempotency re-apply 008', async () => {
     await admin.query('reset role');
     const mig = readFileSync(

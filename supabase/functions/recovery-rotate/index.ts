@@ -8,32 +8,7 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-type AmrEntry = { method?: string; timestamp?: number };
-
-function jwtPayload(authHeader: string): { sub?: string; iat?: number; amr?: AmrEntry[] } | null {
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const parts = token.split(".");
-  if (parts.length < 2) return null;
-  try {
-    return JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-  } catch {
-    return null;
-  }
-}
-
-function authEventTimestamp(payload: { amr?: AmrEntry[] }): number | null {
-  const amr = payload.amr;
-  if (!Array.isArray(amr) || amr.length === 0) return null;
-  let max = 0;
-  for (const entry of amr) {
-    const ts = entry?.timestamp;
-    if (typeof ts !== "number" || ts < 1) continue;
-    const method = entry?.method ?? "";
-    if (method === "refresh" || method === "token_refresh") continue;
-    if (ts > max) max = ts;
-  }
-  return max > 0 ? max : null;
-}
+import { authEventTimestamp, jwtPayload } from "../_shared/amr.ts";
 
 async function rpc(name: string, payload: object): Promise<Response> {
   return await fetch(`${url}/rest/v1/rpc/${name}`, {
@@ -87,6 +62,17 @@ Deno.serve(async (request) => {
     }
 
     const body = await request.json().catch(() => ({}));
+    const grantId = body?.grant_id;
+    if (typeof grantId !== "string" || grantId.length < 8) {
+      return json({ error: "grant_required" }, 403);
+    }
+    const consume = await rpc("tharmesh_sensitive_grant_consume_svc", {
+      p_account: id,
+      p_grant_id: grantId,
+      p_action: "recovery_rotate",
+    });
+    if (!consume.ok) return json({ error: "grant_invalid" }, 403);
+
     const expected = body?.expected_generation;
     const kdf = body?.kdf;
     const n = body?.n;

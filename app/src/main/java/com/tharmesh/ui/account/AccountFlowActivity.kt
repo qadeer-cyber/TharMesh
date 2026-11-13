@@ -1099,10 +1099,24 @@ class AccountFlowActivity : AppCompatActivity() {
                 )
                 return@launch
             }
+            val grant = withContext(Dispatchers.IO) {
+                ServerFreshAuth.recordActionGrant(
+                    http,
+                    BuildConfig.SUPABASE_URL,
+                    BuildConfig.SUPABASE_ANON_KEY,
+                    access,
+                    "recovery_rotate"
+                )
+            }
+            val grantId = grant.grantId
+            if (grant.call !is AuthCall.Ok || grantId.isNullOrBlank()) {
+                status.setText(R.string.account_reauth_required_upload)
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
                 TrustedRecoveryRotate.upload(
                     http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY,
-                    access, sealed, generation
+                    access, sealed, generation, grantId
                 )
             }
             when (result) {

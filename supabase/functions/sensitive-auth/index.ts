@@ -8,32 +8,7 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-type AmrEntry = { method?: string; timestamp?: number };
-
-function jwtPayload(authHeader: string): { sub?: string; iat?: number; amr?: AmrEntry[] } | null {
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const parts = token.split(".");
-  if (parts.length < 2) return null;
-  try {
-    return JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-  } catch {
-    return null;
-  }
-}
-
-function authEventTimestamp(payload: { amr?: AmrEntry[] }): number | null {
-  const amr = payload.amr;
-  if (!Array.isArray(amr) || amr.length === 0) return null;
-  let max = 0;
-  for (const entry of amr) {
-    const ts = entry?.timestamp;
-    if (typeof ts !== "number" || ts < 1) continue;
-    const method = entry?.method ?? "";
-    if (method === "refresh" || method === "token_refresh") continue;
-    if (ts > max) max = ts;
-  }
-  return max > 0 ? max : null;
-}
+import { authEventTimestamp, jwtPayload } from "../_shared/amr.ts";
 
 async function rpc(name: string, payload: object): Promise<Response> {
   return await fetch(`${url}/rest/v1/rpc/${name}`, {
@@ -78,12 +53,26 @@ Deno.serve(async (request) => {
       return json({ fresh: true, scope, max_age_sec: MAX_AGE_SEC, auth_amr_ts: amrTs });
     }
 
-    const reply = await rpc("tharmesh_auth_fresh_record_svc", {
+    const action = typeof body?.action === "string" ? body.action.trim() : "sensitive";
+    const reply = await rpc("tharmesh_sensitive_grant_issue_svc", {
       p_account: id,
+      p_action: action,
+      p_session_sub: id,
       p_auth_amr_ts: amrTs,
       p_token_iat: tokenIat,
+      p_ttl_seconds: MAX_AGE_SEC,
     });
-    return reply.ok ? json({ fresh: true, scope }) : json({ error: "record_unavailable" }, 409);
+    if (!reply.ok) {
+      await rpc("tharmesh_auth_fresh_record_svc", {
+        p_account: id,
+        p_auth_amr_ts: amrTs,
+        p_token_iat: tokenIat,
+      });
+      return json({ error: "record_unavailable" }, 409);
+    }
+    const grantId = await reply.json();
+    const gid = Array.isArray(grantId) ? grantId[0] : grantId;
+    return json({ fresh: true, scope, action, grant_id: gid });
   } catch {
     return json({ error: "request_failed" }, 400);
   }

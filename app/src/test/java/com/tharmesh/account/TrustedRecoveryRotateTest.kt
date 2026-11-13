@@ -32,7 +32,8 @@ class TrustedRecoveryRotateTest {
             "anon",
             "access",
             sealed,
-            0
+            0,
+            "grant-test-id"
         )
         assertTrue(result is AuthCall.Ok)
         assertTrue(http.lastPath!!.endsWith("/functions/v1/recovery-rotate"))

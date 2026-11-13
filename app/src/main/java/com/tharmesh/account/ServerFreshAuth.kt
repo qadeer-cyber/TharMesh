@@ -8,10 +8,33 @@ import org.json.JSONObject
 object ServerFreshAuth {
     private const val MAX_AGE_SEC = 900
 
+    data class ActionGrant(val call: AuthCall, val grantId: String?)
+
     fun recordSession(http: HttpTransport, baseUrl: String, anonKey: String, accessToken: String): AuthCall {
-        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
-        return postEdge(http, baseUrl, headers, "sensitive-auth", JSONObject().put("operation", "record"))
+        return recordActionGrant(http, baseUrl, anonKey, accessToken, "sensitive").call
+    }
+
+    fun recordActionGrant(
+        http: HttpTransport,
+        baseUrl: String,
+        anonKey: String,
+        accessToken: String,
+        action: String
+    ): ActionGrant {
+        if (!AuthBackend.configured(baseUrl, anonKey)) {
+            return ActionGrant(AuthCall.Failed("cloud_auth_not_configured"), null)
+        }
+        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return ActionGrant(AuthCall.Failed("unauthorized"), null)
+        val body = JSONObject().put("operation", "record").put("action", action)
+        val response = postEdgeRaw(http, baseUrl, headers, "sensitive-auth", body)
+        if (response == null) return ActionGrant(AuthCall.Failed("network"), null)
+        if (response.code !in 200..299) return ActionGrant(AuthCall.Failed("http_${response.code}"), null)
+        val grant = try {
+            org.json.JSONObject(response.body).optString("grant_id").takeIf { it.isNotBlank() }
+        } catch (_: Throwable) {
+            null
+        }
+        return ActionGrant(AuthCall.Ok(AuthTokens("", "", 0L)), grant)
     }
 
     fun isFreshOnServer(http: HttpTransport, baseUrl: String, anonKey: String, accessToken: String): Boolean {
@@ -37,16 +60,27 @@ object ServerFreshAuth {
         functionName: String,
         body: JSONObject
     ): AuthCall {
-        val response = try {
+        val response = postEdgeRaw(http, baseUrl, headers, functionName, body)
+            ?: return AuthCall.Failed("network")
+        return if (response.code in 200..299) AuthCall.Ok(AuthTokens("", "", 0L))
+        else AuthCall.Failed("http_${response.code}")
+    }
+
+    private fun postEdgeRaw(
+        http: HttpTransport,
+        baseUrl: String,
+        headers: Map<String, String>,
+        functionName: String,
+        body: JSONObject
+    ): HttpTransport.Response? {
+        return try {
             http.post(
                 baseUrl.trimEnd('/') + "/functions/v1/$functionName",
                 headers,
                 body.toString()
             )
         } catch (_: Throwable) {
-            return AuthCall.Failed("network")
+            null
         }
-        return if (response.code in 200..299) AuthCall.Ok(AuthTokens("", "", 0L))
-        else AuthCall.Failed("http_${response.code}")
     }
 }
