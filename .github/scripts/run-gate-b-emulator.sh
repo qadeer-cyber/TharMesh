@@ -30,6 +30,7 @@ export THARMESH_VERIFY_CERT_ONLY=1
 bash scripts/verify-pinned-apk.sh "$HEAD_APK" | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
 export TM_APK="$HEAD_APK"
 export HEAD_DEBUG_APK="$HEAD_APK"
+"$ADB" install -r -d "$HEAD_APK" >>"$EMULATOR_EVIDENCE_LOG" 2>&1
 echo "APP_DATA_RESET $(date -u +%Y-%m-%dT%H:%M:%SZ) pass=$PASS reason=pre-suite-isolation" \
   | tee -a "$THARMESH_EVIDENCE_DIR/data-reset.log"
 "$ADB" shell am force-stop "$PKG" >>"$EMULATOR_EVIDENCE_LOG" 2>&1 || true
