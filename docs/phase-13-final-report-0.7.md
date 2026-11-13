@@ -7,7 +7,7 @@
 | Cloud run | [bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9](https://cursor.com/agents/bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9) |
 | `originalModelName` | **composer-2.5** |
 | Branch | `cursor/universal-account-0939` |
-| Report commit | `ed415e6` (consolidated 0.7 evidence + enrollment Cat 2) |
+| Report commit | `fa3f8f1` (consolidated 0.7 evidence + enrollment Cat 2; `ed415e6` feature commit) |
 | Supervisor accepted | `b3d2dea` (CI [43408800759](https://github.com/qadeer-cyber/TharMesh/actions/runs/43408800759)) |
 
 ## B — PR / CI / artifacts
@@ -18,8 +18,9 @@
 | PR #55 | **Unmerged** (Track A l10n) |
 | `main` HEAD (base) | `31a9dbbaef764827ec1470ce5ed6b70ba21eed61` |
 | Pre-push green CI | [43408800759](https://github.com/qadeer-cyber/TharMesh/actions/runs/43408800759) — postgres **success**, build **success**, signed-qa **skipped** |
-| Debug APK (43408800759) | artifact `14028079166` — 6,751,582 bytes — SHA-256 `8ac1cc8fbf7e1bdc9a17fcab57ab51a0ee2ff393b2a41ef48e3ea052aa580a14` |
-| Post-push CI | *(record run URL after consolidated push)* |
+| Debug APK (43426038834) | artifact `14037207023` — 7,841,692 bytes (zip) — SHA-256 `42f70734dfb5eb784eef2705fad2836f3c587dbb60f4cee2c95a4fbca91b6cfd` |
+| Prior debug APK (43408800759) | `14028079166` — `8ac1cc8fbf7e1bdc9a17fcab57ab51a0ee2ff393b2a41ef48e3ea052aa580a14` |
+| Post-push CI | [43426038834](https://github.com/qadeer-cyber/TharMesh/actions/runs/43426038834) — postgres **success**, build **success**, signed-qa **skipped** |
 
 ## C — Category totals (executed vs NOT EXECUTED)
 
@@ -59,7 +60,7 @@
 
 | Question | Verdict |
 |----------|---------|
-| Engineering ready (CI green, migrations 001–014, Cat 3 race + surface) | **YES** (re-verify post-push CI on consolidated commit) |
+| Engineering ready (CI green, migrations 001–014, Cat 3 race + surface) | **YES** ([43426038834](https://github.com/qadeer-cyber/TharMesh/actions/runs/43426038834) on `fa3f8f1`) |
 | Staging validated on hosted Supabase | **NO** — Cat 5 NOT EXECUTED |
 | Physical device validated | **NO** — Cat 7 NOT EXECUTED |
 | Safe to merge PR #52 (draft) to `main` | **NO** — remain draft until owner review + staging gate |
