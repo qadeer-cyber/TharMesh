@@ -227,6 +227,37 @@ db_snap() {
   log "snapshot $tag mesh_fp=$(cat "$dir/mesh_fingerprint.txt") lines=$(wc -l <"$dir/messages.tsv")"
 }
 
+assert_persistence_fixtures() {
+  local dir="$1"
+  local db="$dir/tharmesh.db"
+  local q extra cc pi msg ids bodies
+  extra=$(sqlite3 "$db" "select count(*) from contacts where userId not in ('peer-evidence-01','peer-evidence-02');" 2>/dev/null) || extra=query_failed
+  assert_not_query_failed contacts_extra "$extra" || return 1
+  [ "$extra" = "0" ] || { fail "unexpected contact rows (legacy v6 peers must be absent); extra=$extra"; return 1; }
+  cc=$(sqlite3 "$db" "select count(*) from contacts where userId='peer-evidence-01' and displayName='Evidence Peer A';" 2>/dev/null) || cc=query_failed
+  assert_not_query_failed contact_a "$cc" || return 1
+  [ "$cc" = "1" ] || { fail "missing contact peer-evidence-01 / Evidence Peer A"; return 1; }
+  cc=$(sqlite3 "$db" "select count(*) from contacts where userId='peer-evidence-02' and displayName='Evidence Peer B';" 2>/dev/null) || cc=query_failed
+  [ "$cc" = "1" ] || { fail "missing contact peer-evidence-02 / Evidence Peer B"; return 1; }
+  extra=$(sqlite3 "$db" "select count(*) from peer_identity where userId not in ('peer-evidence-01','peer-evidence-02');" 2>/dev/null) || extra=query_failed
+  [ "$extra" = "0" ] || { fail "unexpected peer_identity rows; extra=$extra"; return 1; }
+  pi=$(sqlite3 "$db" "select count(*) from peer_identity where userId in ('peer-evidence-01','peer-evidence-02') and verified=1;" 2>/dev/null) || pi=query_failed
+  [ "$pi" = "2" ] || { fail "expected 2 verified peer_identity rows for evidence peers"; return 1; }
+  msg=$(sqlite3 "$db" "select count(*) from messages;" 2>/dev/null) || msg=query_failed
+  [ "$msg" = "3" ] || { fail "expected exactly 3 messages; got $msg"; return 1; }
+  for body in OFFLINE_PERSISTENCE_SEED_A1 OFFLINE_PERSISTENCE_SEED_A2 OFFLINE_PERSISTENCE_SEED_B1; do
+    ids=$(sqlite3 "$db" "select count(*) from messages where body='$body';" 2>/dev/null) || ids=query_failed
+    [ "$ids" = "1" ] || { fail "missing message body $body"; return 1; }
+  done
+  legacy=$(sqlite3 "$db" "select count(*) from messages where body like 'LEGACY_V6%';" 2>/dev/null) || legacy=0
+  [ "$legacy" = "0" ] || { fail "LEGACY_V6 seed messages must not be present"; return 1; }
+  legacy=$(sqlite3 "$db" "select count(*) from contacts where userId in ('peer-a','peer-b');" 2>/dev/null) || legacy=0
+  [ "$legacy" = "0" ] || { fail "legacy v6 contacts peer-a/peer-b must not be present"; return 1; }
+  bodies=$(sqlite3 "$db" "select body from messages order by body;" 2>/dev/null | tr '\n' ',' )
+  log "fixture ok: messages=[$bodies] contacts=peer-evidence-01,peer-evidence-02"
+  return 0
+}
+
 compare_snapshots() {
   local before="$ART/db-snapshot-$1"
   local after="$ART/db-snapshot-$2"
@@ -262,6 +293,7 @@ step_offline_persistence() {
   [ "$MSG" = "3" ] || { fail "expected 3 messages"; return 1; }
   [ "$CONTACTS" = "2" ] || { fail "expected 2 contacts"; return 1; }
   [ "$VERIFIED" = "2" ] || { fail "expected 2 verified peers"; return 1; }
+  assert_persistence_fixtures "$dir" || return 1
   db_snap pre_kill
   "$ADB" shell am force-stop "$PKG"
   "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true

@@ -6,13 +6,23 @@ ART="${THARMESH_EVIDENCE_DIR:-/opt/cursor/artifacts/ui/0.7-evidence}"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
 ADB="$SDK/platform-tools/adb"
 EMU="$SDK/emulator/emulator"
+PKG="tharmesh.app"
 mkdir -p "$ART"
+RESET_LOG="$ART/data-reset.log"
 
 pass_count=0
+reset_before_pass() {
+  local run="$1"
+  echo "APP_DATA_RESET $(date -u +%Y-%m-%dT%H:%M:%SZ) pass=${run}/3 reason=pre-pass-isolation" | tee -a "$RESET_LOG" "$ART/emulator-3pass-summary.txt"
+  "$ADB" shell am force-stop "$PKG" >>"$RESET_LOG" 2>&1 || true
+  "$ADB" shell pm clear "$PKG" >>"$RESET_LOG" 2>&1
+}
+
 for run in 1 2 3; do
   export EMULATOR_EVIDENCE_LOG="$ART/adb-transcript-run${run}.txt"
   : >"$EMULATOR_EVIDENCE_LOG"
   echo "=== emulator evidence run $run/3 ===" | tee -a "$ART/emulator-3pass-summary.txt"
+  reset_before_pass "$run"
   if ! "$ADB" devices | grep -qE 'emulator-[0-9]+\s+device'; then
     pkill -f "qemu-system" 2>/dev/null || true
     "$ADB" emu kill 2>/dev/null || true
