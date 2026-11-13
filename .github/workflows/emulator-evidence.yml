@@ -1,0 +1,127 @@
+name: Emulator evidence (Cat 6)
+
+# Device gates for Update 0.7 — isolated from Android CI (does not gate postgres/build/signed-qa).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/universal-account-0939
+    paths:
+      - "app/**"
+      - "scripts/emulator-*"
+      - "scripts/debug-keystore-upgrade-*"
+      - "scripts/build-historical-debug-apk.sh"
+      - ".github/workflows/emulator-evidence.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emulator-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
+      ANDROID_COMPILE_SDK: "30"
+      ANDROID_BUILD_TOOLS: "30.0.3"
+      THARMESH_EVIDENCE_DIR: ${{ github.workspace }}/ci-evidence
+      LEGACY_SOURCE_COMMIT: 9fedae917868340e9b2b93f46b847a6119c576bd
+      HISTORICAL_WORKTREE: ${{ runner.temp }}/wt-room-v6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enable KVM for emulator (udev)
+        run: |
+          echo 'SUBSYSTEM=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+
+      - name: Set up JDK 17 (for sdkmanager only)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            emulator
+            system-images;android-30;google_apis;x86_64
+
+      - name: Set up JDK 11 (for Gradle + AGP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Install sqlite3
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+
+      - name: Assemble head debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Build historical Room v6 debug APK (9fedae9)
+        run: bash scripts/build-historical-debug-apk.sh "$LEGACY_SOURCE_COMMIT"
+
+      - name: Record emulator API model metadata
+        run: |
+          mkdir -p "$THARMESH_EVIDENCE_DIR"
+          {
+            echo "emulator_api_level=30"
+            echo "emulator_arch=x86_64"
+            echo "emulator_target=google_apis"
+            echo "runner_model=ubuntu-latest"
+            echo "emulator_runner=reactivecircus/android-emulator-runner@v2"
+          } | tee "$THARMESH_EVIDENCE_DIR/emulator-metadata.txt"
+
+      - name: Cat 6 — on-device legacy upgrade + emulator 3-pass
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            export ANDROID_HOME="${ANDROID_SDK_ROOT}"
+            export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+            export THARMESH_EVIDENCE_DIR="${{ env.THARMESH_EVIDENCE_DIR }}"
+            export LEGACY_SOURCE_COMMIT="${{ env.LEGACY_SOURCE_COMMIT }}"
+            export SKIP_HEAD_ASSEMBLE=1
+            V6_APK="${{ env.HISTORICAL_WORKTREE }}/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
+            test -f "$V6_APK"
+            bash scripts/debug-keystore-upgrade-evidence.sh "$V6_APK"
+            bash scripts/emulator-0.7-evidence-3pass.sh
+
+      - name: Summarize gate results
+        if: always()
+        run: |
+          set -euo pipefail
+          UP="$THARMESH_EVIDENCE_DIR/debug-keystore-upgrade/upgrade-transcript.txt"
+          SUM="$THARMESH_EVIDENCE_DIR/emulator-3pass-summary.txt"
+          echo "=== upgrade transcript tail ==="
+          tail -20 "$UP" || true
+          echo "=== 3-pass summary ==="
+          cat "$SUM" || true
+
+      - name: Upload emulator evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-evidence-cat6
+          if-no-files-found: error
+          path: |
+            ${{ env.THARMESH_EVIDENCE_DIR }}/**/*

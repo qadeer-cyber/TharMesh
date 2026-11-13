@@ -2,9 +2,10 @@
 # Category 6 — FAIL-CLOSED emulator evidence (TharMesh Update 0.7 Phase 0).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ADB="${ANDROID_HOME:-/home/ubuntu/android-sdk}/platform-tools/adb"
-EMU="${ANDROID_HOME:-/home/ubuntu/android-sdk}/emulator/emulator"
-ART="/opt/cursor/artifacts/ui/0.7-evidence"
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
+ADB="$SDK/platform-tools/adb"
+EMU="$SDK/emulator/emulator"
+ART="${THARMESH_EVIDENCE_DIR:-/opt/cursor/artifacts/ui/0.7-evidence}"
 PKG="tharmesh.app"
 mkdir -p "$ART"
 LOG="${EMULATOR_EVIDENCE_LOG:-$ART/adb-transcript.txt}"

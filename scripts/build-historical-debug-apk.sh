@@ -47,4 +47,5 @@ log "building assembleDebug at $COMMIT"
 (cd "$WT" && ./gradlew assembleDebug -q)
 log "apk=$OUT"
 sha256sum "$OUT"
-"$(ls -d "${ANDROID_HOME:-/home/ubuntu/android-sdk}"/build-tools/*/apksigner | sort -V | tail -1)" verify --print-certs "$OUT" | grep -E 'SHA-1|SHA-256'
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
+"$(ls -d "$SDK/build-tools/"*/apksigner 2>/dev/null | sort -V | tail -1)" verify --print-certs "$OUT" | grep -E 'SHA-1|SHA-256'

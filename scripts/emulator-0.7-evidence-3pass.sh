@@ -2,9 +2,10 @@
 # Run emulator-0.7-evidence.sh three times with separate transcripts (supervisor gate).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ART="/opt/cursor/artifacts/ui/0.7-evidence"
-ADB="${ANDROID_HOME:-/home/ubuntu/android-sdk}/platform-tools/adb"
-EMU="${ANDROID_HOME:-/home/ubuntu/android-sdk}/emulator/emulator"
+ART="${THARMESH_EVIDENCE_DIR:-/opt/cursor/artifacts/ui/0.7-evidence}"
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
+ADB="$SDK/platform-tools/adb"
+EMU="$SDK/emulator/emulator"
 mkdir -p "$ART"
 
 pass_count=0
@@ -13,13 +14,20 @@ for run in 1 2 3; do
   : >"$EMULATOR_EVIDENCE_LOG"
   echo "=== emulator evidence run $run/3 ===" | tee -a "$ART/emulator-3pass-summary.txt"
   if ! "$ADB" devices | grep -qE 'emulator-[0-9]+\s+device'; then
-    pkill -f "emulator.*tm_api30" 2>/dev/null || true
-  "$ADB" emu kill 2>/dev/null || true
+    pkill -f "qemu-system" 2>/dev/null || true
+    "$ADB" emu kill 2>/dev/null || true
     sleep 3
-    AVD="$("$EMU" -list-avds | head -1)"
-    "$EMU" -avd "$AVD" -no-window -no-audio -gpu swiftshader_indirect &
+    AVD="$("$EMU" -list-avds 2>/dev/null | head -1)"
+    test -n "$AVD"
+    "$EMU" -avd "$AVD" -no-window -no-audio -gpu swiftshader_indirect -no-boot-anim &
     for _ in $(seq 1 120); do
       "$ADB" wait-for-device shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1 && break
+      sleep 2
+    done
+    for _ in $(seq 1 60); do
+      b=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+      a=$("$ADB" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')
+      [ "$b" = "1" ] && { [ "$a" = "stopped" ] || [ -z "$a" ]; } && break
       sleep 2
     done
   fi

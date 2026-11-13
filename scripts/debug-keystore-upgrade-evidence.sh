@@ -4,9 +4,11 @@
 # Gate: OLD APK must be CI-available (see LEGACY_ROOM_MAX) for legacy schema migration.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ADB="${ANDROID_HOME:-/home/ubuntu/android-sdk}/platform-tools/adb"
-EMU="${ANDROID_HOME:-/home/ubuntu/android-sdk}/emulator/emulator"
-ART="/opt/cursor/artifacts/ui/0.7-evidence/debug-keystore-upgrade"
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
+ADB="$SDK/platform-tools/adb"
+EMU="$SDK/emulator/emulator"
+EVIDENCE_BASE="${THARMESH_EVIDENCE_DIR:-/opt/cursor/artifacts/ui/0.7-evidence}"
+ART="$EVIDENCE_BASE/debug-keystore-upgrade"
 PKG="tharmesh.app"
 mkdir -p "$ART"
 LOG="$ART/upgrade-transcript.txt"
@@ -19,21 +21,37 @@ LEGACY_SOURCE_COMMIT="${LEGACY_SOURCE_COMMIT:-}"
 
 log() { echo "$@" | tee -a "$LOG"; }
 
+wait_for_boot_settled() {
+  local b a
+  for _ in $(seq 1 90); do
+    b=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+    a=$("$ADB" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')
+    if [ "$b" = "1" ] && { [ "$a" = "stopped" ] || [ -z "$a" ]; }; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
 ensure_emulator() {
-  if ! "$ADB" devices | grep -qE 'emulator-[0-9]+\s+device'; then
-    AVD="$("$EMU" -list-avds | head -1)"
-    test -n "$AVD"
-    "$EMU" -avd "$AVD" -no-window -no-audio -gpu swiftshader_indirect &
-    for _ in $(seq 1 120); do
-      "$ADB" wait-for-device shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1 && break
-      sleep 2
-    done
+  if "$ADB" devices | grep -qE 'emulator-[0-9]+\s+device'; then
+    wait_for_boot_settled || true
+    return 0
   fi
+  AVD="$("$EMU" -list-avds 2>/dev/null | head -1)"
+  test -n "$AVD"
+  "$EMU" -avd "$AVD" -no-window -no-audio -gpu swiftshader_indirect -no-boot-anim &
+  for _ in $(seq 1 120); do
+    "$ADB" wait-for-device shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1 && break
+    sleep 2
+  done
+  wait_for_boot_settled || true
 }
 
 apksigner_bin() {
   local bt
-  bt="$(ls -d "${ANDROID_HOME:-/home/ubuntu/android-sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
+  bt="$(ls -d "$SDK/build-tools/"*/apksigner 2>/dev/null | sort -V | tail -1)"
   test -x "$bt"
   echo "$bt"
 }
@@ -212,7 +230,9 @@ main() {
   [ -n "$LEGACY_SOURCE_COMMIT" ] && log "legacy_source_commit=$LEGACY_SOURCE_COMMIT"
 
   ensure_emulator
-  (cd "$ROOT" && ./gradlew assembleDebug -q)
+  if [ "${SKIP_HEAD_ASSEMBLE:-0}" != "1" ]; then
+    (cd "$ROOT" && ./gradlew assembleDebug -q)
+  fi
   NEW_APK="$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
   log "new_apk_file_sha256=$(file_apk_sha256 "$NEW_APK")"
   OLD_SHA="$(cert_sha256 "$OLD_APK")"
