@@ -31,6 +31,7 @@ const CHAIN = [
   '202611120011_revoke_possession_jwt_claims.sql',
   '202611120012_revoke_challenge_possession.sql',
   '202611120013_revoke_svc_session_assert.sql',
+  '202611120014_svc_execute_lockdown.sql',
 ];
 
 const LEGACY_USER = 'a1000000-0000-4000-8000-000000000101';
@@ -100,6 +101,7 @@ test('postgres fresh + upgrade + idempotency policy', async () => {
     }
     await applyFile(up, join(here, 'postgres-bootstrap.sql'));
     await applyFile(up, join(root, 'schema.sql'));
+    await applyFile(up, join(here, 'postgres-supabase-platform-defaults.sql'));
     await applyFile(up, join(here, 'fixtures/pre_0.6_legacy_seed.sql'));
 
     for (const name of CHAIN) {

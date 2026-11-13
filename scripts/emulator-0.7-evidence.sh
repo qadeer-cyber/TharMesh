@@ -223,6 +223,31 @@ step_offline_persistence() {
   log_fatal || return 1
 }
 
+step_reboot_durability() {
+  log "=== emulator reboot durability ==="
+  if ! "$ADB" reboot 2>>"$LOG"; then
+    log "emulator reboot: NOT EXECUTED (adb reboot unsupported on this AVD)"
+    return 0
+  fi
+  local i
+  for i in $(seq 1 120); do
+    if "$ADB" wait-for-device shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1; then
+      log "boot_completed after reboot: ${i}s"
+      break
+    fi
+    sleep 2
+  done
+  "$ADB" shell svc wifi disable >>"$LOG" 2>&1 || true
+  "$ADB" shell svc data disable >>"$LOG" 2>&1 || true
+  "$ADB" shell am force-stop "$PKG"
+  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1
+  db_snap post_reboot
+  compare_snapshots pre_kill post_reboot || return 1
+  wait_for_ui "Evidence Peer A" "chats_post_reboot" 90 || return 1
+  shot_after_ui "06-offline-chats-post-reboot.png" "Evidence Peer A" "reboot_chats" 45 || return 1
+  log_fatal || return 1
+}
+
 step_fake_provision() {
   log "=== fake provisioning ==="
   "$ADB" shell am force-stop "$PKG"
@@ -250,6 +275,7 @@ step_recovery() {
 }
 
 step_offline_persistence || FAILED=1
+step_reboot_durability || FAILED=1
 step_fake_provision || FAILED=1
 step_provision_relaunch || FAILED=1
 step_recovery || FAILED=1
@@ -268,7 +294,20 @@ step_layout_l10n() {
     fi
     shot_after_ui "$out" "$needle" "$out" 30 || return 1
   done
-  log "ur/sd layouts: NOT EXECUTED (preview uses default locale; values-ur/sd verified in JVM AccountRecoveryStringsTest)"
+  local l10n_ok=0
+  for pair in "ur-PK:layout-account-ur.png:Create account" "sd-PK:layout-account-sd.png:Create account"; do
+    IFS=: read -r locale out needle <<<"$pair"
+  "$ADB" shell settings put system system_locales "$locale" >>"$LOG" 2>&1 || { log "locale $locale: set failed"; continue; }
+    "$ADB" shell am force-stop "$PKG"
+    "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
+      --es screen account --ez night false >>"$LOG" 2>&1 || continue
+    if shot_after_ui "$out" "$needle" "$locale" 45; then
+      l10n_ok=$((l10n_ok + 1))
+    fi
+  done
+  if [ "$l10n_ok" -lt 2 ]; then
+    log "ur/sd emulator layouts: NOT EXECUTED ($l10n_ok/2 captured; JVM AccountRecoveryStringsTest covers strings)"
+  fi
 }
 
 step_layout_l10n || FAILED=1

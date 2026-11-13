@@ -39,17 +39,17 @@ migration_inventory_check() {
   local count
   count=$(find "$dir" -maxdepth 1 -name '*.sql' | wc -l)
   local last="$prev"
-  local expected=13
+  local expected=14
   if [ "$count" -ne "$expected" ]; then
     echo "migration inventory: expected $expected files, found $count" >&2
     return 1
   fi
-  if [ "$last" != "202611120013" ]; then
-    echo "migration inventory: expected last version 202611120013, got $last" >&2
+  if [ "$last" != "202611120014" ]; then
+    echo "migration inventory: expected last version 202611120014, got $last" >&2
     return 1
   fi
   local n=1
-  while [ "$n" -le 13 ]; do
+  while [ "$n" -le 14 ]; do
     local want
     want=$(printf '202611120%03d' "$n")
     if ! echo "$seen" | grep -qF "|$want|"; then

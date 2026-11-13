@@ -22,16 +22,8 @@ if [ "$MODE" = "fresh" ]; then
   $PSQL -d "$DB_NAME" -f "$ROOT/tests/postgres-bootstrap.sql"
   migration_ensure_tracking "$DB_NAME" "$ROOT"
   $PSQL -d "$DB_NAME" -f "$ROOT/schema.sql"
+  $PSQL -d "$DB_NAME" -f "$ROOT/tests/postgres-supabase-platform-defaults.sql"
   migration_apply_dir "$DB_NAME" "$MIG_DIR"
-  $PSQL -d "$DB_NAME" -c "GRANT USAGE ON SCHEMA public TO authenticated, anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated, service_role;
-GRANT USAGE ON SCHEMA tharmesh_private TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tharmesh_private TO service_role;
-REVOKE INSERT, UPDATE, DELETE ON TABLE public.recovery_blobs FROM authenticated, anon, public;
-GRANT SELECT ON TABLE public.recovery_blobs TO authenticated;
-GRANT INSERT ON auth.users TO service_role;"
   echo "postgres-migrate-runner: fresh ok ($DB_NAME)"
 elif [ "$MODE" = "reapply" ]; then
   migration_ensure_tracking "$DB_NAME" "$ROOT"

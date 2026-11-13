@@ -14,12 +14,19 @@ bash supabase/tests/postgres-ensure-test-role.sh
 bash supabase/tests/postgres-apply.sh tharmesh_ci_pg
 node --test supabase/tests/postgres-fresh-upgrade.test.mjs
 node --test supabase/tests/postgres-migration-inventory.test.mjs
+node --test supabase/tests/postgres-migration-privileges.test.mjs
 node supabase/tests/identity-postgres-multisession.test.mjs
 NODE_TESTS=(
+  supabase/tests/recovery-bypass.test.mjs
+  supabase/tests/schema-recovery-privileges.test.mjs
   supabase/tests/recovery-grant-atomic.test.mjs
   supabase/tests/sensitive-grant-session.test.mjs
   supabase/tests/device-revoke-challenge-pg.test.mjs
   supabase/tests/device-revoke-approve-race.test.mjs
+  supabase/tests/device-revoke-race.test.mjs
+  supabase/tests/device-lock-race.test.mjs
+  supabase/tests/jwt-claims-session.test.mjs
+  supabase/tests/device-revoke-crypto.test.mjs
 )
 for t in "${NODE_TESTS[@]}"; do
   node --test "$t"
