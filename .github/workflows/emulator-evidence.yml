@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: emulator-evidence-${{ github.ref }}
@@ -30,7 +31,7 @@ jobs:
       ANDROID_BUILD_TOOLS: "30.0.3"
       THARMESH_EVIDENCE_DIR: ${{ github.workspace }}/ci-evidence
       LEGACY_SOURCE_COMMIT: 9fedae917868340e9b2b93f46b847a6119c576bd
-      HISTORICAL_WORKTREE: ${{ runner.temp }}/wt-room-v6
+      HISTORICAL_WORKTREE: /tmp/wt-room-v6
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,11 +83,11 @@ jobs:
             echo "emulator_arch=x86_64"
             echo "emulator_target=google_apis"
             echo "runner_model=ubuntu-latest"
-            echo "emulator_runner=reactivecircus/android-emulator-runner@v2"
+            echo "emulator_runner=reactivecircus/android-emulator-runner@v2.33.0"
           } | tee "$THARMESH_EVIDENCE_DIR/emulator-metadata.txt"
 
       - name: Cat 6 — on-device legacy upgrade + emulator 3-pass
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2.33.0
         with:
           api-level: 30
           arch: x86_64
@@ -101,7 +102,7 @@ jobs:
             export THARMESH_EVIDENCE_DIR="${{ env.THARMESH_EVIDENCE_DIR }}"
             export LEGACY_SOURCE_COMMIT="${{ env.LEGACY_SOURCE_COMMIT }}"
             export SKIP_HEAD_ASSEMBLE=1
-            V6_APK="${{ env.HISTORICAL_WORKTREE }}/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
+            V6_APK="/tmp/wt-room-v6/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
             test -f "$V6_APK"
             bash scripts/debug-keystore-upgrade-evidence.sh "$V6_APK"
             bash scripts/emulator-0.7-evidence-3pass.sh
@@ -123,5 +124,4 @@ jobs:
         with:
           name: emulator-evidence-cat6
           if-no-files-found: error
-          path: |
-            ${{ env.THARMESH_EVIDENCE_DIR }}/**/*
+          path: ci-evidence/
