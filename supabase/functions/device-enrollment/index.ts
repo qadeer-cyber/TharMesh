@@ -14,6 +14,18 @@ function canonical(parts: string[]): Uint8Array {
   return new TextEncoder().encode(parts.join("\x1F"));
 }
 
+function bootstrapMessage(
+  account: string,
+  challenge: string,
+  meshKey: string,
+  deviceId: string,
+  devicePub: string,
+): Uint8Array {
+  return new TextEncoder().encode(
+    `tharmesh:device:bootstrap:v1\n${account}\n${challenge}\n${meshKey}\n${deviceId}\n${devicePub}`,
+  );
+}
+
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -40,6 +52,16 @@ async function importSpki(spkiB64: string): Promise<CryptoKey> {
   );
 }
 
+async function importMeshKey(meshB64: string): Promise<CryptoKey> {
+  return await crypto.subtle.importKey(
+    "spki",
+    decodeB64Url(meshB64, 80),
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["verify"],
+  );
+}
+
 function derToP1363(der: Uint8Array): Uint8Array | null {
   if (der.length < 8 || der[0] !== 0x30) return null;
   let cursor = 2;
@@ -50,9 +72,7 @@ function derToP1363(der: Uint8Array): Uint8Array | null {
     if (cursor + len > der.length) return null;
     let start = cursor;
     let pad = 0;
-    if (len > 0 && der[start] === 0x00) {
-      pad = 1;
-    }
+    if (len > 0 && der[start] === 0x00) pad = 1;
     const width = len - pad;
     if (width > 32) return null;
     out.set(der.subarray(start + pad, start + len), offset + 32 - width);
@@ -73,6 +93,16 @@ async function verifyDer(spkiB64: string, message: Uint8Array, derSigB64: string
   }
 }
 
+async function verifyMeshRaw(meshKey: string, message: Uint8Array, sigB64: string): Promise<boolean> {
+  try {
+    const key = await importMeshKey(meshKey);
+    const sig = decodeB64Url(sigB64, 64);
+    return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, sig, message);
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   if (!url || !anon || !service) return json({ error: "unavailable" }, 503);
@@ -88,6 +118,43 @@ Deno.serve(async (request) => {
 
     const body = await request.json();
     const operation = body?.operation;
+
+    if (operation === "bootstrap_challenge") {
+      const reply = await rpc("tharmesh_bootstrap_challenge_svc", { p_account: id });
+      if (!reply.ok) return json({ error: "bootstrap_unavailable" }, 409);
+      const challenge = await reply.json();
+      return json({ challenge });
+    }
+
+    if (operation === "bootstrap_commit") {
+      const {
+        device_id: deviceId,
+        device_pubkey: devicePub,
+        mesh_public_key: meshKey,
+        challenge,
+        mesh_sig_b64: meshSig,
+        device_sig_b64: deviceSig,
+        certificate,
+      } = body;
+      if (
+        typeof deviceId !== "string" || typeof devicePub !== "string" || typeof meshKey !== "string" ||
+        typeof challenge !== "string" || typeof meshSig !== "string" || typeof deviceSig !== "string"
+      ) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      const msg = bootstrapMessage(id, challenge, meshKey, deviceId, devicePub);
+      if (!(await verifyMeshRaw(meshKey, msg, meshSig))) return json({ error: "invalid_mesh_proof" }, 403);
+      if (!(await verifyDer(devicePub, msg, deviceSig))) return json({ error: "invalid_device_proof" }, 403);
+      const reply = await rpc("tharmesh_bootstrap_device_svc", {
+        p_account: id,
+        p_device_id: deviceId,
+        p_device_pubkey: devicePub,
+        p_challenge: challenge,
+        p_certificate: certificate ?? null,
+      });
+      return reply.ok ? json({ ok: true }) : json({ error: "bootstrap_unavailable" }, 409);
+    }
+
     if (operation === "begin") {
       const {
         device_id: deviceId,
@@ -104,13 +171,7 @@ Deno.serve(async (request) => {
         return json({ error: "invalid_request" }, 400);
       }
       const msg = canonical([
-        "TM-ENROLL-v1",
-        id,
-        meshKey,
-        newPub,
-        deviceId,
-        nonceB64,
-        "0",
+        "TM-ENROLL-v1", id, meshKey, newPub, deviceId, nonceB64, "0",
       ]);
       if (!(await verifyDer(newPub, msg, reqSig))) return json({ error: "invalid_proof" }, 403);
       const reply = await rpc("tharmesh_enrollment_begin_svc", {
@@ -160,9 +221,46 @@ Deno.serve(async (request) => {
     }
 
     if (operation === "finish") {
-      const { nonce_b64: nonceB64, certificate } = body;
-      if (typeof nonceB64 !== "string" || typeof certificate !== "string") {
+      const {
+        nonce_b64: nonceB64,
+        certificate,
+        finish_sig_b64: finishSig,
+      } = body;
+      if (typeof nonceB64 !== "string" || typeof certificate !== "string" || typeof finishSig !== "string") {
         return json({ error: "invalid_request" }, 400);
+      }
+      const pendingRes = await rpc("tharmesh_enrollment_pending_get_svc", {
+        p_account: id,
+        p_nonce_b64: nonceB64,
+      });
+      if (!pendingRes.ok) return json({ error: "pending_unavailable" }, 409);
+      const rows = await pendingRes.json();
+      if (!Array.isArray(rows) || rows.length !== 1) return json({ error: "pending_unavailable" }, 409);
+      const pending = rows[0];
+      if (!pending.approval_sig_b64 || !pending.approved_device_id) {
+        return json({ error: "not_approved" }, 403);
+      }
+      const finishMsg = canonical(["TM-ENROLL-FINISH-v1", id, pending.mesh_public_key, pending.new_device_pubkey, pending.device_id, nonceB64, "0"]);
+      if (!(await verifyDer(pending.new_device_pubkey, finishMsg, finishSig))) {
+        return json({ error: "invalid_finish_proof" }, 403);
+      }
+      const beginMsg = canonical([
+        "TM-ENROLL-v1", id, pending.mesh_public_key, pending.new_device_pubkey, pending.device_id, nonceB64, "0",
+      ]);
+      if (!(await verifyDer(pending.new_device_pubkey, beginMsg, pending.request_sig_b64))) {
+        return json({ error: "invalid_request_proof" }, 403);
+      }
+      const trustedRes = await rpc("tharmesh_trusted_device_pubkey_svc", {
+        p_account: id,
+        p_trusted_device_id: pending.approved_device_id,
+      });
+      if (!trustedRes.ok) return json({ error: "trusted_device_unavailable" }, 403);
+      const trustedPub = await trustedRes.json();
+      if (typeof trustedPub !== "string") return json({ error: "trusted_device_unavailable" }, 403);
+      const epoch = String(Math.floor(Date.parse(pending.expires_at) / 1000));
+      const apprMsg = canonical(["TM-DEVICE-APPROVE-v1", id, pending.new_device_pubkey, nonceB64, epoch]);
+      if (!(await verifyDer(trustedPub, apprMsg, pending.approval_sig_b64))) {
+        return json({ error: "invalid_approval_proof" }, 403);
       }
       const reply = await rpc("tharmesh_enrollment_finish_svc", {
         p_account: id,
@@ -170,20 +268,6 @@ Deno.serve(async (request) => {
         p_certificate: certificate,
       });
       return reply.ok ? json({ ok: true }) : json({ error: "finish_unavailable" }, 409);
-    }
-
-    if (operation === "bootstrap_device") {
-      const { device_id: deviceId, device_pubkey: devicePub, certificate } = body;
-      if (typeof deviceId !== "string" || typeof devicePub !== "string") {
-        return json({ error: "invalid_request" }, 400);
-      }
-      const reply = await rpc("tharmesh_bootstrap_device_svc", {
-        p_account: id,
-        p_device_id: deviceId,
-        p_device_pubkey: devicePub,
-        p_certificate: certificate ?? null,
-      });
-      return reply.ok ? json({ ok: true }) : json({ error: "bootstrap_unavailable" }, 409);
     }
 
     return json({ error: "invalid_operation" }, 400);

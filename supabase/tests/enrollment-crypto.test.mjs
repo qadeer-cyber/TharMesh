@@ -74,6 +74,17 @@ test('device-enrollment edge rejects bad proofs before service writes', async ()
     if (url.includes('tharmesh_trusted_device_pubkey_svc')) {
       return Response.json(trusted.pubB64);
     }
+    if (url.includes('enrollment_pending_get_svc')) {
+      return Response.json([{
+        mesh_public_key: mesh,
+        new_device_pubkey: newDev.pubB64,
+        device_id: 'phone-2',
+        expires_at: new Date(Number(epoch) * 1000).toISOString(),
+        approval_sig_b64: signDer(trusted.privKey, approveMsg(account, newDev.pubB64, nonce, Number(epoch))),
+        approved_device_id: 'trusted-1',
+        request_sig_b64: reqSig,
+      }]);
+    }
     if (url.includes('_svc')) {
       svcWrites++;
       return new Response(null, { status: 204 });
@@ -200,8 +211,22 @@ test('device-enrollment edge rejects bad proofs before service writes', async ()
   );
   stats.passed++;
 
+  const finishMsg = canonical(['TM-ENROLL-FINISH-v1', account, mesh, newDev.pubB64, 'phone-2', nonce, '0']);
+  const shortFinish = await submit({
+    operation: 'finish',
+    nonce_b64: nonce,
+    certificate: 'cert:phone-2',
+    finish_sig_b64: 'short',
+  });
+  assert.ok(shortFinish.status === 403 || shortFinish.status === 400);
+  stats.passed++;
   assert.equal(
-    (await submit({ operation: 'finish', nonce_b64: nonce, certificate: 'cert:phone-2' })).status,
+    (await submit({
+      operation: 'finish',
+      nonce_b64: nonce,
+      certificate: 'cert:phone-2',
+      finish_sig_b64: signDer(newDev.privKey, finishMsg),
+    })).status,
     200
   );
   stats.passed++;

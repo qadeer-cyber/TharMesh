@@ -22,7 +22,8 @@ for f in 202611120001_identity_provisioning.sql \
          202611120003_identity_device_guard.sql \
          202611120004_trusted_device_enrollment.sql \
          202611120005_device_current_explicit_reset.sql \
-         202611120006_enrollment_fail_closed_edge.sql; do
+         202611120006_enrollment_fail_closed_edge.sql \
+         202611120007_bootstrap_proof_and_auth_amr.sql; do
   $PSQL -d "$DB_NAME" -f "$ROOT/migrations/$f"
 done
 $PSQL -d "$DB_NAME" -c "GRANT USAGE ON SCHEMA public TO authenticated, anon;

@@ -346,10 +346,62 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
-  await t.test('migration idempotency re-apply 006', async () => {
+  await t.test('bootstrap challenge replay denied', async () => {
+    await admin.query('reset role');
+    const uid = 'f1000000-0000-4000-8000-000000000088';
+    await admin.query('insert into auth.users values ($1, now()) on conflict do nothing', [uid]);
+    await activateUser(admin, uid);
+    await admin.query('set role service_role');
+    const ch = (
+      await admin.query('select public.tharmesh_bootstrap_challenge_svc($1::uuid) as c', [uid])
+    ).rows[0].c;
+    await admin.query(
+      'select public.tharmesh_bootstrap_device_svc($1::uuid,$2,$3,$4::uuid,$5)',
+      [uid, 'boot-1', trustedDev.pubB64, ch, 'cert']
+    );
+    await assert.rejects(
+      () =>
+        admin.query(
+          'select public.tharmesh_bootstrap_device_svc($1::uuid,$2,$3,$4::uuid,$5)',
+          [uid, 'boot-2', trustedDev.pubB64, ch, 'cert']
+        ),
+      (e) => e.code === '42501'
+    );
+    stats.passed++;
+  });
+
+  await t.test('concurrent enrollment approve then finish', async () => {
+    await admin.query('reset role');
+    const newDev = keyMaterial();
+    const nonce = b64url(randomBytes(11));
+    const expires = new Date(Date.now() + 600_000).toISOString();
+    await admin.query('set role service_role');
+    const reqSig = signDer(newDev.privKey, enrollRequestMsg(userA, KEY122, newDev.pubB64, 'conc', nonce));
+    await admin.query(
+      'select public.tharmesh_enrollment_begin_svc($1::uuid,$2,$3,$4,$5,$6::timestamptz)',
+      [userA, 'conc', newDev.pubB64, nonce, reqSig, expires]
+    );
+    const epoch = (
+      await admin.query('select extract(epoch from $1::timestamptz)::bigint as e', [expires])
+    ).rows[0].e;
+    const apprSig = signDer(trustedDev.privKey, approveMsg(userA, newDev.pubB64, nonce, epoch));
+    await admin.query('select public.tharmesh_enrollment_approve_svc($1::uuid,$2,$3,$4)', [
+      userA, nonce, 'trusted-1', apprSig,
+    ]);
+    await admin.query('select public.tharmesh_enrollment_finish_svc($1::uuid,$2,$3)', [
+      userA, nonce, 'cert:conc',
+    ]);
+    await assert.rejects(
+      () => admin.query('select public.tharmesh_enrollment_finish_svc($1::uuid,$2,$3)', [userA, nonce, 'cert:conc']),
+      (e) => e.code === '42501'
+    );
+    stats.passed++;
+  });
+
+  await t.test('migration idempotency re-apply 007', async () => {
     await admin.query('reset role');
     const mig = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120006_enrollment_fail_closed_edge.sql'),
+      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120007_bootstrap_proof_and_auth_amr.sql'),
       'utf8'
     );
     await admin.query(mig);

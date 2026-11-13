@@ -2,6 +2,8 @@
 
 package com.tharmesh.account
 
+import com.tharmesh.identity.Base64Url
+import com.tharmesh.identity.CryptoIdentity
 import org.json.JSONObject
 
 /** Trusted enrollment via Edge Function (Web Crypto), not direct enrollment RPCs. */
@@ -70,37 +72,105 @@ object TrustedCloudEnrollment {
             .put("expires_epoch", expiresAtEpochSec)
     )
 
+    fun enrollFinishMessage(
+        accountId: String,
+        meshPublicKey: String,
+        devicePublicKey: String,
+        deviceId: String,
+        nonceB64: String
+    ): ByteArray = canonical(
+        "TM-ENROLL-FINISH-v1",
+        accountId,
+        meshPublicKey,
+        devicePublicKey,
+        deviceId,
+        nonceB64,
+        "0"
+    )
+
+    fun bootstrapMessage(
+        accountId: String,
+        challenge: String,
+        meshPublicKey: String,
+        deviceId: String,
+        devicePublicKey: String
+    ): ByteArray = (
+        "tharmesh:device:bootstrap:v1\n$accountId\n$challenge\n$meshPublicKey\n$deviceId\n$devicePublicKey"
+    ).toByteArray(Charsets.UTF_8)
+
     fun enrollmentFinish(
         http: HttpTransport,
         baseUrl: String,
         anonKey: String,
         accessToken: String,
         nonceB64: String,
-        certificate: String
+        certificate: String,
+        finishSigB64: String
     ): AuthCall = postEdge(
         http, baseUrl, anonKey, accessToken,
         JSONObject()
             .put("operation", "finish")
             .put("nonce_b64", nonceB64)
             .put("certificate", certificate)
+            .put("finish_sig_b64", finishSigB64)
     )
 
-    fun bootstrapDevice(
+    fun fetchBootstrapChallenge(
+        http: HttpTransport,
+        baseUrl: String,
+        anonKey: String,
+        accessToken: String
+    ): String? {
+        if (!AuthBackend.configured(baseUrl, anonKey)) return null
+        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return null
+        val response = try {
+            http.post(
+                baseUrl.trimEnd('/') + "/functions/v1/device-enrollment",
+                headers,
+                JSONObject().put("operation", "bootstrap_challenge").toString()
+            )
+        } catch (_: Throwable) {
+            return null
+        }
+        if (response.code !in 200..299) return null
+        return JSONObject(response.body).optString("challenge").takeIf { it.isNotBlank() }
+    }
+
+    fun bootstrapCommit(
         http: HttpTransport,
         baseUrl: String,
         anonKey: String,
         accessToken: String,
+        accountId: String,
+        mesh: CryptoIdentity,
+        device: DeviceSigner,
         deviceId: String,
-        devicePublicKey: String,
-        certificate: String? = null
-    ): AuthCall = postEdge(
-        http, baseUrl, anonKey, accessToken,
-        JSONObject()
-            .put("operation", "bootstrap_device")
-            .put("device_id", deviceId)
-            .put("device_pubkey", devicePublicKey)
-            .put("certificate", certificate ?: "")
-    )
+        challenge: String
+    ): AuthCall {
+        val msg = bootstrapMessage(accountId, challenge, mesh.publicKeyBase64, deviceId, device.publicKeyBase64)
+        val meshDer = Base64Url.decode(mesh.sign(msg))
+        val meshSig = meshDer?.let { Base64Url.encode(IdentityProvisioning.p256Signature(it)) } ?: return AuthCall.Failed("network")
+        return postEdge(
+            http, baseUrl, anonKey, accessToken,
+            JSONObject()
+                .put("operation", "bootstrap_commit")
+                .put("device_id", deviceId)
+                .put("device_pubkey", device.publicKeyBase64)
+                .put("mesh_public_key", mesh.publicKeyBase64)
+                .put("challenge", challenge)
+                .put("mesh_sig_b64", meshSig)
+                .put("device_sig_b64", device.sign(msg))
+        )
+    }
+
+    private fun canonical(vararg parts: String): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        parts.forEachIndexed { idx, s ->
+            if (idx > 0) out.write(0x1F)
+            out.write(s.toByteArray(Charsets.UTF_8))
+        }
+        return out.toByteArray()
+    }
 
     fun commitExplicitReset(
         http: HttpTransport,

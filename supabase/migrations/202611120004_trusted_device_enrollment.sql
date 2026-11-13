@@ -40,24 +40,8 @@ begin
 end;
 $$;
 
--- PGlite / hosted dev without plpython: shape-only stub. Real PG loads
--- 202611120004_verify_plpython.sql after this migration (see postgres-apply.sh).
-create or replace function tharmesh_private.verify_ecdsa_p256_spki(
-    spki_b64 text,
-    message bytea,
-    der_sig_b64 text
-)
-returns boolean
-language sql
-immutable
-strict
-as $$
-    select length(spki_b64) >= 80
-        and length(der_sig_b64) >= 40
-        and octet_length(message) > 10;
-$$;
-
-revoke all on function tharmesh_private.verify_ecdsa_p256_spki(text, bytea, text) from public, anon, authenticated;
+-- In-database ECDSA verification is intentionally unavailable (fail closed).
+-- Cryptographic verification runs only in Edge Functions (Update 0.5).
 
 create or replace function tharmesh_private.device_approve_message(
     p_account uuid,
@@ -183,10 +167,7 @@ begin
     if mesh is null then
         raise exception 'Canonical mesh required' using errcode = '42501';
     end if;
-    msg := tharmesh_private.enroll_request_message(caller, mesh, p_new_device_pubkey, p_device_id, p_nonce_b64);
-    if not tharmesh_private.verify_ecdsa_p256_spki(p_new_device_pubkey, msg, p_request_sig_b64) then
-        raise exception 'Invalid device request signature' using errcode = '42501';
-    end if;
+    raise exception 'Enrollment verification requires Edge Function' using errcode = '42501';
     if exists (
         select 1 from tharmesh_private.enrollment_pending e
         where e.account_id = caller and e.nonce_b64 = p_nonce_b64
@@ -232,23 +213,9 @@ begin
     select d.device_public_key into trusted_pubkey from public.devices d
         where d.account_id = caller and d.device_id = p_trusted_device_id and d.revoked_at is null;
     if trusted_pubkey is null then
-        select i.mesh_public_key into trusted_pubkey
-        from tharmesh_private.canonical_identities i
-        where i.account_id = caller and i.mesh_public_key is not null
-          and not exists (
-              select 1 from public.devices d
-              where d.account_id = caller and d.revoked_at is null
-          );
-        if trusted_pubkey is null or p_trusted_device_id <> 'bootstrap-mesh' then
-            raise exception 'Trusted device not found' using errcode = '42501';
-        end if;
+        raise exception 'Trusted device not found' using errcode = '42501';
     end if;
-    msg := tharmesh_private.device_approve_message(
-        caller, pending.new_device_pubkey, p_nonce_b64, pending.expires_at
-    );
-    if not tharmesh_private.verify_ecdsa_p256_spki(trusted_pubkey, msg, p_approval_sig_b64) then
-        raise exception 'Invalid approval signature' using errcode = '42501';
-    end if;
+    raise exception 'Enrollment verification requires Edge Function' using errcode = '42501';
     update tharmesh_private.enrollment_pending e
         set approval_sig_b64 = p_approval_sig_b64,
             approved_device_id = p_trusted_device_id

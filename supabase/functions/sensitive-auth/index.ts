@@ -1,4 +1,4 @@
-// Records server-enforced fresh auth from JWT session iat (no client prefs).
+// Server-enforced fresh auth from JWT amr method timestamps (not access-token iat refresh).
 const url = Deno.env.get("SUPABASE_URL");
 const anon = Deno.env.get("SUPABASE_ANON_KEY");
 const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -8,7 +8,9 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-function jwtPayload(authHeader: string): { sub?: string; iat?: number } | null {
+type AmrEntry = { method?: string; timestamp?: number };
+
+function jwtPayload(authHeader: string): { sub?: string; iat?: number; amr?: AmrEntry[] } | null {
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   const parts = token.split(".");
   if (parts.length < 2) return null;
@@ -17,6 +19,20 @@ function jwtPayload(authHeader: string): { sub?: string; iat?: number } | null {
   } catch {
     return null;
   }
+}
+
+function authEventTimestamp(payload: { amr?: AmrEntry[] }): number | null {
+  const amr = payload.amr;
+  if (!Array.isArray(amr) || amr.length === 0) return null;
+  let max = 0;
+  for (const entry of amr) {
+    const ts = entry?.timestamp;
+    if (typeof ts !== "number" || ts < 1) continue;
+    const method = entry?.method ?? "";
+    if (method === "refresh" || method === "token_refresh") continue;
+    if (ts > max) max = ts;
+  }
+  return max > 0 ? max : null;
 }
 
 async function rpc(name: string, payload: object): Promise<Response> {
@@ -45,22 +61,29 @@ Deno.serve(async (request) => {
     if (typeof id !== "string" || !email_confirmed_at) return json({ error: "sign_in_required" }, 401);
 
     const payload = jwtPayload(authorization);
-    const iat = payload?.iat;
-    if (typeof iat !== "number") return json({ error: "invalid_session" }, 403);
-    const age = Math.floor(Date.now() / 1000) - iat;
-    if (age < 0 || age > MAX_AGE_SEC) return json({ error: "stale_session" }, 403);
-    if (payload?.sub !== id) return json({ error: "account_mismatch" }, 403);
+    if (!payload || payload.sub !== id) return json({ error: "account_mismatch" }, 403);
+    const tokenIat = payload.iat;
+    const amrTs = authEventTimestamp(payload);
+    if (typeof tokenIat !== "number" || amrTs === null) return json({ error: "invalid_session" }, 403);
+
+    const now = Math.floor(Date.now() / 1000);
+    const authAge = now - amrTs;
+    if (authAge < 0 || authAge > MAX_AGE_SEC) return json({ error: "stale_auth_event" }, 403);
+    if (tokenIat < amrTs) return json({ error: "invalid_session" }, 403);
+    if (tokenIat - amrTs > 120) return json({ error: "refresh_without_reauth" }, 403);
 
     const body = await request.json().catch(() => ({}));
+    const scope = typeof body?.scope === "string" ? body.scope : "sensitive";
     if (body?.operation === "check_only") {
-      return json({ fresh: true, max_age_sec: MAX_AGE_SEC });
+      return json({ fresh: true, scope, max_age_sec: MAX_AGE_SEC, auth_amr_ts: amrTs });
     }
 
     const reply = await rpc("tharmesh_auth_fresh_record_svc", {
       p_account: id,
-      p_session_iat: iat,
+      p_auth_amr_ts: amrTs,
+      p_token_iat: tokenIat,
     });
-    return reply.ok ? json({ fresh: true }) : json({ error: "record_unavailable" }, 409);
+    return reply.ok ? json({ fresh: true, scope }) : json({ error: "record_unavailable" }, 409);
   } catch {
     return json({ error: "request_failed" }, 400);
   }

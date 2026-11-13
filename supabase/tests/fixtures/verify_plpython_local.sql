@@ -1,5 +1,6 @@
--- Optional: real ECDSA verify (requires plpython3u + cryptography). Not for PGlite.
-create or replace function tharmesh_private.verify_ecdsa_p256_spki(
+-- LOCAL PG HARNESS ONLY — never apply to hosted Supabase migrations.
+-- Optional manual install after apt install postgresql-plpython3-16 python3-cryptography.
+create or replace function tharmesh_private.verify_ecdsa_p256_spki_local(
     spki_b64 text,
     message bytea,
     der_sig_b64 text
@@ -28,5 +29,3 @@ try:
 except Exception:
     return False
 $$;
-
-revoke all on function tharmesh_private.verify_ecdsa_p256_spki(text, bytea, text) from public, anon, authenticated;

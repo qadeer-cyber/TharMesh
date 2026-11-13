@@ -746,18 +746,28 @@ class AccountFlowActivity : AppCompatActivity() {
                         status.setText(R.string.account_error_conflict)
                         return@launch
                     }
+                    val mesh = UserPrefs.readIdentity(this@AccountFlowActivity)
                     val device = AndroidDeviceKey.loadOrCreate()
-                    if (device != null) {
-                        val finger = UserPrefs.readIdentity(this@AccountFlowActivity)?.fingerprint?.take(16).orEmpty()
-                        if (finger.isNotBlank()) {
-                            withContext(Dispatchers.IO) {
-                                TrustedCloudEnrollment.bootstrapDevice(
+                    if (device != null && mesh != null) {
+                        val finger = mesh.fingerprint.take(16)
+                        withContext(Dispatchers.IO) {
+                            val challenge = TrustedCloudEnrollment.fetchBootstrapChallenge(
+                                http,
+                                BuildConfig.SUPABASE_URL,
+                                BuildConfig.SUPABASE_ANON_KEY,
+                                auth.tokens.accessToken
+                            )
+                            if (!challenge.isNullOrBlank()) {
+                                TrustedCloudEnrollment.bootstrapCommit(
                                     http,
                                     BuildConfig.SUPABASE_URL,
                                     BuildConfig.SUPABASE_ANON_KEY,
                                     auth.tokens.accessToken,
+                                    auth.tokens.accountId,
+                                    mesh,
+                                    device,
                                     finger,
-                                    device.publicKeyBase64
+                                    challenge
                                 )
                             }
                         }
@@ -1145,17 +1155,25 @@ class AccountFlowActivity : AppCompatActivity() {
             status.setText(R.string.account_error_approve)
             return
         }
-        if (!EnrollmentReplayGuard.markConsumed(this, cert.accountId, cert.nonceB64)) {
-            status.setText(R.string.account_error_enroll_replay)
-            return
-        }
         val ok = DeviceEnrollment.accept(cert, accountPublic, request)
         if (!ok) {
             status.setText(R.string.account_error_approve)
             return
         }
         val access = CloudSessionStore.readAccessToken(this)
-        if (!access.isNullOrBlank() && AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)) {
+        val device = AndroidDeviceKey.loadOrCreate()
+        val accountId = CloudSessionStore.readAccountId(this) ?: cert.accountId
+        val finishMsg = TrustedCloudEnrollment.enrollFinishMessage(
+            accountId,
+            cert.meshPublicKey,
+            cert.devicePublicKey,
+            cert.deviceId,
+            cert.nonceB64
+        )
+        val finishSig = device?.sign(finishMsg)
+        if (!access.isNullOrBlank() && AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+            && finishSig != null
+        ) {
             lifecycleScope.launch {
                 val cloud = withContext(Dispatchers.IO) {
                     TrustedCloudEnrollment.enrollmentFinish(
@@ -1164,15 +1182,19 @@ class AccountFlowActivity : AppCompatActivity() {
                         BuildConfig.SUPABASE_ANON_KEY,
                         access,
                         cert.nonceB64,
-                        EnrollmentQr.encodeCertificate(cert)
+                        EnrollmentQr.encodeCertificate(cert),
+                        finishSig
                     )
                 }
-                status.setText(
-                    if (cloud is AuthCall.Ok) R.string.account_enroll_accepted
-                    else R.string.account_error_approve
-                )
+                if (cloud is AuthCall.Ok) {
+                    EnrollmentReplayGuard.markConsumed(this@AccountFlowActivity, cert.accountId, cert.nonceB64)
+                    status.setText(R.string.account_enroll_accepted)
+                } else {
+                    status.setText(R.string.account_error_approve)
+                }
             }
         } else {
+            EnrollmentReplayGuard.markConsumed(this, cert.accountId, cert.nonceB64)
             status.setText(R.string.account_enroll_accepted)
         }
     }
