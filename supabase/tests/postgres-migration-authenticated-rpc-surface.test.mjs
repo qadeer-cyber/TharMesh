@@ -13,6 +13,7 @@ const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest_auth_surface';
 const userA = 'f1000000-0000-4000-8000-0000000000a1';
 
 /** Must match docs/authorization-surface-audit.md (authenticated EXECUTE). */
+/** Product RPCs (must have authenticated EXECUTE). */
 const ALLOWED_NAMES = new Set([
   'tharmesh_identity_state',
   'tharmesh_uses_canonical_identity',
@@ -21,8 +22,13 @@ const ALLOWED_NAMES = new Set([
   'tharmesh_account_evidence',
   'tharmesh_auth_fresh_required',
   'tharmesh_recovery_generation',
-  'tharmesh_device_revoke',
 ]);
+
+/** JWT claim helpers (EXECUTE ok; not *_svc). */
+const JWT_HELPERS = new Set(['tharmesh_jwt_session_id']);
+
+/** Must not be callable by authenticated (Edge path only). */
+const REVOKED_CLIENT_RPCS = new Set(['tharmesh_device_revoke']);
 
 function ensureDb() {
   const script = join(dirname(fileURLToPath(import.meta.url)), 'postgres-apply.sh');
@@ -60,12 +66,20 @@ test('014 client surface: authenticated allowlist, svc/private denied, smoke RPC
         assert.equal(row.auth_exec, false, `authenticated must not execute svc ${row.sig}`);
         continue;
       }
+      if (REVOKED_CLIENT_RPCS.has(row.proname)) {
+        assert.equal(row.auth_exec, false, `authenticated must not execute ${row.sig}`);
+        continue;
+      }
       if (row.auth_exec) {
-        assert.ok(ALLOWED_NAMES.has(row.proname), `unexpected authenticated EXECUTE on ${row.sig}`);
+        const ok = ALLOWED_NAMES.has(row.proname) || JWT_HELPERS.has(row.proname);
+        assert.ok(ok, `unexpected authenticated EXECUTE on ${row.sig}`);
         authGranted.add(row.proname);
       }
     }
     for (const name of ALLOWED_NAMES) {
+      assert.ok(authGranted.has(name), `missing authenticated EXECUTE for ${name}`);
+    }
+    for (const name of JWT_HELPERS) {
       assert.ok(authGranted.has(name), `missing authenticated EXECUTE for ${name}`);
     }
 
@@ -98,7 +112,7 @@ test('014 client surface: authenticated allowlist, svc/private denied, smoke RPC
             '00000000-0000-4000-8000-000000000001',
             'A'.repeat(80),
           ]),
-        (e) => !denyMsg(e) && (e.code === '42501' || /disabled/i.test(e.message ?? ''))
+        (e) => denyMsg(e) || e.code === '42501'
       );
     });
 

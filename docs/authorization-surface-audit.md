@@ -19,12 +19,13 @@ These are the only `public.tharmesh_*` routines that must remain executable by `
 | `tharmesh_account_evidence()` | Account evidence timestamps | 004–005 |
 | `tharmesh_auth_fresh_required(integer)` | AMR freshness gate | 006 |
 | `tharmesh_recovery_generation()` | Read recovery blob generation | 008 |
+| `tharmesh_jwt_session_id()` | Read `session_id` / `jti` from JWT claims (PostgREST / `auth.jwt()` plumbing) | 011 |
 
-### Callable but fail-closed (EXECUTE granted, body rejects client use)
+### Direct client RPC disabled (`REVOKE EXECUTE` from authenticated)
 
 | Function | Behavior | Migration |
 |----------|----------|-----------|
-| `tharmesh_device_revoke(text, uuid, text)` | Raises: direct RPC disabled; use `device-revoke` Edge | 011 |
+| `tharmesh_device_revoke(text, uuid, text)` | No `EXECUTE` for authenticated; use `device-revoke` Edge | 011 |
 
 ## Not authenticated (must deny `EXECUTE`)
 

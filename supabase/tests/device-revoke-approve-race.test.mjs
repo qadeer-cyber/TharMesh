@@ -80,7 +80,7 @@ async function raceScenario(pool, { onlyTwoDevices }) {
     const c = await pool.connect();
     try {
       await c.query('begin');
-      await c.query('set role service_role');
+      await c.query('set local role service_role');
       await c.query('select public.tharmesh_enrollment_approve_svc($1::uuid,$2,$3,$4)', [
         userA,
         nonce,
@@ -93,7 +93,7 @@ async function raceScenario(pool, { onlyTwoDevices }) {
       await c.query('rollback');
       return { code: e.code, message: e.message };
     } finally {
-      c.release();
+      await releaseClient(c);
     }
   };
 
@@ -108,12 +108,13 @@ async function raceScenario(pool, { onlyTwoDevices }) {
       await c.query('rollback');
       return { code: e.code, message: e.message };
     } finally {
-      c.release();
+      await releaseClient(c);
     }
   };
 
   const [ra, rb] = await Promise.all([approve(), revoke()]);
   const admin2 = await pool.connect();
+  await admin2.query('reset role');
   const pending = (
     await admin2.query(
       `select approval_sig_b64, approved_device_id from tharmesh_private.enrollment_pending

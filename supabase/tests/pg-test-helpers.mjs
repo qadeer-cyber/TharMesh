@@ -22,6 +22,7 @@ export function createTestPool(options = {}) {
     await client.query(
       `SET statement_timeout = '${STMT_MS}'; SET lock_timeout = '${LOCK_MS}'; SET idle_in_transaction_session_timeout = '${IDLE_TX_MS}';`
     );
+    await client.query('reset role');
     return client;
   };
   return pool;

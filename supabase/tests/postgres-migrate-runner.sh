@@ -15,7 +15,7 @@ export PGPASSWORD="${THARMESH_PG_PASSWORD:-pgtest_local}"
 PSQL="psql -h $PGHOST -U $PGUSER -v ON_ERROR_STOP=1"
 
 if [ "$MODE" = "fresh" ]; then
-  $PSQL -d postgres -c "DROP DATABASE IF EXISTS ${DB_NAME};"
+  $PSQL -d postgres -c "DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE);"
   $PSQL -d postgres -c "CREATE DATABASE ${DB_NAME};"
   $PSQL -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS plpython3u;" 2>/dev/null || \
     echo "note: plpython3u extension unavailable (skipped)"
