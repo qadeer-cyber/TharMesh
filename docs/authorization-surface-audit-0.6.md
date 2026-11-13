@@ -8,7 +8,7 @@
 | `device-enrollment` | yes | request body + user | yes (`_shared/amr.ts`) | n/a (crypto + svc) |
 | `sensitive-auth` | yes | `sub` vs user id | yes | issues session-bound grants (`recovery_rotate`, `device_revoke`) |
 | `recovery-rotate` | yes | `sub` vs user id | yes | `tharmesh_recovery_rotate_commit_svc` (grant consume + CAS put, one txn) |
-| `device-revoke` | yes | `sub` vs user id | yes (grant path) | consumes `device_revoke` grant + active-device pubkey proof |
+| `device-revoke` | yes | `sub` vs user id | yes (grant path) | Web Crypto proof (`TM-DEVICE-REVOKE-v1`) + `tharmesh_device_revoke_svc` |
 
 ## Write RPCs (service_role only)
 
@@ -16,7 +16,7 @@
 
 ## Authenticated RPCs (guarded)
 
-`tharmesh_device_revoke(text,uuid,text)`, `tharmesh_recovery_generation`, `tharmesh_list_devices`, `tharmesh_account_evidence` — require `auth.uid()`; revoke requires session-matched action grant (not account-wide `auth_freshness`).
+`tharmesh_device_revoke(text,uuid,text)` — **fail-closed** (Edge only). `tharmesh_device_revoke_svc` — **service_role** after possession proof. Session id via `tharmesh_jwt_session_id()` / `auth.jwt()` claims JSON (hosted PostgREST compatible).
 
 ## Direct table writes closed (009)
 

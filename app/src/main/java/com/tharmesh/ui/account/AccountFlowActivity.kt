@@ -1302,9 +1302,14 @@ class AccountFlowActivity : AppCompatActivity() {
             return
         }
         lifecycleScope.launch {
-            val selfPub = AndroidDeviceKey.loadOrCreate()?.publicKeyBase64
-            if (selfPub.isNullOrBlank()) {
+            val signer = AndroidDeviceKey.loadOrCreate()
+            if (signer == null) {
                 status.setText(R.string.account_error_keystore)
+                return@launch
+            }
+            val accountId = CloudSessionStore.readAccountId(this@AccountFlowActivity)
+            if (accountId.isNullOrBlank()) {
+                status.setText(R.string.account_error_not_configured)
                 return@launch
             }
             val grant = withContext(Dispatchers.IO) {
@@ -1319,7 +1324,14 @@ class AccountFlowActivity : AppCompatActivity() {
             }
             val result = withContext(Dispatchers.IO) {
                 DeviceDirectory.revoke(
-                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, id, grantId, selfPub
+                    http,
+                    BuildConfig.SUPABASE_URL,
+                    BuildConfig.SUPABASE_ANON_KEY,
+                    access,
+                    accountId,
+                    id,
+                    grantId,
+                    signer
                 )
             }
             status.setText(

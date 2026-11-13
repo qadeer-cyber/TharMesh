@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
+import { issueGrant, revokeViaSvc } from './pg-test-helpers.mjs';
 const require = createRequire(import.meta.url);
 const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
 const DB = process.env.THARMESH_PG_TEST_DB ?? 'tharmesh_pgtest';
@@ -77,18 +78,6 @@ async function withJwt(client, userId, role, fn, { commit = false, sessionId = '
     await client.query('rollback');
     throw e;
   }
-}
-
-async function issueDeviceRevokeGrant(client, account, sessionId) {
-  const ts = Math.floor(Date.now() / 1000);
-  await client.query('reset role');
-  await client.query('set role service_role');
-  return (
-    await client.query(
-      'select public.tharmesh_sensitive_grant_issue_svc($1::uuid,$2,$3,$4::bigint,$5::bigint,$6) as g',
-      [account, 'device_revoke', sessionId, ts, ts, 900]
-    )
-  ).rows[0].g;
 }
 
 function ensureDb() {
@@ -302,7 +291,7 @@ test('local Postgres multi-session suite', async (t) => {
 
   await t.test('revocation and authenticated device list', async () => {
     const sid = 'sess-revoke-ok';
-    const grant = await issueDeviceRevokeGrant(admin, userA, sid);
+    const grant = await issueGrant(admin, userA, 'device_revoke', sid);
     await withJwt(
       admin,
       userA,
@@ -312,11 +301,7 @@ test('local Postgres multi-session suite', async (t) => {
         assert.ok(list.length >= 2);
         const revokeId = list.find((r) => r.device_id !== 'trusted-1')?.device_id;
         assert.ok(revokeId);
-        await admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
-          revokeId,
-          grant,
-          trustedDev.pubB64,
-        ]);
+        await revokeViaSvc(admin, userA, revokeId, grant, sid, trustedDev.pubB64);
         const after = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
         assert.ok(after.find((r) => r.device_id === revokeId)?.revoked_at);
       },
@@ -342,7 +327,7 @@ test('local Postgres multi-session suite', async (t) => {
 
   await t.test('last active device revoke denied', async () => {
     const sid = 'sess-last-one';
-    const grant = await issueDeviceRevokeGrant(admin, userA, sid);
+    const grant = await issueGrant(admin, userA, 'device_revoke', sid);
     await withJwt(
       admin,
       userA,
@@ -356,12 +341,7 @@ test('local Postgres multi-session suite', async (t) => {
         ).rows[0].c;
         assert.equal(active, 1);
         await assert.rejects(
-          () =>
-            admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
-              'trusted-1',
-              grant,
-              trustedDev.pubB64,
-            ]),
+          () => revokeViaSvc(admin, userA, 'trusted-1', grant, sid, trustedDev.pubB64),
           (e) => e.message?.includes('Last active') || e.code === '42501'
         );
       },
@@ -372,24 +352,34 @@ test('local Postgres multi-session suite', async (t) => {
 
   await t.test('cross-account revoke denied', async () => {
     const sid = 'sess-cross';
-    const grant = await issueDeviceRevokeGrant(admin, userB, sid);
+    const grant = await issueGrant(admin, userB, 'device_revoke', sid);
     await withJwt(
       admin,
       userB,
       'authenticated',
       async () => {
         await assert.rejects(
-          () =>
-            admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
-              'trusted-1',
-              grant,
-              trustedDev.pubB64,
-            ]),
+          () => revokeViaSvc(admin, userB, 'trusted-1', grant, sid, trustedDev.pubB64),
           (e) => e.code === '42501'
         );
       },
       { sessionId: sid }
     );
+    stats.passed++;
+  });
+
+  await t.test('authenticated direct tharmesh_device_revoke fail-closed', async () => {
+    await withJwt(admin, userA, 'authenticated', async () => {
+      await assert.rejects(
+        () =>
+          admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
+            'trusted-1',
+            '00000000-0000-4000-8000-000000000001',
+            trustedDev.pubB64,
+          ]),
+        (e) => e.message?.includes('disabled') || e.code === '42501'
+      );
+    });
     stats.passed++;
   });
 
@@ -554,12 +544,12 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
-  await t.test('migration idempotency re-apply 010', async () => {
+  await t.test('migration idempotency re-apply 011', async () => {
     await admin.query('reset role');
     const mig = readFileSync(
       join(
         dirname(fileURLToPath(import.meta.url)),
-        '../migrations/202611120010_grant_session_atomic_recovery.sql'
+        '../migrations/202611120011_revoke_possession_jwt_claims.sql'
       ),
       'utf8'
     );

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { issueGrant, withSession } from './pg-test-helpers.mjs';
+import { issueGrant, revokeViaSvc, withSession } from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
@@ -42,17 +42,12 @@ async function activeCount(pool, account = userA) {
 async function revokeWithGrant(pool, deviceId, grantId, sessionId, activePub = KEY122) {
   const c = await pool.connect();
   try {
-    return await withSession(
-      c,
-      userA,
-      sessionId,
-      async () => {
-        await c.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [deviceId, grantId, activePub]);
-        return { ok: true };
-      },
-      { commit: true }
-    );
+    await c.query('begin');
+    await revokeViaSvc(c, userA, deviceId, grantId, sessionId, activePub);
+    await c.query('commit');
+    return { ok: true };
   } catch (e) {
+    await c.query('rollback');
     return { code: e.code, message: e.message };
   } finally {
     c.release();
@@ -191,14 +186,11 @@ test('cross-account revoke denied', async () => {
   const c = await pool.connect();
   try {
     await assert.rejects(
-      () =>
-        withSession(
-          c,
-          userB,
-          'sess-cross-b',
-          () => c.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', ['d1', g, KEY122]),
-          { commit: true }
-        ),
+      async () => {
+        await c.query('begin');
+        await revokeViaSvc(c, userB, 'd1', g, 'sess-cross-b', KEY122);
+        await c.query('commit');
+      },
       (e) => e.code === '42501'
     );
   } finally {

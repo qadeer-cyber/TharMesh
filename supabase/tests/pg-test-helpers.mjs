@@ -1,10 +1,16 @@
-export async function withSession(client, userId, sessionId, fn, { commit = false } = {}) {
+export async function withSession(client, userId, sessionId, fn, { commit = false, claimsOnly = false } = {}) {
   await client.query('begin');
   try {
     await client.query('set local role authenticated');
-    await client.query("select set_config('request.jwt.claim.sub', $1, true)", [userId]);
-    if (sessionId) {
-      await client.query("select set_config('request.jwt.claim.session_id', $1, true)", [sessionId]);
+    if (claimsOnly && sessionId) {
+      await client.query("select set_config('request.jwt.claims', $1, true)", [
+        JSON.stringify({ sub: userId, session_id: sessionId, role: 'authenticated' }),
+      ]);
+    } else {
+      await client.query("select set_config('request.jwt.claim.sub', $1, true)", [userId]);
+      if (sessionId) {
+        await client.query("select set_config('request.jwt.claim.session_id', $1, true)", [sessionId]);
+      }
     }
     const result = await fn();
     if (commit) await client.query('commit');
@@ -14,6 +20,20 @@ export async function withSession(client, userId, sessionId, fn, { commit = fals
     await client.query('rollback');
     throw e;
   }
+}
+
+export async function revokeViaSvc(client, account, deviceId, grantId, sessionId, callerPub, proofTs) {
+  const ts = proofTs ?? Math.floor(Date.now() / 1000);
+  await client.query('reset role');
+  await client.query('set role service_role');
+  await client.query('select public.tharmesh_device_revoke_svc($1::uuid,$2,$3::uuid,$4,$5,$6::bigint)', [
+    account,
+    deviceId,
+    grantId,
+    sessionId,
+    callerPub,
+    ts,
+  ]);
 }
 
 export async function issueGrant(client, account, action, sessionId) {
