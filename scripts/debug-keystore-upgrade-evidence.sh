@@ -15,6 +15,7 @@ OLD_APK="${1:-$ART/tharmesh-app-debug-old.apk}"
 OLD_CI_RUN="${OLD_CI_RUN:-}"
 OLD_ROOM_EXPECTED="${OLD_ROOM_EXPECTED:-}"
 LEGACY_ROOM_MAX="${LEGACY_ROOM_MAX:-6}"
+LEGACY_SOURCE_COMMIT="${LEGACY_SOURCE_COMMIT:-}"
 
 log() { echo "$@" | tee -a "$LOG"; }
 
@@ -129,8 +130,68 @@ compare_snapshots() {
   done
 }
 
+seed_legacy_v6_sqlite() {
+  local prefs="/tmp/tharmesh_v6_user_prefs.xml"
+  cat >"$prefs" <<'EOF'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="authenticated" value="true" />
+    <string name="user_id">legacy-v6-seed-user</string>
+    <string name="username">Legacy V6 Seed</string>
+    <string name="auth_provider">anonymous</string>
+    <string name="identity_fingerprint">legacyv6meshfp0001</string>
+    <string name="identity_private_key_b64">MEECAQAwEwYHKoZIzj0CAQYIKoZIzj0DAQcEJzAlAgEBBCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</string>
+    <string name="identity_public_key_b64">MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==</string>
+</map>
+EOF
+  "$ADB" push "$prefs" /sdcard/tharmesh_user_prefs.xml >>"$LOG" 2>&1
+  "$ADB" shell run-as "$PKG" mkdir -p shared_prefs >>"$LOG" 2>&1 || true
+  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh_user_prefs.xml shared_prefs/tharmesh_user_prefs.xml" >>"$LOG" 2>&1
+  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
+  sleep 8
+  "$ADB" shell am force-stop "$PKG"
+  local dir="/tmp/tharmesh-v6-seed"
+  mkdir -p "$dir"
+  db_pull_dir "$dir"
+  local ver
+  ver=$(room_user_version "$dir")
+  log "v6 seed bootstrap room_version=$ver"
+  if [ "$ver" != "6" ] && [ "$ver" != "0" ]; then
+    log "WARN expected room 6 before seed inserts, got $ver"
+  fi
+  sqlite3 "$dir/tharmesh.db" <<'SQL'
+PRAGMA user_version = 6;
+INSERT OR REPLACE INTO contacts (userId, displayName, publicKey, addedAt, lastSeen) VALUES
+  ('peer-a', 'Evidence Peer A', 'PUBKEYA', 100, 100),
+  ('peer-b', 'Evidence Peer B', 'PUBKEYB', 100, 100);
+INSERT INTO messages (fromUserId, toUserId, peerUserId, body, status, timestamp) VALUES
+  ('legacy-v6-seed-user', 'peer-a', 'peer-a', 'LEGACY_V6_SEED_A1', 'DELIVERED', 1001),
+  ('legacy-v6-seed-user', 'peer-a', 'peer-a', 'LEGACY_V6_SEED_A2', 'DELIVERED', 1002),
+  ('legacy-v6-seed-user', 'peer-b', 'peer-b', 'LEGACY_V6_SEED_B1', 'DELIVERED', 1003);
+INSERT OR REPLACE INTO peer_identity (userId, publicKeyBase64, fingerprint, firstSeenMs, verified, verifiedAtMs) VALUES
+  ('peer-a', 'PUBKEYA', 'fpa', 100, 1, 101),
+  ('peer-b', 'PUBKEYB', 'fpb', 100, 1, 101);
+SQL
+  "$ADB" push "$dir/tharmesh.db" /sdcard/tharmesh.db >>"$LOG" 2>&1
+  "$ADB" shell run-as "$PKG" mkdir -p databases >>"$LOG" 2>&1 || true
+  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh.db databases/tharmesh.db" >>"$LOG" 2>&1
+  rm -f "$dir/tharmesh.db-wal" "$dir/tharmesh.db-shm"
+  : >"$dir/tharmesh.db-wal"
+  : >"$dir/tharmesh.db-shm"
+  "$ADB" push "$dir/tharmesh.db-wal" /sdcard/tharmesh.db-wal >>"$LOG" 2>&1 || true
+  "$ADB" push "$dir/tharmesh.db-shm" /sdcard/tharmesh.db-shm >>"$LOG" 2>&1 || true
+  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh.db-wal databases/tharmesh.db-wal" >>"$LOG" 2>&1 || true
+  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh.db-shm databases/tharmesh.db-shm" >>"$LOG" 2>&1 || true
+  log "v6 sqlite seed complete"
+}
+
 seed_old_app() {
   "$ADB" shell am force-stop "$PKG"
+  if [ -n "$LEGACY_SOURCE_COMMIT" ]; then
+    log "legacy seed via sqlite (historical commit $LEGACY_SOURCE_COMMIT)"
+    seed_legacy_v6_sqlite
+    return 0
+  fi
   if "$ADB" shell pm dump "$PKG" 2>/dev/null | grep -q OfflineRoomPersistenceSmokeActivity; then
     "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.OfflineRoomPersistenceSmokeActivity" >>"$LOG" 2>&1
     sleep 3
@@ -148,6 +209,7 @@ main() {
   fi
   log "old_apk_file_sha256=$(file_apk_sha256 "$OLD_APK")"
   [ -n "$OLD_CI_RUN" ] && log "old_apk_ci_run=$OLD_CI_RUN"
+  [ -n "$LEGACY_SOURCE_COMMIT" ] && log "legacy_source_commit=$LEGACY_SOURCE_COMMIT"
 
   ensure_emulator
   (cd "$ROOT" && ./gradlew assembleDebug -q)
@@ -195,6 +257,9 @@ main() {
   fi
   log "migration_path=Room_${old_room}_to_${new_room} (automatic on open)"
   compare_snapshots
+  if [ -n "$LEGACY_SOURCE_COMMIT" ]; then
+    log "label=Cat 6 debug-keystore legacy upgrade, old APK rebuilt from historical source commit $LEGACY_SOURCE_COMMIT"
+  fi
   log "RESULT=PASS debug-keystore legacy schema upgrade"
 }
 
