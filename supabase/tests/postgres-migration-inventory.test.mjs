@@ -16,20 +16,29 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const migDir = join(root, 'migrations');
 
+function pgCreds() {
+  return {
+    user: process.env.THARMESH_PG_USER ?? process.env.PGUSER ?? 'tharmesh_runner',
+    password: process.env.THARMESH_PG_PASSWORD ?? process.env.PGPASSWORD ?? 'pgtest_local',
+    host: process.env.THARMESH_PG_HOST ?? process.env.PGHOST ?? '127.0.0.1',
+  };
+}
+
 function run(cmd, env = {}) {
   const r = spawnSync('bash', cmd, {
     encoding: 'utf8',
-    env: { ...process.env, THARMESH_PG_USER: 'tharmesh_runner', THARMESH_PG_PASSWORD: 'pgtest_local', ...env },
+    env: { ...process.env, ...env },
   });
   return r;
 }
 
 async function countMigrations(db) {
+  const { user, password, host } = pgCreds();
   const pool = new Pool({
     database: db,
-    user: 'tharmesh_runner',
-    password: 'pgtest_local',
-    host: '127.0.0.1',
+    user,
+    password,
+    host,
   });
   const client = await pool.connect();
   try {

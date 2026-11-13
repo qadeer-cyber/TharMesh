@@ -21,7 +21,7 @@ function ensureDb(name) {
   const script = join(dirname(fileURLToPath(import.meta.url)), 'postgres-apply.sh');
   const r = spawnSync('bash', [script, name], {
     encoding: 'utf8',
-    env: { ...process.env, THARMESH_PG_USER: 'tharmesh_runner', THARMESH_PG_PASSWORD: 'pgtest_local' },
+    env: process.env,
   });
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'postgres-apply failed');
 }

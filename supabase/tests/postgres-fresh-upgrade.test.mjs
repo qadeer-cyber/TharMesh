@@ -54,7 +54,7 @@ function dropCreate(db) {
     [join(here, 'postgres-apply.sh'), db],
     {
       encoding: 'utf8',
-      env: { ...process.env, THARMESH_PG_USER: 'tharmesh_runner', THARMESH_PG_PASSWORD: 'pgtest_local' },
+      env: process.env,
     }
   );
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'postgres-apply failed');
@@ -93,7 +93,11 @@ test('postgres fresh + upgrade + idempotency policy', async () => {
   const upPool = new Pool(poolConfig(upgradeDb));
   const up = await upPool.connect();
   try {
-    await up.query('CREATE EXTENSION IF NOT EXISTS plpython3u');
+    try {
+      await up.query('CREATE EXTENSION IF NOT EXISTS plpython3u');
+    } catch (e) {
+      if (!String(e.message ?? e).includes('plpython3u')) throw e;
+    }
     await applyFile(up, join(here, 'postgres-bootstrap.sql'));
     await applyFile(up, join(root, 'schema.sql'));
     await applyFile(up, join(here, 'fixtures/pre_0.6_legacy_seed.sql'));

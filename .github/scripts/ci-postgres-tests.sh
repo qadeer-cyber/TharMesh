@@ -9,6 +9,8 @@ export PGPASSWORD="${THARMESH_PG_PASSWORD:-pgtest_local}"
 
 npm install --prefix /tmp/tharmesh-pg-tests pg@8.11.3
 
+bash supabase/tests/postgres-ensure-test-role.sh
+
 bash supabase/tests/postgres-apply.sh tharmesh_ci_pg
 node --test supabase/tests/postgres-fresh-upgrade.test.mjs
 node --test supabase/tests/postgres-migration-inventory.test.mjs
