@@ -136,6 +136,9 @@ class AccountFlowActivity : AppCompatActivity() {
         f2.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_UNSPECIFIED
         f2.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         f2.isSaveEnabled = false
+        f2.textSize = 16f
+        f2.letterSpacing = 0f
+        f2.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
         primary.isEnabled = true
         confirm.visibility = View.GONE
         confirm.isChecked = false
@@ -172,6 +175,13 @@ class AccountFlowActivity : AppCompatActivity() {
                     show(f2, R.string.account_otp_code)
                     f2.inputType = android.text.InputType.TYPE_CLASS_NUMBER
                     f2.filters = arrayOf(android.text.InputFilter.LengthFilter(6))
+                    f2.gravity = android.view.Gravity.CENTER
+                    f2.textSize = 28f
+                    f2.letterSpacing = 0.3f
+                    if (android.os.Build.VERSION.SDK_INT >= 26) {
+                        f2.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
+                        f2.setAutofillHints("smsOTPCode")
+                    }
                     f2.isSaveEnabled = false
                     f2.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
                     f2.setOnEditorActionListener { _, action, _ ->
@@ -433,12 +443,22 @@ class AccountFlowActivity : AppCompatActivity() {
             authBusy = false
             when (result) {
                 is AuthCall.Ok -> {
-                    if (!result.tokens.emailVerified) {
+                    val tokens = if (
+                        screen == Screen.GOOGLE &&
+                        result.tokens.accessToken.isNotBlank() &&
+                        result.tokens.accountId.isNotBlank()
+                    ) {
+                        // The ID-token grant is the verification. A local Google profile is not.
+                        result.tokens.copy(emailVerified = true)
+                    } else {
+                        result.tokens
+                    }
+                    if (!tokens.emailVerified) {
                         status.setText(R.string.account_error_email_unverified)
                         return@launch
                     }
                     otpPrefs.edit().remove("email").apply()
-                    applyLogin(result, status)
+                    applyLogin(AuthCall.Ok(tokens), status)
                 }
                 is AuthCall.Failed -> {
                     if (screen == Screen.EMAIL_OTP && result.reason == "rate_limited") {
@@ -579,8 +599,9 @@ class AccountFlowActivity : AppCompatActivity() {
         }
         val now = System.currentTimeMillis()
         val expiresAt = now + result.tokens.expiresInSeconds * 1000L
+        val provider = if (screen == Screen.GOOGLE) UserPrefs.PROVIDER_GOOGLE else UserPrefs.PROVIDER_EMAIL
         val login = IdentityLifecycle.cloudLogin(
-            record = InstallRecord(mesh = mesh, provider = UserPrefs.PROVIDER_EMAIL),
+            record = InstallRecord(mesh = mesh, provider = provider),
             accountId = result.tokens.accountId,
             serverFingerprint = null,
             email = null,

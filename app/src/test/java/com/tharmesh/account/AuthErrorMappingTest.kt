@@ -96,7 +96,10 @@ class AuthErrorMappingTest {
             assertEquals("a@b.co", payload.getString("email"))
             when (calls) {
                 1 -> {
-                    assertEquals("$base/auth/v1/otp", url)
+                    assertTrue(url.startsWith("$base/auth/v1/otp"))
+                    assertTrue(url.contains("redirect_to="))
+                    assertFalse(url.contains("localhost"))
+                    assertEquals(com.tharmesh.account.AuthRedirect.CALLBACK, payload.getString("redirect_to"))
                     assertTrue(payload.getBoolean("create_user"))
                     HttpTransport.Response(200, "{}")
                 }

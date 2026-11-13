@@ -8,7 +8,7 @@
     <string name="chat_status_msg_failed">ناکام — دوبارہ کوشش کے لیے ٹیپ کریں</string>
     <string name="chat_status_msg_awaiting_key">تصدیق شدہ رابطے کا انتظار — پیغام نہیں بھیجا گیا</string>
     <string name="mesh_service_notification">تھارمیش قریبی آلات سن رہا ہے</string>
-    <string name="login_create_account">اکاؤنٹ بنائیں</string>
+    <string name="login_create_account">ای میل سے جاری رکھیں</string>
     <string name="login_sign_in">سائن ان</string>
     <string name="login_continue_with_google">گوگل کے ساتھ جاری رکھیں</string>
     <string name="login_continue_anonymously">بغیر اکاؤنٹ کے جاری رکھیں</string>

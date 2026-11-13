@@ -8,7 +8,7 @@
     <string name="chat_status_msg_failed">ناڪام — ٻيهر ڪوشش لاءِ ٽيپ ڪريو</string>
     <string name="chat_status_msg_awaiting_key">تصديق ٿيل رابطي جو انتظار — نياپو نه موڪليو ويو</string>
     <string name="mesh_service_notification">ٿارميش ويجها ڊوائيس ٻڌي رهيو آهي</string>
-    <string name="login_create_account">اڪائونٽ ٺاهيو</string>
+    <string name="login_create_account">اي ميل سان اڳتي</string>
     <string name="login_sign_in">سائن ان</string>
     <string name="login_continue_with_google">گوگل سان جاري رکو</string>
     <string name="login_continue_anonymously">اڪائونٽ کان سواءِ جاري رکو</string>

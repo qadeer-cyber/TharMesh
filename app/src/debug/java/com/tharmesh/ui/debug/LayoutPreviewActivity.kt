@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -66,6 +67,36 @@ class LayoutPreviewActivity : AppCompatActivity() {
             }
             "status" -> seedHealth()
             "contact" -> seedContact()
+            "otp", "otp_code" -> seedOtp(name)
+        }
+    }
+
+    private fun seedOtp(name: String?) {
+        findViewById<TextView>(R.id.account_title)?.setText(R.string.account_otp_title)
+        findViewById<TextView>(R.id.account_primary)?.setText(
+            if (name == "otp_code") R.string.account_otp_verify else R.string.account_otp_send
+        )
+        findViewById<TextView>(R.id.account_body)?.setText(
+            if (name == "otp_code") R.string.account_otp_verify_body else R.string.account_otp_request_body
+        )
+        findViewById<EditText>(R.id.account_field_1)?.apply {
+            visibility = View.VISIBLE
+            setText(if (name == "otp_code") "person@example.com" else "")
+            isEnabled = name != "otp_code"
+        }
+        listOf(R.id.account_field_3, R.id.account_field_4).forEach { id ->
+            findViewById<View>(id)?.visibility = View.GONE
+        }
+        findViewById<EditText>(R.id.account_field_2)?.apply {
+            if (name == "otp_code") {
+                visibility = View.VISIBLE
+                hint = getString(R.string.account_otp_code)
+                gravity = android.view.Gravity.CENTER
+                textSize = 28f
+                letterSpacing = 0.3f
+            } else {
+                visibility = View.GONE
+            }
         }
     }
 
@@ -173,6 +204,8 @@ class LayoutPreviewActivity : AppCompatActivity() {
             "profile" to R.layout.activity_profile,
             "about" to R.layout.activity_about,
             "account" to R.layout.activity_account_flow,
+            "otp" to R.layout.activity_account_flow,
+            "otp_code" to R.layout.activity_account_flow,
             "scanner" to R.layout.activity_scan_qr,
             "qr" to R.layout.activity_my_qr,
             "terms" to R.layout.activity_terms_gate,

@@ -137,9 +137,16 @@ object AuthBackend {
     fun requestEmailOtp(http: HttpTransport, baseUrl: String, apiKey: String, email: String): AuthCall {
         if (!configured(baseUrl, apiKey)) return AuthCall.Failed("cloud_auth_not_configured")
         if (!email.contains("@")) return AuthCall.Failed("email_address_invalid")
-        val payload = JSONObject().put("email", email.trim()).put("create_user", true)
+        val payload = JSONObject()
+            .put("email", email.trim())
+            .put("create_user", true)
+            .put("redirect_to", AuthRedirect.CALLBACK)
         val response = try {
-            http.post(baseUrl.trim().trimEnd('/') + "/auth/v1/otp", SupabaseHeaders.build(apiKey), payload.toString())
+            http.post(
+                baseUrl.trim().trimEnd('/') + "/auth/v1/otp" + redirectQuery(),
+                SupabaseHeaders.build(apiKey),
+                payload.toString()
+            )
         } catch (ignored: Exception) {
             return AuthCall.Failed("network")
         }

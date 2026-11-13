@@ -98,6 +98,7 @@
         <item name="tmBubbleMeStart">@color/tm_rose_dark_primary</item>
         <item name="tmBubbleMeEnd">@color/tm_rose_dark_primary</item>
         <item name="tmUnreadBadge">@color/tm_rose_dark_primary</item>
+        <item name="tmTickRead">@color/tm_rose_dark_primary</item>
         <item name="tmGradientAccentStart">@color/tm_rose_dark_primary</item>
         <item name="tmGradientAccentEnd">@color/tm_rose_dark_primary</item>
         <item name="tmDotConnected">@color/tm_rose_dark_primary</item>
