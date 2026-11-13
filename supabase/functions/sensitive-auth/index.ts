@@ -9,6 +9,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 import { authEventTimestamp, jwtPayload } from "../_shared/amr.ts";
+import { sessionId } from "../_shared/session.ts";
+
+const ALLOWED_ACTIONS = new Set(["recovery_rotate", "device_revoke"]);
 
 async function rpc(name: string, payload: object): Promise<Response> {
   return await fetch(`${url}/rest/v1/rpc/${name}`, {
@@ -53,21 +56,26 @@ Deno.serve(async (request) => {
       return json({ fresh: true, scope, max_age_sec: MAX_AGE_SEC, auth_amr_ts: amrTs });
     }
 
-    const action = typeof body?.action === "string" ? body.action.trim() : "sensitive";
+    const action = typeof body?.action === "string" ? body.action.trim() : "";
+    const sid = sessionId(payload);
+    if (sid === null) return json({ error: "invalid_session" }, 403);
+    if (!ALLOWED_ACTIONS.has(action)) {
+      const legacy = await rpc("tharmesh_auth_fresh_record_svc", {
+        p_account: id,
+        p_auth_amr_ts: amrTs,
+        p_token_iat: tokenIat,
+      });
+      return legacy.ok ? json({ fresh: true, scope, session_bound: false }) : json({ error: "record_unavailable" }, 409);
+    }
     const reply = await rpc("tharmesh_sensitive_grant_issue_svc", {
       p_account: id,
       p_action: action,
-      p_session_sub: id,
+      p_session_id: sid,
       p_auth_amr_ts: amrTs,
       p_token_iat: tokenIat,
       p_ttl_seconds: MAX_AGE_SEC,
     });
     if (!reply.ok) {
-      await rpc("tharmesh_auth_fresh_record_svc", {
-        p_account: id,
-        p_auth_amr_ts: amrTs,
-        p_token_iat: tokenIat,
-      });
       return json({ error: "record_unavailable" }, 409);
     }
     const grantId = await reply.json();

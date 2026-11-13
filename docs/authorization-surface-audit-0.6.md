@@ -6,8 +6,9 @@
 |----------|-----------------|-------------------|------------------------|--------------|
 | `identity-proof` | yes | `sub` vs user id | (via GoTrue session) | n/a |
 | `device-enrollment` | yes | request body + user | yes (`_shared/amr.ts`) | n/a (crypto + svc) |
-| `sensitive-auth` | yes | `sub` vs user id | yes | issues `sensitive_action_grants` |
-| `recovery-rotate` | yes | `sub` vs user id | yes + `tharmesh_auth_fresh_required` | consumes `recovery_rotate` grant |
+| `sensitive-auth` | yes | `sub` vs user id | yes | issues session-bound grants (`recovery_rotate`, `device_revoke`) |
+| `recovery-rotate` | yes | `sub` vs user id | yes | `tharmesh_recovery_rotate_commit_svc` (grant consume + CAS put, one txn) |
+| `device-revoke` | yes | `sub` vs user id | yes (grant path) | consumes `device_revoke` grant + active-device pubkey proof |
 
 ## Write RPCs (service_role only)
 
@@ -15,7 +16,7 @@
 
 ## Authenticated RPCs (guarded)
 
-`tharmesh_device_revoke`, `tharmesh_recovery_generation`, `tharmesh_list_devices`, `tharmesh_account_evidence` — require `auth.uid()` and fresh auth where applicable.
+`tharmesh_device_revoke(text,uuid,text)`, `tharmesh_recovery_generation`, `tharmesh_list_devices`, `tharmesh_account_evidence` — require `auth.uid()`; revoke requires session-matched action grant (not account-wide `auth_freshness`).
 
 ## Direct table writes closed (009)
 
@@ -29,7 +30,11 @@ Excluded: `anonymous`, `token_refresh`, `refresh`.
 
 ## Device mutation serialization
 
-`tharmesh_private.account_device_mutation_lock` advisory xact lock used in `tharmesh_device_revoke`, `tharmesh_enrollment_finish_svc`, `tharmesh_bootstrap_device_svc` (migration 009).
+`tharmesh_private.account_device_mutation_lock` advisory xact lock used in `tharmesh_device_revoke`, `tharmesh_enrollment_finish_svc`, `tharmesh_enrollment_approve_svc`, `tharmesh_bootstrap_device_svc`, `tharmesh_commit_explicit_reset` (migration 009–010).
+
+## Known issue (gate 2): revoked device JWT still account-scoped
+
+Supabase user JWTs are account-level, not device-level. A phone that was revoked in `devices` but still holds a refreshable session can pass fresh AMR (`sensitive-auth`) and obtain a `device_revoke` grant while only the non-revoked device’s pubkey satisfies `p_active_device_pubkey`. Mitigation in 010: revoke requires proof from an **active** device key on the account. Remaining gap: any active device holder can revoke others (intended for account holder); a stale session on a **revoked** device cannot satisfy pubkey proof but could still disturb enroll/read paths until refresh tokens expire—monitor session revocation on device revoke in a future gate.
 
 ## All-devices-lost recovery
 

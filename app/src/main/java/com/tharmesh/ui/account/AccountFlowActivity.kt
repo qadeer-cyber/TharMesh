@@ -1113,10 +1113,11 @@ class AccountFlowActivity : AppCompatActivity() {
                 status.setText(R.string.account_reauth_required_upload)
                 return@launch
             }
+            val requestId = staged?.requestId ?: java.util.UUID.randomUUID().toString()
             val result = withContext(Dispatchers.IO) {
                 TrustedRecoveryRotate.upload(
                     http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY,
-                    access, sealed, generation, grantId
+                    access, sealed, generation, grantId, requestId
                 )
             }
             when (result) {
@@ -1301,18 +1302,24 @@ class AccountFlowActivity : AppCompatActivity() {
             return
         }
         lifecycleScope.launch {
-            val fresh = withContext(Dispatchers.IO) {
-                ServerFreshAuth.isFreshOnServer(
-                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access
+            val selfPub = AndroidDeviceKey.loadOrCreate()?.publicKeyBase64
+            if (selfPub.isNullOrBlank()) {
+                status.setText(R.string.account_error_keystore)
+                return@launch
+            }
+            val grant = withContext(Dispatchers.IO) {
+                ServerFreshAuth.recordActionGrant(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, "device_revoke"
                 )
             }
-            if (!fresh) {
+            val grantId = grant.grantId
+            if (grant.call !is AuthCall.Ok || grantId.isNullOrBlank()) {
                 status.setText(R.string.account_reauth_required_revoke)
                 return@launch
             }
             val result = withContext(Dispatchers.IO) {
                 DeviceDirectory.revoke(
-                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, id
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, id, grantId, selfPub
                 )
             }
             status.setText(
@@ -1377,7 +1384,12 @@ class AccountFlowActivity : AppCompatActivity() {
             }
             pendingPhrase = outcome.phrase
             RecoveryRotationStage.save(
-                this@AccountFlowActivity, outcome.phrase, outcome.sealed, accountId, expectedGen
+                this@AccountFlowActivity,
+                outcome.phrase,
+                outcome.sealed,
+                accountId,
+                expectedGen,
+                java.util.UUID.randomUUID().toString()
             )
             pendingRecord = InstallRecord(
                 accountId = accountId,

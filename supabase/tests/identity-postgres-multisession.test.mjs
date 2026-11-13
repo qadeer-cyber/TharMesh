@@ -63,20 +63,32 @@ async function poolClient() {
   return client;
 }
 
-async function withJwt(client, userId, role, fn, { commit = false } = {}) {
+async function withJwt(client, userId, role, fn, { commit = false, sessionId = 'sess-test-a1' } = {}) {
   await client.query('begin');
   try {
     if (role) await client.query('set local role ' + role);
     await client.query("select set_config('request.jwt.claim.sub', $1, true)", [userId]);
+    await client.query("select set_config('request.jwt.claim.session_id', $1, true)", [sessionId]);
     const result = await fn();
     if (commit) await client.query('commit');
+    else await client.query('rollback');
     return result;
   } catch (e) {
     await client.query('rollback');
     throw e;
-  } finally {
-    if (!commit) await client.query('rollback');
   }
+}
+
+async function issueDeviceRevokeGrant(client, account, sessionId) {
+  const ts = Math.floor(Date.now() / 1000);
+  await client.query('reset role');
+  await client.query('set role service_role');
+  return (
+    await client.query(
+      'select public.tharmesh_sensitive_grant_issue_svc($1::uuid,$2,$3,$4::bigint,$5::bigint,$6) as g',
+      [account, 'device_revoke', sessionId, ts, ts, 900]
+    )
+  ).rows[0].g;
 }
 
 function ensureDb() {
@@ -289,7 +301,8 @@ test('local Postgres multi-session suite', async (t) => {
   });
 
   await t.test('revocation and authenticated device list', async () => {
-    await recordFreshAuth(admin, userA);
+    const sid = 'sess-revoke-ok';
+    const grant = await issueDeviceRevokeGrant(admin, userA, sid);
     await withJwt(
       admin,
       userA,
@@ -299,52 +312,84 @@ test('local Postgres multi-session suite', async (t) => {
         assert.ok(list.length >= 2);
         const revokeId = list.find((r) => r.device_id !== 'trusted-1')?.device_id;
         assert.ok(revokeId);
-        await admin.query('select public.tharmesh_device_revoke($1)', [revokeId]);
+        await admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
+          revokeId,
+          grant,
+          trustedDev.pubB64,
+        ]);
         const after = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
         assert.ok(after.find((r) => r.device_id === revokeId)?.revoked_at);
       },
-      { commit: true }
+      { commit: true, sessionId: sid }
     );
     stats.passed++;
   });
 
-  await t.test('revoke without fresh auth denied', async () => {
-    await admin.query('delete from tharmesh_private.auth_freshness where account_id = $1', [userA]);
+  await t.test('revoke without session grant denied', async () => {
     await withJwt(admin, userA, 'authenticated', async () => {
       await assert.rejects(
-        () => admin.query('select public.tharmesh_device_revoke($1)', ['trusted-1']),
-        (e) => e.message?.includes('Fresh auth') || e.code === '42501'
+        () =>
+          admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
+            'trusted-1',
+            '00000000-0000-4000-8000-000000000001',
+            trustedDev.pubB64,
+          ]),
+        (e) => e.code === '42501'
       );
     });
     stats.passed++;
   });
 
   await t.test('last active device revoke denied', async () => {
-    await recordFreshAuth(admin, userA);
-    await withJwt(admin, userA, 'authenticated', async () => {
-      const active = (
-        await admin.query(
-          'select count(*)::int as c from public.devices d where d.account_id = $1 and d.revoked_at is null',
-          [userA]
-        )
-      ).rows[0].c;
-      assert.equal(active, 1);
-      await assert.rejects(
-        () => admin.query('select public.tharmesh_device_revoke($1)', ['trusted-1']),
-        (e) => e.message?.includes('Last active') || e.code === '42501'
-      );
-    });
+    const sid = 'sess-last-one';
+    const grant = await issueDeviceRevokeGrant(admin, userA, sid);
+    await withJwt(
+      admin,
+      userA,
+      'authenticated',
+      async () => {
+        const active = (
+          await admin.query(
+            'select count(*)::int as c from public.devices d where d.account_id = $1 and d.revoked_at is null',
+            [userA]
+          )
+        ).rows[0].c;
+        assert.equal(active, 1);
+        await assert.rejects(
+          () =>
+            admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
+              'trusted-1',
+              grant,
+              trustedDev.pubB64,
+            ]),
+          (e) => e.message?.includes('Last active') || e.code === '42501'
+        );
+      },
+      { sessionId: sid }
+    );
     stats.passed++;
   });
 
   await t.test('cross-account revoke denied', async () => {
-    await recordFreshAuth(admin, userB);
-    await withJwt(admin, userB, 'authenticated', async () => {
-      await assert.rejects(
-        () => admin.query('select public.tharmesh_device_revoke($1)', ['trusted-1']),
-        (e) => e.code === '42501'
-      );
-    });
+    const sid = 'sess-cross';
+    const grant = await issueDeviceRevokeGrant(admin, userB, sid);
+    await withJwt(
+      admin,
+      userB,
+      'authenticated',
+      async () => {
+        await assert.rejects(
+          () =>
+            admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', [
+              'trusted-1',
+              grant,
+              trustedDev.pubB64,
+            ]),
+          (e) => e.code === '42501'
+        );
+      },
+      { sessionId: sid }
+    );
     stats.passed++;
   });
 
@@ -509,10 +554,13 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
-  await t.test('migration idempotency re-apply 009', async () => {
+  await t.test('migration idempotency re-apply 010', async () => {
     await admin.query('reset role');
     const mig = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120009_recovery_lock_device_serialize.sql'),
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '../migrations/202611120010_grant_session_atomic_recovery.sql'
+      ),
       'utf8'
     );
     await admin.query(mig);

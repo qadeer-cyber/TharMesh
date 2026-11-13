@@ -77,9 +77,6 @@ create policy devices_insert_own on public.devices
 create policy devices_update_own on public.devices
     for update using (auth.uid() = account_id) with check (auth.uid() = account_id);
 
+-- recovery_blobs: SELECT-only for authenticated after migration 009+. Inserts/updates go through Edge + *_svc RPCs.
 create policy recovery_select_own on public.recovery_blobs
     for select using (auth.uid() = account_id);
-create policy recovery_insert_own on public.recovery_blobs
-    for insert with check (auth.uid() = account_id and kdf = 'scrypt');
-create policy recovery_update_own on public.recovery_blobs
-    for update using (auth.uid() = account_id) with check (auth.uid() = account_id and kdf = 'scrypt');

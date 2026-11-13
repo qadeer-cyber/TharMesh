@@ -16,7 +16,8 @@ object RecoveryRotationStage {
         val sealedJson: String,
         val accountId: String,
         val savedAtMs: Long,
-        val expectedGeneration: Int
+        val expectedGeneration: Int,
+        val requestId: String
     )
 
     fun save(
@@ -24,7 +25,8 @@ object RecoveryRotationStage {
         phrase: String,
         sealed: IdentityRecovery.SealedIdentity,
         accountId: String,
-        expectedGeneration: Int
+        expectedGeneration: Int,
+        requestId: String
     ) {
         val json = org.json.JSONObject()
             .put("kdf", sealed.kdf)
@@ -40,6 +42,7 @@ object RecoveryRotationStage {
             .putString("account", accountId)
             .putLong("at", System.currentTimeMillis())
             .putInt("gen", expectedGeneration)
+            .putString("req", requestId)
             .apply()
     }
 
@@ -48,7 +51,8 @@ object RecoveryRotationStage {
         val phrase = prefs.getString("phrase", null) ?: return null
         val sealed = prefs.getString("sealed", null) ?: return null
         val account = prefs.getString("account", null) ?: return null
-        return Staged(phrase, sealed, account, prefs.getLong("at", 0L), prefs.getInt("gen", 0))
+        val req = prefs.getString("req", null) ?: java.util.UUID.randomUUID().toString()
+        return Staged(phrase, sealed, account, prefs.getLong("at", 0L), prefs.getInt("gen", 0), req)
     }
 
     fun clear(context: Context) {

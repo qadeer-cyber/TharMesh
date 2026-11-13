@@ -22,11 +22,19 @@ test('sensitive-auth rejects refresh-only JWT iat without fresh amr', async () =
   const account = 'f1000000-0000-4000-8000-0000000000a1';
   const now = Math.floor(Date.now() / 1000);
   let recorded = 0;
-  globalThis.fetch = async (url) => {
+  let grantIssue = 0;
+  let lastGrantBody = null;
+  globalThis.fetch = async (url, init) => {
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: account, email_confirmed_at: '2026-11-12' });
     }
-    if (url.includes('sensitive_grant_issue_svc') || url.includes('auth_fresh_record_svc')) {
+  const body = init?.body ? JSON.parse(init.body) : {};
+    if (url.includes('sensitive_grant_issue_svc')) {
+      grantIssue++;
+      lastGrantBody = body;
+      return new Response(JSON.stringify('grant-action'), { status: 200 });
+    }
+    if (url.includes('auth_fresh_record_svc')) {
       recorded++;
       return new Response(JSON.stringify('grant-uuid-test'), { status: 200 });
     }
@@ -42,6 +50,7 @@ test('sensitive-auth rejects refresh-only JWT iat without fresh amr', async () =
 
   const staleAmr = bearer({
     sub: account,
+    session_id: 'sess-amr-stale1',
     iat: now,
     amr: [{ method: 'password', timestamp: now - 3600 }],
   });
@@ -49,6 +58,7 @@ test('sensitive-auth rejects refresh-only JWT iat without fresh amr', async () =
 
   const refreshBypass = bearer({
     sub: account,
+    session_id: 'sess-amr-refr1',
     iat: now,
     amr: [{ method: 'password', timestamp: now - 400 }, { method: 'refresh', timestamp: now - 10 }],
   });
@@ -57,14 +67,34 @@ test('sensitive-auth rejects refresh-only JWT iat without fresh amr', async () =
 
   const fresh = bearer({
     sub: account,
+    session_id: 'sess-amr-fresh1',
     iat: now,
     amr: [{ method: 'otp', timestamp: now - 30 }],
   });
   assert.equal((await submit(fresh)).status, 200);
   assert.equal(recorded, 1);
 
+  const freshAction = bearer({
+    sub: account,
+    session_id: 'sess-amr-act01',
+    iat: now,
+    amr: [{ method: 'otp', timestamp: now - 20 }],
+  });
+  const actionRes = await handle(
+    new Request('https://x', {
+      method: 'POST',
+      headers: { Authorization: freshAction, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'recovery_rotate' }),
+    })
+  );
+  assert.equal(actionRes.status, 200);
+  assert.equal(grantIssue, 1);
+  assert.equal(lastGrantBody.p_session_id, 'sess-amr-act01');
+  assert.equal(lastGrantBody.p_action, 'recovery_rotate');
+
   const anonOnly = bearer({
     sub: account,
+    session_id: 'sess-amr-anon1',
     iat: now,
     amr: [{ method: 'anonymous', timestamp: now - 5 }],
   });

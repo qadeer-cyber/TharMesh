@@ -68,18 +68,13 @@ object DeviceDirectory {
         baseUrl: String,
         anonKey: String,
         accessToken: String,
-        deviceId: String
+        deviceId: String,
+        grantId: String,
+        activeDevicePublicKey: String
     ): AuthCall {
-        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
-        val body = JSONObject().put("p_device_id", deviceId).toString()
-        val response = try {
-            http.post(baseUrl.trimEnd('/') + "/rest/v1/rpc/tharmesh_device_revoke", headers, body)
-        } catch (_: Throwable) {
-            return AuthCall.Failed("network")
-        }
-        return if (response.code in 200..299) AuthCall.Ok(AuthTokens("", "", 0L))
-        else AuthCall.Failed("http_${response.code}")
+        return TrustedDeviceRevoke.revoke(
+            http, baseUrl, anonKey, accessToken, deviceId, grantId, activeDevicePublicKey
+        )
     }
 
     fun fetchEvidence(
