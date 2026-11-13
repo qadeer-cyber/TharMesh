@@ -17,6 +17,10 @@ function canonical(parts) {
   return Buffer.from(parts.join('\x1F'), 'utf8');
 }
 
+function approveMsg(account, newDevPub, nonce, epochSeconds) {
+  return canonical(['TM-DEVICE-APPROVE-v1', account, newDevPub, nonce, String(epochSeconds)]);
+}
+
 function keyMaterial() {
   const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const spki = pair.publicKey.export({ type: 'spki', format: 'der' });
@@ -65,6 +69,10 @@ test('device-enrollment edge rejects bad proofs before service writes', async ()
   const newDev = keyMaterial();
   const nonce = b64url(randomBytes(12));
   const epoch = String(Math.floor(Date.now() / 1000) + 600);
+  const reqMsg = canonical(['TM-ENROLL-v1', account, mesh, newDev.pubB64, 'phone-2', nonce, '0']);
+  const reqSig = signDer(newDev.privKey, reqMsg);
+  const expiresAt = new Date(Number(epoch) * 1000).toISOString();
+  const apprSigStored = signDer(trusted.privKey, approveMsg(account, newDev.pubB64, nonce, Number(epoch)));
   let svcWrites = 0;
   globalThis.fetch = async (url, options) => {
     if (url.endsWith('/auth/v1/user')) {
@@ -79,8 +87,8 @@ test('device-enrollment edge rejects bad proofs before service writes', async ()
         mesh_public_key: mesh,
         new_device_pubkey: newDev.pubB64,
         device_id: 'phone-2',
-        expires_at: new Date(Number(epoch) * 1000).toISOString(),
-        approval_sig_b64: signDer(trusted.privKey, approveMsg(account, newDev.pubB64, nonce, Number(epoch))),
+        expires_at: expiresAt,
+        approval_sig_b64: apprSigStored,
         approved_device_id: 'trusted-1',
         request_sig_b64: reqSig,
       }]);
@@ -101,9 +109,6 @@ test('device-enrollment edge rejects bad proofs before service writes', async ()
         body: JSON.stringify(body),
       })
     );
-
-  const reqMsg = canonical(['TM-ENROLL-v1', account, mesh, newDev.pubB64, 'phone-2', nonce, '0']);
-  const reqSig = signDer(newDev.privKey, reqMsg);
 
   const shortSig = await submit({
     operation: 'begin',
