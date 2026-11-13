@@ -15,6 +15,8 @@ if [ -z "${EMULATOR_KEEP_LOG:-}" ]; then
 fi
 FAILED=0
 REBOOT_UI_MAX_ATTEMPTS="${REBOOT_UI_MAX_ATTEMPTS:-6}"
+REBOOT_BOOT_MAX_SEC="${REBOOT_BOOT_MAX_SEC:-240}"
+BOOT_SETTLE_MAX_SEC="${BOOT_SETTLE_MAX_SEC:-180}"
 
 log() { echo "$@" | tee -a "$LOG"; }
 
@@ -120,9 +122,21 @@ dismiss_system_anr() {
   fi
 }
 
+emit_adb_diagnostics() {
+  local tag="$1"
+  log "=== adb diagnostics ($tag) ==="
+  "$ADB" devices -l 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell getprop sys.boot_completed 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell getprop init.svc.bootanim 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell getprop dev.bootcomplete 2>&1 | tee -a "$LOG" || true
+  "$ADB" logcat -d -t 120 -s AndroidRuntime:E 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell dumpsys activity activities 2>/dev/null | head -50 | tee -a "$LOG" || true
+}
+
 wait_for_boot_settled() {
   local i anim
-  for i in $(seq 1 90); do
+  local max=$((BOOT_SETTLE_MAX_SEC / 2))
+  for i in $(seq 1 "$max"); do
     if ! "$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1; then
       sleep 2
       continue
@@ -137,7 +151,12 @@ wait_for_boot_settled() {
     fi
     sleep 2
   done
-  log "boot settled: timeout (bootanim still running)"
+  log "boot settled: TIMEOUT after ${BOOT_SETTLE_MAX_SEC}s (bootanim still running)"
+  emit_adb_diagnostics boot_settle_timeout
+  if [ "${THARMESH_STRICT_BOOT:-0}" = "1" ]; then
+    fail "BOOT_SETTLE_TIMEOUT"
+    return 1
+  fi
   return 0
 }
 
@@ -155,8 +174,9 @@ wait_for_ui() {
     fi
     sleep 1
   done
-  fail "ui wait '$label'"
+  fail "UI_WAIT_TIMEOUT label=$label timeout=${timeout}s"
   log_activity_top
+  emit_adb_diagnostics "ui_wait_$label"
   return 1
 }
 
@@ -323,15 +343,21 @@ step_reboot_durability() {
     log "emulator reboot: NOT EXECUTED (adb reboot unsupported on this AVD)"
     return 0
   fi
-  local i
-  for i in $(seq 1 120); do
+  local i boot_ok=0 max=$((REBOOT_BOOT_MAX_SEC / 2))
+  for i in $(seq 1 "$max"); do
     if "$ADB" wait-for-device shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1; then
-      log "boot_completed after reboot: ${i}s"
+      log "boot_completed after reboot: $((i * 2))s"
+      boot_ok=1
       break
     fi
     sleep 2
   done
-  wait_for_boot_settled
+  if [ "$boot_ok" -ne 1 ]; then
+    fail "REBOOT_BOOT_TIMEOUT ${REBOOT_BOOT_MAX_SEC}s"
+    emit_adb_diagnostics reboot_boot
+    return 1
+  fi
+  wait_for_boot_settled || return 1
   sleep 10
   "$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
   "$ADB" shell input keyevent KEYCODE_BACK >>"$LOG" 2>&1 || true

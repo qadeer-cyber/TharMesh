@@ -1,6 +1,6 @@
 name: Emulator evidence (Cat 6)
 
-# Device gates for Update 0.7 — isolated from Android CI (does not gate postgres/build/signed-qa).
+# Gate A (v6→v7 in-place) and Gate B (persistence/UI) as separate jobs; B = 3 fresh emulators.
 on:
   workflow_dispatch:
   push:
@@ -11,8 +11,9 @@ on:
       - "scripts/emulator-*"
       - "scripts/debug-keystore-upgrade-*"
       - "scripts/build-historical-debug-apk.sh"
+      - "scripts/verify-pinned-apk.sh"
       - ".github/workflows/emulator-evidence.yml"
-      - ".github/scripts/run-cat6-emulator-evidence.sh"
+      - ".github/scripts/run-gate-*.sh"
 
 permissions:
   contents: read
@@ -22,53 +23,39 @@ concurrency:
   group: emulator-evidence-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
+  ANDROID_COMPILE_SDK: "30"
+  ANDROID_BUILD_TOOLS: "30.0.3"
+  LEGACY_SOURCE_COMMIT: 9fedae917868340e9b2b93f46b847a6119c576bd
+  HISTORICAL_WORKTREE: /tmp/wt-room-v6
+  THARMESH_EXPECT_V6_FILE_SHA256: e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89
+  THARMESH_EXPECT_DEBUG_CERT_SHA256: ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec
+
 jobs:
-  emulator-evidence:
+  prepare-apks:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
-      ANDROID_COMPILE_SDK: "30"
-      ANDROID_BUILD_TOOLS: "30.0.3"
-      THARMESH_EVIDENCE_DIR: ${{ github.workspace }}/ci-evidence
-      LEGACY_SOURCE_COMMIT: 9fedae917868340e9b2b93f46b847a6119c576bd
-      HISTORICAL_WORKTREE: /tmp/wt-room-v6
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Enable KVM for emulator (udev)
-        run: |
-          echo 'SUBSYSTEM=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          sudo chmod 666 /dev/kvm
-          ls -l /dev/kvm
-          test -r /dev/kvm && test -w /dev/kvm
-
-      - name: Set up JDK 17 (for sdkmanager only)
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
         with:
           packages: >-
             platform-tools
-            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
             build-tools;${{ env.ANDROID_BUILD_TOOLS }}
 
-      - name: Set up JDK 11 (for Gradle + AGP)
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 11
-
-      - name: Install sqlite3
-        run: sudo apt-get update && sudo apt-get install -y sqlite3
 
       - name: Assemble head debug APK
         run: ./gradlew --no-daemon assembleDebug
@@ -76,58 +63,132 @@ jobs:
       - name: Build historical Room v6 debug APK (9fedae9)
         run: bash scripts/build-historical-debug-apk.sh "$LEGACY_SOURCE_COMMIT"
 
-      - name: Stage Room v6 APK into workspace evidence dir
+      - name: Package and verify APK artifacts
         run: |
-          mkdir -p ci-evidence
-          V6_SRC="$HISTORICAL_WORKTREE/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
-          test -f "$V6_SRC"
-          cp -f "$V6_SRC" ci-evidence/v6-room6-debug.apk
-          sha256sum ci-evidence/v6-room6-debug.apk
+          set -euo pipefail
+          mkdir -p apk-artifacts
+          cp -f app/build/outputs/apk/debug/tharmesh.app-debug.apk apk-artifacts/tharmesh-head-debug.apk
+          cp -f "$HISTORICAL_WORKTREE/app/build/outputs/apk/debug/tharmesh.app-debug.apk" apk-artifacts/v6-room6-debug.apk
+          chmod +x scripts/verify-pinned-apk.sh
+          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk
+          sha256sum apk-artifacts/*.apk | tee apk-artifacts/SHA256SUMS.txt
 
-      - name: Set up JDK 17 for emulator runner sdkmanager
-        uses: actions/setup-java@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cat6-apk-artifacts
+          path: apk-artifacts/
+
+  gate-a-legacy-upgrade:
+    needs: prepare-apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'SUBSYSTEM=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo chmod 666 /dev/kvm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cat6-apk-artifacts
+          path: apk-artifacts
+
+      - name: Re-verify v6 APK hash and cert
+        run: |
+          chmod +x scripts/verify-pinned-apk.sh
+          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk
+
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Record emulator API model metadata
-        run: |
-          mkdir -p "$THARMESH_EVIDENCE_DIR"
-          {
-            echo "emulator_api_level=30"
-            echo "emulator_arch=x86_64"
-            echo "emulator_target=google_apis"
-            echo "runner_model=ubuntu-latest"
-            echo "emulator_runner=reactivecircus/android-emulator-runner@v2.33.0"
-          } | tee "$THARMESH_EVIDENCE_DIR/emulator-metadata.txt"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }}
 
-      - name: Cat 6 — on-device legacy upgrade + emulator 3-pass
+      - name: Install sqlite3
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+
+      - name: Gate A — v6 in-place upgrade on fresh emulator (timeout-bounded)
+        timeout-minutes: 35
         uses: reactivecircus/android-emulator-runner@v2.33.0
+        env:
+          THARMESH_EVIDENCE_DIR: ${{ github.workspace }}/ci-evidence/gate-a
+          LEGACY_SOURCE_COMMIT: ${{ env.LEGACY_SOURCE_COMMIT }}
         with:
           api-level: 30
           arch: x86_64
           target: google_apis
           force-avd-creation: true
           disable-linux-hw-accel: false
+          emulator-boot-timeout: 600
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: bash .github/scripts/run-cat6-emulator-evidence.sh
+          script: bash .github/scripts/run-gate-a-emulator.sh
 
-      - name: Summarize gate results
+      - uses: actions/upload-artifact@v4
         if: always()
-        run: |
-          set -euo pipefail
-          UP="$THARMESH_EVIDENCE_DIR/debug-keystore-upgrade/upgrade-transcript.txt"
-          SUM="$THARMESH_EVIDENCE_DIR/emulator-3pass-summary.txt"
-          echo "=== upgrade transcript tail ==="
-          tail -20 "$UP" || true
-          echo "=== 3-pass summary ==="
-          cat "$SUM" || true
-
-      - name: Upload emulator evidence artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: emulator-evidence-cat6
-          if-no-files-found: error
-          path: ci-evidence/
+          name: gate-a-legacy-upgrade
+          path: ci-evidence/gate-a/
+
+  gate-b-persistence:
+    needs: [prepare-apks, gate-a-legacy-upgrade]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      max-parallel: 1
+      matrix:
+        pass: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'SUBSYSTEM=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo chmod 666 /dev/kvm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cat6-apk-artifacts
+          path: apk-artifacts
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+
+      - name: Install sqlite3
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+
+      - name: Gate B pass ${{ matrix.pass }} — fresh emulator (timeout-bounded)
+        timeout-minutes: 40
+        uses: reactivecircus/android-emulator-runner@v2.33.0
+        env:
+          GATE_B_PASS: ${{ matrix.pass }}
+          THARMESH_EVIDENCE_DIR: ${{ github.workspace }}/ci-evidence/gate-b-pass-${{ matrix.pass }}
+          REBOOT_BOOT_MAX_SEC: "240"
+          REBOOT_UI_MAX_ATTEMPTS: "6"
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: true
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: bash .github/scripts/run-gate-b-emulator.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-b-pass-${{ matrix.pass }}
+          path: ci-evidence/gate-b-pass-${{ matrix.pass }}/
