@@ -39,6 +39,10 @@
     <string name="account_error_enroll_replay">هي داخلا اڳ استعمال ٿي چڪي آهي.</string>
     <string name="account_rotate_recovery_done">نئين بحالي تيار. اپ لوڊ کان اڳ جملو محفوظ ڪريو.</string>
     <string name="account_rotate_upload_pending">مقامي چاٻي بدلي. اپ لوڊ ناڪام — ٻيهر ڪوشش ڪريو.</string>
+    <string name="account_rotate_resume_body">بحالي جي چاٻي مٽاسٽا شروع ٿي پر اپ لوڊ نه ٿيو. اپ لوڊ مڪمل ڪريو يا رد ڪريو.</string>
+    <string name="account_rotate_resume_upload">اپ لوڊ مڪمل ڪريو</string>
+    <string name="account_rotate_discard_stage">اسٽيج ٿيل چاٻي رد ڪريو</string>
+    <string name="account_uploaded">بحالي سائفر متن اپ لوڊ ٿي ويو. سرور وٽ بحالي چاٻي يا نجي چاٻي ناهي.</string>
     <string name="settings_account_devices">ڊوائيسز</string>
     <string name="settings_account_devices_sub">QR سان ٻيو فون منظور ڪريو</string>
     <string name="account_security_body">ڪلائوڊ سيشن ۽ ميش سڃاڻپ الڳ آهن. ڪلائوڊ مان سائن آئوٽ نياپا، رابطا، ۽ ميش چاٻي رکي.</string>

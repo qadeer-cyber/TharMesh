@@ -39,6 +39,10 @@
     <string name="account_error_enroll_replay">یہ اندراج پہلے استعمال ہو چکا۔</string>
     <string name="account_rotate_recovery_done">نئی بحالی تیار۔ اپ لوڈ سے پہلے جملہ محفوظ کریں۔</string>
     <string name="account_rotate_upload_pending">مقامی کلید بدلی۔ اپ لوڈ ناکام — دوبارہ کوشش کریں۔</string>
+    <string name="account_rotate_resume_body">بحالی کی کلید بدلی شروع ہوئی مگر اپ لوڈ نہیں ہوئی۔ اپ لوڈ مکمل کریں یا رد کریں۔</string>
+    <string name="account_rotate_resume_upload">اپ لوڈ مکمل کریں</string>
+    <string name="account_rotate_discard_stage">اسٹیج شدہ کلید رد کریں</string>
+    <string name="account_uploaded">بحالی سائفر متن اپ لوڈ ہو گیا۔ سرور کے پاس بحالی کلید یا نجی کلید نہیں۔</string>
     <string name="settings_account_devices">آلات</string>
     <string name="settings_account_devices_sub">QR سے دوسرا فون منظور کریں</string>
     <string name="account_security_body">کلاؤڈ سیشن اور میش شناخت الگ ہیں۔ کلاؤڈ سے سائن آؤٹ پیغامات، رابطے، اور میش کلید رکھتا ہے۔</string>

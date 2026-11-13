@@ -102,7 +102,7 @@ async function raceScenario(pool, { onlyTwoDevices }) {
     const c = await pool.connect();
     try {
       await c.query('begin');
-      await revokeViaSvc(c, userA, challengeId);
+      await revokeViaSvc(c, userA, challengeId, sid);
       await c.query('commit');
       return { ok: true };
     } catch (e) {

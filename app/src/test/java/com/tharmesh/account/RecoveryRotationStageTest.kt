@@ -23,6 +23,7 @@ class RecoveryRotationStageTest {
             .toString()
         val staged = RecoveryRotationStage.Staged("phrase", json, "acct", 1L, 2, "req-test-id")
         val parsed = RecoveryRotationStage.sealedFromStaged(staged)
+        assertEquals("req-test-id", staged.requestId)
         assertNotNull(parsed)
         assertEquals(sealed.ciphertextB64, parsed!!.ciphertextB64)
     }

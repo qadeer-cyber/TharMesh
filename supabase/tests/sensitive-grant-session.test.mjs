@@ -86,9 +86,9 @@ test('sensitive grants: session, action, expiry, replay', async () => {
     const sid2 = 'sess-grant-use1';
     const g2 = await issueGrant(admin, userA, 'device_revoke', sid2);
     const ch2 = await issueRevokeChallenge(admin, userA, sid2, 'd1', 'd2', g2);
-    await revokeViaSvc(admin, userA, ch2);
+    await revokeViaSvc(admin, userA, ch2, sid2);
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, ch2),
+      () => revokeViaSvc(admin, userA, ch2, sid2),
       (e) => e.message?.includes('consumed') || e.code === '42501'
     );
 
@@ -101,7 +101,7 @@ test('sensitive grants: session, action, expiry, replay', async () => {
     );
     const chCross = await issueRevokeChallenge(admin, userB, sidB, 'd1', 'd2', gCross);
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, chCross),
+      () => revokeViaSvc(admin, userA, chCross, 'sess-b-xxxx1'),
       (e) => e.message?.includes('Challenge not found') || e.code === '42501'
     );
 

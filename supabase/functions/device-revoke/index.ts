@@ -143,6 +143,7 @@ Deno.serve(async (request) => {
     const reply = await rpc("tharmesh_device_revoke_svc", {
       p_account: id,
       p_challenge_id: challengeId,
+      p_session_id: sid,
     });
     if (!reply.ok) {
       const err = await reply.text();

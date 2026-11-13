@@ -32,6 +32,8 @@ data class AuthTokens(
 
 sealed class AuthCall {
     data class Ok(val tokens: AuthTokens) : AuthCall()
+    /** Recovery blob accepted by the server (optional committed generation). */
+    data class RecoveryUploaded(val serverGeneration: Int?) : AuthCall()
     data class PendingVerification(val accountId: String) : AuthCall()
     data class Failed(
         val reason: String,

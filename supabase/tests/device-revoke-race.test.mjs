@@ -193,6 +193,6 @@ test('cross-account revoke denied', async () => {
   const g = await issueGrant(admin, userB, 'device_revoke', 'sess-cross-b');
   const ch = await issueRevokeChallenge(admin, userB, 'sess-cross-b', 'd1', 'd2', g);
   admin.release();
-  await assert.rejects(() => revokeViaSvc(admin, userA, ch), (e) => e.code === '42501');
+  await assert.rejects(() => revokeViaSvc(admin, userA, ch, 'sess-cross-b'), (e) => e.code === '42501');
   await pool.end();
 });

@@ -1070,8 +1070,13 @@ class AccountFlowActivity : AppCompatActivity() {
 
     private fun uploadRecovery(status: TextView) {
         val record = pendingRecord
-        val sealed = record?.recoverySealed
-        val accountId = record?.accountId
+        val staged = RecoveryRotationStage.read(this)
+        val accountId = staged?.accountId ?: record?.accountId
+        val sealed = when {
+            staged != null && staged.accountId == accountId ->
+                RecoveryRotationStage.sealedFromStaged(staged)
+            else -> record?.recoverySealed
+        }
         val access = CloudSessionStore.readAccessToken(this)
         if (sealed == null || accountId.isNullOrBlank() || access.isNullOrBlank() ||
             !AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
@@ -1079,7 +1084,6 @@ class AccountFlowActivity : AppCompatActivity() {
             status.setText(R.string.account_saved_local_only)
             return
         }
-        val staged = RecoveryRotationStage.read(this)
         val expectedGen = staged?.expectedGeneration
         lifecycleScope.launch {
             val generation = expectedGen ?: withContext(Dispatchers.IO) {
@@ -1121,13 +1125,24 @@ class AccountFlowActivity : AppCompatActivity() {
                 )
             }
             when (result) {
-                is AuthCall.Ok -> {
+                is AuthCall.RecoveryUploaded, is AuthCall.Ok -> {
                     RecoveryRotationStage.clear(this@AccountFlowActivity)
                     status.setText(R.string.account_uploaded)
                 }
                 is AuthCall.Failed -> when (result.reason) {
-                    "generation_conflict" -> status.setText(R.string.account_rotate_upload_conflict)
+                    "generation_conflict" -> {
+                        val live = withContext(Dispatchers.IO) {
+                            TrustedRecoveryRotate.fetchGeneration(
+                                http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access
+                            )
+                        }
+                        if (live != null && staged != null) {
+                            RecoveryRotationStage.updateExpectedGeneration(this@AccountFlowActivity, live)
+                        }
+                        status.setText(R.string.account_rotate_upload_conflict)
+                    }
                     "fresh_auth_required" -> status.setText(R.string.account_reauth_required_upload)
+                    "network" -> status.setText(R.string.account_rotate_upload_pending)
                     else -> status.setText(R.string.account_rotate_upload_pending)
                 }
             }

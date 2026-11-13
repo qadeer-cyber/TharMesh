@@ -68,7 +68,12 @@ object TrustedRecoveryRotate {
             return AuthCall.Failed("network")
         }
         return when (response.code) {
-            in 200..299 -> AuthCall.Ok(AuthTokens("", "", 0L))
+            in 200..299 -> {
+                val gen = runCatching {
+                    org.json.JSONObject(response.body).optInt("generation", -1)
+                }.getOrDefault(-1)
+                AuthCall.RecoveryUploaded(if (gen > 0) gen else null)
+            }
             409 -> AuthCall.Failed("generation_conflict")
             403 -> AuthCall.Failed("fresh_auth_required")
             else -> AuthCall.Failed("http_${response.code}")

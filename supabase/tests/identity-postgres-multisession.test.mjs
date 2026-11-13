@@ -52,6 +52,14 @@ function signDer(privKey, msg) {
   return b64url(s.sign({ key: privKey, dsaEncoding: 'der' }));
 }
 
+async function clearAborted(client) {
+  try {
+    await client.query('ROLLBACK');
+  } catch (_) {
+    /* client was not in a failed transaction */
+  }
+}
+
 async function poolClient() {
   const pool = new Pool({
     database: DB,
@@ -361,7 +369,7 @@ test('local Postgres multi-session suite', async (t) => {
     );
     const grant = await issueGrant(admin, userB, 'device_revoke', sid);
     const ch = await issueRevokeChallenge(admin, userB, sid, 'b-one', 'b-two', grant);
-    await assert.rejects(() => revokeViaSvc(admin, userA, ch), (e) => e.code === '42501');
+    await assert.rejects(() => revokeViaSvc(admin, userA, ch, 'sess-cross'), (e) => e.code === '42501');
     stats.passed++;
   });
 
@@ -541,7 +549,22 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
+  await t.test('migration idempotency re-apply 013', async () => {
+    await clearAborted(admin);
+    await admin.query('reset role');
+    const mig = readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '../migrations/202611120013_revoke_svc_session_assert.sql'
+      ),
+      'utf8'
+    );
+    await admin.query(mig);
+    stats.passed++;
+  });
+
   await t.test('migration idempotency re-apply 012', async () => {
+    await clearAborted(admin);
     await admin.query('reset role');
     const mig = readFileSync(
       join(
@@ -555,6 +578,7 @@ test('local Postgres multi-session suite', async (t) => {
   });
 
   await t.test('recovery direct insert denied for authenticated', async () => {
+    await clearAborted(admin);
     await withJwt(admin, userA, 'authenticated', async () => {
       await assert.rejects(
         () =>
@@ -570,6 +594,7 @@ test('local Postgres multi-session suite', async (t) => {
   });
 
   await t.test('migration idempotency re-apply 008', async () => {
+    await clearAborted(admin);
     await admin.query('reset role');
     const mig = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120008_recovery_cas_revoke_fresh.sql'),
@@ -580,6 +605,7 @@ test('local Postgres multi-session suite', async (t) => {
   });
 
   await t.test('migration idempotency re-apply 007', async () => {
+    await clearAborted(admin);
     await admin.query('reset role');
     const mig = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120007_bootstrap_proof_and_auth_amr.sql'),
@@ -589,7 +615,28 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
+  await t.test('migration idempotency re-apply 010-013 with live data', async () => {
+    await clearAborted(admin);
+    await admin.query('reset role');
+    const migDir = join(dirname(fileURLToPath(import.meta.url)), '../migrations');
+    const chain = [
+      '202611120010_grant_session_atomic_recovery.sql',
+      '202611120011_revoke_possession_jwt_claims.sql',
+      '202611120012_revoke_challenge_possession.sql',
+      '202611120013_revoke_svc_session_assert.sql',
+    ];
+    for (const name of chain) {
+      await admin.query(readFileSync(join(migDir, name), 'utf8'));
+    }
+    const devices = (
+      await admin.query('select count(*)::int as n from public.devices where account_id = $1::uuid', [userA])
+    ).rows[0].n;
+    assert.ok(devices >= 1);
+    stats.passed++;
+  });
+
   await t.test('in-DB verifier removed (fail closed)', async () => {
+    await clearAborted(admin);
     await admin.query('reset role');
     await admin.query('reset role');
     const exists = (

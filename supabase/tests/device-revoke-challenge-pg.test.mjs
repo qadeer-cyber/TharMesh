@@ -51,9 +51,13 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
     const sid = 'sess-ch-pg-01';
     const grant = await issueGrant(admin, userA, 'device_revoke', sid);
     const ch = await issueRevokeChallenge(admin, userA, sid, 'a', 'b', grant);
-    await revokeViaSvc(admin, userA, ch);
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, ch),
+      () => revokeViaSvc(admin, userA, ch, 'wrong-sess-id'),
+      (e) => e.message?.includes('session') && e.code === '42501'
+    );
+    await revokeViaSvc(admin, userA, ch, sid);
+    await assert.rejects(
+      () => revokeViaSvc(admin, userA, ch, sid),
       (e) => e.message?.includes('consumed') && e.code === '42501'
     );
     const consumed = (
@@ -74,7 +78,10 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
        where challenge_id = $1`,
       [ch2]
     );
-    await assert.rejects(() => revokeViaSvc(admin, userA, ch2), (e) => e.message?.includes('expired') && e.code === '42501');
+    await assert.rejects(
+      () => revokeViaSvc(admin, userA, ch2, sid),
+      (e) => e.message?.includes('expired') && e.code === '42501'
+    );
     const grantStill = (
       await admin.query('select consumed_at from tharmesh_private.sensitive_action_grants where grant_id = $1', [grant2])
     ).rows[0].consumed_at;
@@ -87,7 +94,7 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
       'a',
     ]);
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, ch3),
+      () => revokeViaSvc(admin, userA, ch3, 'sess-ch-pg-02'),
       (e) => e.message?.includes('not active') && e.code === '42501'
     );
 
@@ -100,7 +107,7 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
     );
     const chB = await issueRevokeChallenge(admin, userB, 'sess-b-xxxx1', 'x', 'y', gB);
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, chB),
+      () => revokeViaSvc(admin, userA, chB, 'sess-b-xxxx1'),
       (e) => e.message?.includes('Challenge not found') && e.code === '42501'
     );
   } finally {
@@ -130,7 +137,7 @@ test('wrong challenge target not revocable via mismatched issue', async () => {
     const sid = 'sess-wrong-tgt';
     const grant = await issueGrant(admin, userA, 'device_revoke', sid);
     const ch = await issueRevokeChallenge(admin, userA, sid, 'a', 'b', grant);
-    await revokeViaSvc(admin, userA, ch);
+    await revokeViaSvc(admin, userA, ch, sid);
     const cActive = (
       await admin.query(
         'select count(*)::int as n from public.devices where account_id = $1 and revoked_at is null',

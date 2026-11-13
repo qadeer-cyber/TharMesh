@@ -73,10 +73,14 @@ export async function issueRevokeChallenge(client, account, sessionId, requestin
   ).rows[0].c;
 }
 
-export async function revokeViaSvc(client, account, challengeId) {
+export async function revokeViaSvc(client, account, challengeId, sessionId) {
   await client.query('reset role');
   await client.query('set role service_role');
-  await client.query('select public.tharmesh_device_revoke_svc($1::uuid,$2::uuid)', [account, challengeId]);
+  await client.query('select public.tharmesh_device_revoke_svc($1::uuid,$2::uuid,$3)', [
+    account,
+    challengeId,
+    sessionId,
+  ]);
 }
 
 export async function revokeWithChallenge(
@@ -88,7 +92,7 @@ export async function revokeWithChallenge(
   grantId
 ) {
   const challengeId = await issueRevokeChallenge(client, account, sessionId, requestingId, targetId, grantId);
-  await revokeViaSvc(client, account, challengeId);
+  await revokeViaSvc(client, account, challengeId, sessionId);
   return challengeId;
 }
 

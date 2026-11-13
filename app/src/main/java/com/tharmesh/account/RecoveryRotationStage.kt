@@ -59,6 +59,14 @@ object RecoveryRotationStage {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
     }
 
+    /** Keeps staged phrase/sealed/request when server generation moved (409). */
+    fun updateExpectedGeneration(context: Context, generation: Int) {
+        if (read(context) == null) return
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt("gen", generation)
+            .apply()
+    }
+
     fun sealedFromStaged(staged: Staged): IdentityRecovery.SealedIdentity? {
         return try {
             val o = org.json.JSONObject(staged.sealedJson)

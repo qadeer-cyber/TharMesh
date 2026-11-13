@@ -16,7 +16,7 @@
 
 ## Authenticated RPCs (guarded)
 
-`tharmesh_device_revoke(text,uuid,text)` — **fail-closed** (Edge only). `tharmesh_device_revoke_svc` — **service_role** after possession proof. Session id via `tharmesh_jwt_session_id()` / `auth.jwt()` claims JSON (hosted PostgREST compatible).
+`tharmesh_device_revoke(text,uuid,text)` — **fail-closed** (Edge only). `tharmesh_device_revoke_svc(p_account, p_challenge_id, p_session_id)` — **service_role** after possession proof; SQL asserts `ch.session_id = p_session_id` (013). Session id via `tharmesh_jwt_session_id()` / `auth.jwt()` claims JSON (hosted PostgREST compatible).
 
 ## Direct table writes closed (009)
 

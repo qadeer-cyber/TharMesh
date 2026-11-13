@@ -33,11 +33,26 @@ class TrustedRecoveryRotateTest {
             "access",
             sealed,
             0,
-            "grant-test-id"
+            "grant-test-id",
+            "req-stable-001"
         )
-        assertTrue(result is AuthCall.Ok)
+        assertTrue(result is AuthCall.RecoveryUploaded)
+        assertEquals(1, (result as AuthCall.RecoveryUploaded).serverGeneration)
         assertTrue(http.lastPath!!.endsWith("/functions/v1/recovery-rotate"))
         assertTrue(http.lastBody!!.contains("\"expected_generation\":0"))
+        assertTrue(http.lastBody!!.contains("\"request_id\":\"req-stable-001\""))
+    }
+
+    @Test
+    fun upload_conflict_is_failed() {
+        val http = FakeHttp()
+        http.code = 409
+        val sealed = IdentityRecovery.seal("key", IdentityRecovery.generatePhrase(), java.security.SecureRandom())
+        val result = TrustedRecoveryRotate.upload(
+            http, "https://x", "anon", "tok", sealed, 3, "g", "req-2"
+        )
+        assertTrue(result is AuthCall.Failed)
+        assertEquals("generation_conflict", (result as AuthCall.Failed).reason)
     }
 
     @Test
