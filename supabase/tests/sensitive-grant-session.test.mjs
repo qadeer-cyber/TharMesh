@@ -72,7 +72,7 @@ test('sensitive grants: session, action, expiry, replay', async () => {
       (e) => e.message?.includes('session') || e.code === '42501'
     );
 
-    await admin.query('set role service_role');
+    await admin.query('reset role');
     await admin.query(
       `update tharmesh_private.sensitive_action_grants set expires_at = clock_timestamp() - interval '1 min'
        where grant_id = $1`,

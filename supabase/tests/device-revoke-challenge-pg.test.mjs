@@ -60,6 +60,7 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
       () => revokeViaSvc(admin, userA, ch, sid),
       (e) => e.message?.includes('consumed') && e.code === '42501'
     );
+    await admin.query('reset role');
     const consumed = (
       await admin.query('select consumed_at from tharmesh_private.device_revoke_challenges where challenge_id = $1', [
         ch,
@@ -73,6 +74,7 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
 
     const grant2 = await issueGrant(admin, userA, 'device_revoke', sid);
     const ch2 = await issueRevokeChallenge(admin, userA, sid, 'a', 'b', grant2);
+    await admin.query('reset role');
     await admin.query(
       `update tharmesh_private.device_revoke_challenges set expires_at = clock_timestamp() - interval '1 second'
        where challenge_id = $1`,
@@ -82,6 +84,7 @@ test('revoke challenge replay and expiry preserve grants and devices', async () 
       () => revokeViaSvc(admin, userA, ch2, sid),
       (e) => e.message?.includes('expired') && e.code === '42501'
     );
+    await admin.query('reset role');
     const grantStill = (
       await admin.query('select consumed_at from tharmesh_private.sensitive_action_grants where grant_id = $1', [grant2])
     ).rows[0].consumed_at;
