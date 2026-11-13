@@ -32,7 +32,7 @@ function sha256Hex(text) {
 async function grantConsumed(pool, grantId) {
   const c = await pool.connect();
   try {
-    await c.query('set role service_role');
+    await c.query('reset role');
     const row = (
       await c.query('select consumed_at from tharmesh_private.sensitive_action_grants where grant_id = $1', [
         grantId,
