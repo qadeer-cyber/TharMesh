@@ -102,10 +102,12 @@ wait_for_room_db() {
     fi
     rm -rf "$probe"
     "$ADB" shell am force-stop "$PKG" >>"$LOG" 2>&1 || true
+    "$ADB" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >>"$LOG" 2>&1 || true
     "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
     sleep 5
   done
   log "FAIL room database never appeared"
+  "$ADB" logcat -d -s AndroidRuntime:E TharMeshApp:D >>"$LOG" 2>&1 || true
   return 1
 }
 
@@ -184,7 +186,19 @@ compare_snapshots() {
   done
 }
 
+grant_runtime_permissions() {
+  local p
+  for p in \
+    android.permission.ACCESS_FINE_LOCATION \
+    android.permission.ACCESS_COARSE_LOCATION \
+    android.permission.BLUETOOTH \
+    android.permission.BLUETOOTH_ADMIN; do
+    "$ADB" shell pm grant "$PKG" "$p" >>"$LOG" 2>&1 || true
+  done
+}
+
 seed_legacy_v6_sqlite() {
+  grant_runtime_permissions
   local prefs="/tmp/tharmesh_v6_user_prefs.xml"
   cat >"$prefs" <<'EOF'
 <?xml version='1.0' encoding='utf-8' standalone='yes' ?>
@@ -193,9 +207,6 @@ seed_legacy_v6_sqlite() {
     <string name="user_id">legacy-v6-seed-user</string>
     <string name="username">Legacy V6 Seed</string>
     <string name="auth_provider">anonymous</string>
-    <string name="identity_fingerprint">legacyv6meshfp0001</string>
-    <string name="identity_private_key_b64">MEECAQAwEwYHKoZIzj0CAQYIKoZIzj0DAQcEJzAlAgEBBCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</string>
-    <string name="identity_public_key_b64">MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==</string>
 </map>
 EOF
   "$ADB" push "$prefs" /sdcard/tharmesh_user_prefs.xml >>"$LOG" 2>&1
