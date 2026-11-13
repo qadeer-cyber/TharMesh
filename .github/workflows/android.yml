@@ -36,22 +36,17 @@ jobs:
           --health-retries 5
     env:
       PGHOST: localhost
-      THARMESH_PG_USER: tharmesh_runner
-      THARMESH_PG_PASSWORD: pgtest_local
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      THARMESH_PG_USER: postgres
+      THARMESH_PG_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install PostgreSQL client and plpython
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client postgresql-plpython3-15
-      - name: Create migration runner role
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h localhost -U postgres -c "CREATE USER tharmesh_runner WITH PASSWORD 'pgtest_local' CREATEDB SUPERUSER;"
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Run Category 3 Postgres tests
         run: bash .github/scripts/ci-postgres-tests.sh
 

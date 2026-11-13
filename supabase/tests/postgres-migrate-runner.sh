@@ -17,7 +17,8 @@ PSQL="psql -h $PGHOST -U $PGUSER -v ON_ERROR_STOP=1"
 if [ "$MODE" = "fresh" ]; then
   $PSQL -d postgres -c "DROP DATABASE IF EXISTS ${DB_NAME};"
   $PSQL -d postgres -c "CREATE DATABASE ${DB_NAME};"
-  $PSQL -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS plpython3u;"
+  $PSQL -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS plpython3u;" 2>/dev/null || \
+    echo "note: plpython3u extension unavailable (skipped)"
   $PSQL -d "$DB_NAME" -f "$ROOT/tests/postgres-bootstrap.sql"
   migration_ensure_tracking "$DB_NAME" "$ROOT"
   $PSQL -d "$DB_NAME" -f "$ROOT/schema.sql"
