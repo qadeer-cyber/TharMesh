@@ -209,7 +209,8 @@
     <string name="account_save_title">Save recovery key</string>
     <string name="account_save_body">Write this key down. It is not stored on the server and it will not be shown again. Anyone with it can restore your mesh identity.</string>
     <string name="account_devices_title">Device management</string>
-    <string name="account_devices_body">Adding a phone requires a QR from the new phone and an explicit approval on this one. The certificate names both public keys and a nonce. A substituted key is rejected.</string>
+    <string name="account_devices_body">Adding a phone requires a QR from the new phone and an explicit approval on this one. The certificate names both public keys and a nonce. A substituted key is rejected. Revoking a device here does not delete messages or keys already on another phone.</string>
+    <string name="account_devices_current">This phone: %1$s</string>
     <string name="account_offline_title">Offline mode</string>
     <string name="account_offline_body">This install stays authorized with no network. An expired cloud token is not a sign-out. A server cannot revoke a device that never connects again.</string>
     <string name="account_security_title">Account security</string>
@@ -255,6 +256,17 @@
     <string name="account_action_accept">Accept certificate on this phone</string>
     <string name="account_confirm_enroll">I approve this device enrollment. Both phones must agree.</string>
     <string name="account_enroll_accepted">This phone accepted the certificate. The mesh key was not replaced.</string>
+    <string name="account_error_enroll_replay">This approval was already used. Ask the other phone for a new QR.</string>
+    <string name="account_legacy_reconcile_title">Account on this phone</string>
+    <string name="account_legacy_reconcile_keep_local">This cloud account is linked. Your mesh key on this phone stays as-is because the server has not admitted a canonical identity yet.</string>
+    <string name="account_legacy_reconcile_conflict">The server identity does not match this phone. Sign out, restore from your recovery key, or add this phone through device approval.</string>
+    <string name="account_legacy_reconcile_reset">This phone previously chose a new mesh key. The old key is not restored automatically.</string>
+    <string name="account_rotate_recovery_title">Rotate recovery key</string>
+    <string name="account_rotate_recovery_body">You will get a new recovery phrase. The app uploads a new sealed backup. Anyone who saved an old copy of the backup can still open it with the old phrase. Contacts may need to re-verify you if you rotate the mesh identity itself.</string>
+    <string name="account_rotate_recovery_action">Generate new recovery key</string>
+    <string name="account_rotate_recovery_done">New recovery key created. Write it down. Older backups still open with the old phrase.</string>
+    <string name="settings_account_backup">Backup &amp; recovery</string>
+    <string name="settings_account_backup_sub">Rotate recovery key</string>
     <string name="account_confirm_new_key">I understand this is a new key, not my previous one, and contacts must verify it again.</string>
     <string name="account_confirm_first_key">This phone has no earlier TharMesh key to restore.</string>
     <string name="account_error_not_configured">This copy of the app was built without SUPABASE_URL and SUPABASE_ANON_KEY. No account was created. Install the CI debug APK, or set both in local.properties and rebuild. A blank value is not a configured project.</string>

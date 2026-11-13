@@ -140,6 +140,17 @@ class SettingsSectionActivity : AppCompatActivity() {
             )
         }
         addClickRow(
+            R.drawable.ic_storage,
+            getString(R.string.settings_account_backup),
+            getString(R.string.settings_account_backup_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.ROTATE_RECOVERY
+                )
+            )
+        }
+        addClickRow(
             R.drawable.ic_devices,
             getString(R.string.settings_account_devices),
             getString(R.string.settings_account_devices_sub)

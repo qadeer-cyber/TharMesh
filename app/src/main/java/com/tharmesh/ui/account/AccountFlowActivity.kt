@@ -37,7 +37,9 @@ import com.tharmesh.account.AuthRateLimiter
 import com.tharmesh.account.CloudCredential
 import com.tharmesh.account.CloudSessionStore
 import com.tharmesh.account.DeviceEnrollment
+import com.tharmesh.account.EnrollmentReplayGuard
 import com.tharmesh.account.EnrollmentQr
+import com.tharmesh.account.LegacyReconciliation
 import com.tharmesh.account.HandlePolicy
 import com.tharmesh.account.IdentityProvisioning
 import com.tharmesh.account.IdentityLifecycle
@@ -50,6 +52,7 @@ import com.tharmesh.account.OfflineMode
 import com.tharmesh.account.OfflineModeResolver
 import com.tharmesh.account.PendingSignup
 import com.tharmesh.account.PendingSignupStore
+import com.tharmesh.account.RecoveryRotation
 import com.tharmesh.account.RecoveryUpload
 import com.tharmesh.account.SupabaseDirectory
 import com.tharmesh.account.UrlHttpTransport
@@ -74,7 +77,7 @@ class AccountFlowActivity : AppCompatActivity() {
 
     enum class Screen {
         CREATE, SIGN_IN, VERIFY_EMAIL, EMAIL_OTP, GOOGLE, RECOVER, SECURE_IDENTITY, SAVE_RECOVERY,
-        DEVICES, OFFLINE, SECURITY
+        LEGACY_RECONCILE, ROTATE_RECOVERY, DEVICES, OFFLINE, SECURITY
     }
 
     private val otpPrefs by lazy { getSharedPreferences("tharmesh_email_otp", MODE_PRIVATE) }
@@ -88,6 +91,8 @@ class AccountFlowActivity : AppCompatActivity() {
     private var pendingPhrase: String? = null
     private var pendingRecord: InstallRecord? = null
     private var pendingEnrollment: com.tharmesh.account.EnrollmentRequest? = null
+    private var legacyReconcileMessage: LegacyReconciliation.Decision =
+        LegacyReconciliation.Decision.REQUIRES_RECOVERY_OR_ENROLLMENT
     private var resendBlockedUntilMs: Long = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val resendTick = Runnable { if (screen == Screen.EMAIL_OTP) paintOtpCooldown() else paintResendCooldown() }
@@ -318,9 +323,35 @@ class AccountFlowActivity : AppCompatActivity() {
                         .show()
                 }
             }
+            Screen.LEGACY_RECONCILE -> {
+                title.setText(R.string.account_legacy_reconcile_title)
+                body.setText(
+                    when (legacyReconcileMessage) {
+                        LegacyReconciliation.Decision.RESET_PRECLUDES_LEGACY_RESTORE ->
+                            R.string.account_legacy_reconcile_reset
+                        LegacyReconciliation.Decision.CONFLICT ->
+                            R.string.account_legacy_reconcile_conflict
+                        else -> R.string.account_legacy_reconcile_keep_local
+                    }
+                )
+                primary.setText(R.string.account_action_sign_in)
+                primary.setOnClickListener { goHome() }
+            }
+            Screen.ROTATE_RECOVERY -> {
+                title.setText(R.string.account_rotate_recovery_title)
+                body.setText(R.string.account_rotate_recovery_body)
+                primary.setText(R.string.account_rotate_recovery_action)
+                primary.setOnClickListener { rotateRecovery(status) }
+            }
             Screen.DEVICES -> {
                 title.setText(R.string.account_devices_title)
-                body.setText(R.string.account_devices_body)
+                val finger = UserPrefs.readIdentity(this)?.fingerprint
+                body.text = if (finger.isNullOrBlank()) {
+                    getString(R.string.account_devices_body)
+                } else {
+                    getString(R.string.account_devices_body) + "\n\n" +
+                        getString(R.string.account_devices_current, finger)
+                }
                 show(f1, R.string.account_field_enroll)
                 confirm.visibility = View.VISIBLE
                 confirm.setText(R.string.account_confirm_enroll)
@@ -663,7 +694,28 @@ class AccountFlowActivity : AppCompatActivity() {
                 is IdentityProvisioning.Result.RecoveryRequired -> {
                     canonicalRecovery = true
                     expectedRecoveryKey = outcome.canonicalKey
-                    bind(Screen.RECOVER)
+                    val local = UserPrefs.readIdentity(this@AccountFlowActivity)
+                    legacyReconcileMessage = LegacyReconciliation.decide(
+                        LegacyReconciliation.Evidence(
+                            serverState = if (outcome.canonicalKey == null) "legacy_unknown" else "recovery_required",
+                            canonicalMeshPublicKey = outcome.canonicalKey,
+                            localMesh = local,
+                            explicitResetCommitted = false,
+                            cloudDeviceRows = 0,
+                            cloudRecoveryBlob = false
+                        )
+                    )
+                    when (legacyReconcileMessage) {
+                        LegacyReconciliation.Decision.KEEP_LOCAL_AND_USE_CLOUD_SESSION,
+                        LegacyReconciliation.Decision.KEYS_ALREADY_ALIGNED -> {
+                            PendingSignupStore.clear(this@AccountFlowActivity)
+                            goHome()
+                        }
+                        LegacyReconciliation.Decision.RESET_PRECLUDES_LEGACY_RESTORE,
+                        LegacyReconciliation.Decision.CONFLICT ->
+                            bind(Screen.LEGACY_RECONCILE)
+                        else -> bind(Screen.RECOVER)
+                    }
                 }
                 IdentityProvisioning.Result.Retry -> {
                     status.setText(R.string.account_provisioning_retry)
@@ -971,8 +1023,45 @@ class AccountFlowActivity : AppCompatActivity() {
             status.setText(R.string.account_error_approve)
             return
         }
+        if (!EnrollmentReplayGuard.markConsumed(this, cert.accountId, cert.nonceB64)) {
+            status.setText(R.string.account_error_enroll_replay)
+            return
+        }
         val ok = DeviceEnrollment.accept(cert, accountPublic, request)
         status.setText(if (ok) R.string.account_enroll_accepted else R.string.account_error_approve)
+    }
+
+    private fun rotateRecovery(status: TextView) {
+        if (authBusy) return
+        val mesh = UserPrefs.readIdentity(this) ?: run {
+            status.setText(R.string.account_error_held)
+            return
+        }
+        val accountId = CloudSessionStore.readAccountId(this) ?: UserPrefs.readProfile(this)?.userId
+        if (accountId.isNullOrBlank()) {
+            status.setText(R.string.account_error_not_configured)
+            return
+        }
+        authBusy = true
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.Default) {
+                RecoveryRotation.rotate(mesh.privateKeyBase64, mesh.publicKeyBase64, random)
+            }
+            pendingPhrase = outcome.phrase
+            pendingRecord = InstallRecord(
+                accountId = accountId,
+                mesh = MeshMaterial.from(
+                    mesh,
+                    UserPrefs.readProfile(this@AccountFlowActivity)?.userId ?: accountId
+                ),
+                recoverySealed = outcome.sealed,
+                provider = UserPrefs.readProfile(this@AccountFlowActivity)?.authProvider
+                    ?: UserPrefs.PROVIDER_EMAIL
+            )
+            authBusy = false
+            status.setText(R.string.account_rotate_recovery_done)
+            bind(Screen.SAVE_RECOVERY)
+        }
     }
 
     private fun approveEnrollment(field: EditText, userApproved: Boolean, status: TextView) {
