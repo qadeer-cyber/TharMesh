@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { issueGrant, revokeViaSvc, withSession } from './pg-test-helpers.mjs';
+import { issueGrant, issueRevokeChallenge, revokeViaSvc, revokeWithChallenge } from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
@@ -39,11 +39,11 @@ async function activeCount(pool, account = userA) {
   }
 }
 
-async function revokeWithGrant(pool, deviceId, grantId, sessionId, activePub = KEY122) {
+async function revokeWithGrant(pool, requestingId, targetId, grantId, sessionId) {
   const c = await pool.connect();
   try {
     await c.query('begin');
-    await revokeViaSvc(c, userA, deviceId, grantId, sessionId, activePub);
+    await revokeWithChallenge(c, userA, sessionId, requestingId, targetId, grantId);
     await c.query('commit');
     return { ok: true };
   } catch (e) {
@@ -93,8 +93,8 @@ test('two devices, two simultaneous revokes: exactly one succeeds', async () => 
   const g2 = await issueGrant(admin, userA, 'device_revoke', sid2);
   admin.release();
   const [r1, r2] = await Promise.all([
-    revokeWithGrant(pool, ids[0], g1, sid1),
-    revokeWithGrant(pool, ids[1], g2, sid2),
+    revokeWithGrant(pool, ids[0], ids[1], g1, sid1),
+    revokeWithGrant(pool, ids[1], ids[0], g2, sid2),
   ]);
   const ok = [r1, r2].filter((r) => r.ok).length;
   assert.equal(ok, 1);
@@ -117,7 +117,10 @@ test('three devices, three simultaneous revokes: two succeed', async () => {
   );
   admin.release();
   const results = await Promise.all(
-    ids.map((id, i) => revokeWithGrant(pool, id, grants[i], `sess-race-3-${i}`))
+    ids.map((id, i) => {
+      const other = ids[(i + 1) % ids.length];
+      return revokeWithGrant(pool, id, other, grants[i], `sess-race-3-${i}`);
+    })
   );
   const ok = results.filter((r) => r.ok).length;
   assert.equal(ok, 2);
@@ -139,8 +142,8 @@ test('same device revoked twice concurrently', async () => {
   const g2 = await issueGrant(admin, userA, 'device_revoke', 'sess-dup-2');
   admin.release();
   const [r1, r2] = await Promise.all([
-    revokeWithGrant(pool, 'd1', g1, 'sess-dup-1'),
-    revokeWithGrant(pool, 'd1', g2, 'sess-dup-2'),
+    revokeWithGrant(pool, 'd2', 'd1', g1, 'sess-dup-1'),
+    revokeWithGrant(pool, 'd2', 'd1', g2, 'sess-dup-2'),
   ]);
   assert.equal([r1, r2].filter((r) => r.ok).length, 1);
   const loser = r1.ok ? r2 : r1;
@@ -161,11 +164,11 @@ test('already-revoked device returns 42501', async () => {
   const admin = await pool.connect();
   const g1 = await issueGrant(admin, userA, 'device_revoke', 'sess-already');
   admin.release();
-  await revokeWithGrant(pool, 'd1', g1, 'sess-already');
+  await revokeWithGrant(pool, 'd2', 'd1', g1, 'sess-already');
   const admin2 = await pool.connect();
   const g2 = await issueGrant(admin2, userA, 'device_revoke', 'sess-already-2');
   admin2.release();
-  const again = await revokeWithGrant(pool, 'd1', g2, 'sess-already-2');
+  const again = await revokeWithGrant(pool, 'd2', 'd1', g2, 'sess-already-2');
   assert.equal(again.code, '42501');
   await pool.end();
 });
@@ -181,20 +184,15 @@ test('cross-account revoke denied', async () => {
   await seedDevices(pool, 2);
   const admin = await pool.connect();
   await admin.query('insert into auth.users values ($1, now()) on conflict do nothing', [userB]);
+  await admin.query('set role service_role');
+  await admin.query(
+    `insert into public.devices (account_id, device_id, mesh_public_key, device_public_key, certificate)
+     values ($1,'d1',$2,$2,'c'), ($1,'d2',$2,$2,'c')`,
+    [userB, KEY122]
+  );
   const g = await issueGrant(admin, userB, 'device_revoke', 'sess-cross-b');
+  const ch = await issueRevokeChallenge(admin, userB, 'sess-cross-b', 'd1', 'd2', g);
   admin.release();
-  const c = await pool.connect();
-  try {
-    await assert.rejects(
-      async () => {
-        await c.query('begin');
-        await revokeViaSvc(c, userB, 'd1', g, 'sess-cross-b', KEY122);
-        await c.query('commit');
-      },
-      (e) => e.code === '42501'
-    );
-  } finally {
-    c.release();
-  }
+  await assert.rejects(() => revokeViaSvc(admin, userA, ch), (e) => e.code === '42501');
   await pool.end();
 });

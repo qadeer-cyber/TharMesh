@@ -1,8 +1,8 @@
 # Staging package (0.6 P1 draft) — no production changes
 
-## Migrations (forward-only through 011)
+## Migrations (forward-only through 012)
 
-Apply in order: `202611120001` … `202611120011`. Do not edit applied migrations on hosted projects.
+Apply in order: `202611120001` … `202611120012`. Do not edit applied migrations on hosted projects.
 
 ## Preconditions
 
@@ -27,6 +27,7 @@ node --test supabase/tests/schema-recovery-privileges.test.mjs
 node --test supabase/tests/device-revoke-race.test.mjs
 node --test supabase/tests/device-lock-race.test.mjs
 node --test supabase/tests/device-revoke-crypto.test.mjs
+node --test supabase/tests/device-revoke-challenge-pg.test.mjs
 node --test supabase/tests/device-revoke-approve-race.test.mjs
 node --test supabase/tests/jwt-claims-session.test.mjs
 node supabase/tests/identity-postgres-multisession.test.mjs

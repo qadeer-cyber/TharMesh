@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { issueGrant, revokeViaSvc } from './pg-test-helpers.mjs';
+import { issueGrant, revokeWithChallenge } from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
@@ -100,7 +100,7 @@ test('revoke races enrollment_finish under account lock', async () => {
       const c = await pool.connect();
       try {
         await c.query('begin');
-        await revokeViaSvc(c, userA, 't2', gRevoke, 'sess-lock-rev', trusted.pubB64);
+        await revokeWithChallenge(c, userA, 'sess-lock-rev', 't1', 't2', gRevoke);
         await c.query('commit');
         return { ok: true };
       } catch (e) {

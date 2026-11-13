@@ -5,21 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { generateKeyPairSync } from 'node:crypto';
-import { issueGrant, revokeViaSvc, withSession } from './pg-test-helpers.mjs';
-
-function b64url(buf) {
-  return Buffer.from(buf)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-function activeKey() {
-  const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  const spki = pair.publicKey.export({ type: 'spki', format: 'der' });
-  return b64url(spki);
-}
+import {
+  issueGrant,
+  issueRevokeChallenge,
+  revokeViaSvc,
+  revokeWithChallenge,
+  withSession,
+} from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
@@ -37,6 +29,16 @@ function ensureDb() {
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'postgres-apply failed');
 }
 
+function activeKey() {
+  const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const spki = pair.publicKey.export({ type: 'spki', format: 'der' });
+  return Buffer.from(spki)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
 test('sensitive grants: session, action, expiry, replay', async () => {
   ensureDb();
   const pool = new Pool({
@@ -46,14 +48,14 @@ test('sensitive grants: session, action, expiry, replay', async () => {
     host: process.env.THARMESH_PG_HOST ?? '127.0.0.1',
   });
   const admin = await pool.connect();
+  const livePub = activeKey();
   try {
     await admin.query('reset role');
     await admin.query('insert into auth.users values ($1, now()), ($2, now()) on conflict do nothing', [userA, userB]);
     await admin.query('set role service_role');
-    const livePub = activeKey();
     await admin.query(
       `insert into public.devices (account_id, device_id, mesh_public_key, device_public_key, certificate)
-       values ($1,'d1',$2,$2,'c'), ($1,'d2',$2,$3,'c')`,
+       values ($1,'d1',$2,$3,'c'), ($1,'d2',$2,$2,'c')`,
       [userA, KEY122, livePub]
     );
 
@@ -66,7 +68,7 @@ test('sensitive grants: session, action, expiry, replay', async () => {
     const grant = await issueGrant(admin, userA, 'device_revoke', sid);
 
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, 'd2', grant, 'wrong-sess-1', livePub),
+      () => issueRevokeChallenge(admin, userA, 'wrong-sess-1', 'd1', 'd2', grant),
       (e) => e.message?.includes('session') || e.code === '42501'
     );
 
@@ -77,34 +79,41 @@ test('sensitive grants: session, action, expiry, replay', async () => {
       [grant]
     );
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, 'd2', grant, sid, livePub),
+      () => issueRevokeChallenge(admin, userA, sid, 'd1', 'd2', grant),
       (e) => e.message?.includes('expired') || e.code === '42501'
     );
 
     const sid2 = 'sess-grant-use1';
     const g2 = await issueGrant(admin, userA, 'device_revoke', sid2);
-    await revokeViaSvc(admin, userA, 'd2', g2, sid2, livePub);
+    const ch2 = await issueRevokeChallenge(admin, userA, sid2, 'd1', 'd2', g2);
+    await revokeViaSvc(admin, userA, ch2);
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, 'd1', g2, sid2, livePub),
+      () => revokeViaSvc(admin, userA, ch2),
       (e) => e.message?.includes('consumed') || e.code === '42501'
     );
 
     const sidB = 'sess-user-b-xxx';
     const gCross = await issueGrant(admin, userB, 'device_revoke', sidB);
+    await admin.query(
+      `insert into public.devices (account_id, device_id, mesh_public_key, device_public_key, certificate)
+       values ($1,'d1',$2,$2,'c'), ($1,'d2',$2,$2,'c') on conflict do nothing`,
+      [userB, KEY122]
+    );
+    const chCross = await issueRevokeChallenge(admin, userB, sidB, 'd1', 'd2', gCross);
     await assert.rejects(
-      () => revokeViaSvc(admin, userB, 'd1', gCross, sidB, KEY122),
-      (e) => e.code === '42501'
+      () => revokeViaSvc(admin, userA, chCross),
+      (e) => e.message?.includes('Challenge not found') || e.code === '42501'
     );
 
     const gRot = await issueGrant(admin, userA, 'recovery_rotate', sid);
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, 'd1', gRot, sid, livePub),
+      () => issueRevokeChallenge(admin, userA, sid, 'd1', 'd2', gRot),
       (e) => e.message?.includes('action') || e.code === '42501'
     );
 
     await withSession(admin, userA, sid, async () => {
       await assert.rejects(
-        () => admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', ['d1', gRot, KEY122]),
+        () => admin.query('select public.tharmesh_device_revoke($1,$2::uuid,$3)', ['d1', gRot, livePub]),
         (e) => e.message?.includes('disabled') || e.code === '42501'
       );
     });
@@ -112,14 +121,14 @@ test('sensitive grants: session, action, expiry, replay', async () => {
     await admin.query('delete from public.devices where account_id = $1', [userA]);
     await admin.query(
       `insert into public.devices (account_id, device_id, mesh_public_key, device_public_key, certificate)
-       values ($1,'d1',$2,$2,'c'), ($1,'d2',$2,$3,'c')`,
+       values ($1,'d1',$2,$3,'c'), ($1,'d2',$2,$2,'c')`,
       [userA, KEY122, livePub]
     );
-    const gCaller = await issueGrant(admin, userA, 'device_revoke', 'sess-rev-active');
-    await revokeViaSvc(admin, userA, 'd1', gCaller, 'sess-rev-active', livePub);
-    const gRevokedKey = await issueGrant(admin, userA, 'device_revoke', 'sess-revoked');
+    const gKillD1 = await issueGrant(admin, userA, 'device_revoke', 'sess-kill-d1');
+    await revokeWithChallenge(admin, userA, 'sess-kill-d1', 'd2', 'd1', gKillD1);
+    const gDead = await issueGrant(admin, userA, 'device_revoke', 'sess-revoked');
     await assert.rejects(
-      () => revokeViaSvc(admin, userA, 'd2', gRevokedKey, 'sess-revoked', KEY122),
+      () => issueRevokeChallenge(admin, userA, 'sess-revoked', 'd1', 'd2', gDead),
       (e) => e.message?.includes('not active') || e.code === '42501'
     );
   } finally {

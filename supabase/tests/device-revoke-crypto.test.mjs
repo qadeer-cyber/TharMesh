@@ -1,5 +1,5 @@
 /**
- * device-revoke edge: possession proof required (Web Crypto), not pubkey-only.
+ * device-revoke edge: DB pubkey lookup; challenge-bound signatures.
  */
 import assert from 'node:assert/strict';
 import { createPrivateKey, createSign, generateKeyPairSync } from 'node:crypto';
@@ -17,8 +17,16 @@ function canonical(parts) {
   return Buffer.from(parts.join('\x1F'), 'utf8');
 }
 
-function revokeMsg(account, target, grantId, callerPub, ts) {
-  return canonical(['TM-DEVICE-REVOKE-v1', account, target, grantId, callerPub, String(ts)]);
+function challengeMsg(account, sessionId, reqId, targetId, grantId, challengeId) {
+  return canonical([
+    'TM-DEVICE-REVOKE-CHALLENGE-v1',
+    account,
+    sessionId,
+    reqId,
+    targetId,
+    grantId,
+    challengeId,
+  ]);
 }
 
 function keyMaterial() {
@@ -36,23 +44,25 @@ function signDer(privKey, msg) {
 }
 
 const account = 'f1000000-0000-4000-8000-0000000000a1';
+const sessionId = 'sess-revoke-cr1';
 const grantId = 'a1000000-0000-4000-8000-0000000000g1';
 const target = 'device-target';
+const requester = 'device-requester';
+const challengeId = 'c1000000-0000-4000-8000-0000000000h1';
 
 function bearer(nowSec) {
-  const hdr = Buffer.from('{}').toString('base64url');
   const pay = Buffer.from(
     JSON.stringify({
       sub: account,
-      session_id: 'sess-revoke-cr1',
+      session_id: sessionId,
       iat: nowSec,
       amr: [{ method: 'otp', timestamp: nowSec - 30 }],
     })
   ).toString('base64url');
-  return `Bearer ${hdr}.${pay}.sig`;
+  return `Bearer e30.${pay}.sig`;
 }
 
-test('device-revoke edge rejects bad possession proofs', async () => {
+test('device-revoke edge rejects bad challenge proofs', async () => {
   let handle;
   globalThis.Deno = {
     env: new Map([
@@ -66,12 +76,27 @@ test('device-revoke edge rejects bad possession proofs', async () => {
   };
   const active = keyMaterial();
   const other = keyMaterial();
-  const revoked = keyMaterial();
   const now = Math.floor(Date.now() / 1000);
   let svcCalls = 0;
   globalThis.fetch = async (url, options) => {
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: account, email_confirmed_at: '2026-11-12' });
+    }
+    if (url.includes('tharmesh_device_revoke_challenge_get_svc')) {
+      return Response.json([
+        {
+          account_id: account,
+          session_id: sessionId,
+          requesting_device_id: requester,
+          target_device_id: target,
+          grant_id: grantId,
+          expires_at: new Date(Date.now() + 120_000).toISOString(),
+          consumed_at: null,
+        },
+      ]);
+    }
+    if (url.includes('tharmesh_device_pubkey_lookup_svc')) {
+      return new Response(JSON.stringify(active.pubB64), { status: 200 });
     }
     if (url.includes('tharmesh_device_revoke_svc')) {
       svcCalls++;
@@ -89,30 +114,73 @@ test('device-revoke edge rejects bad possession proofs', async () => {
       })
     );
 
-  const baseBody = {
-    device_id: target,
-    grant_id: grantId,
-    caller_device_pubkey: active.pubB64,
-    proof_ts: now,
-  };
+  const commit = (sig, targetId = target) =>
+    post({ operation: 'commit', challenge_id: challengeId, target_device_id: targetId, proof_sig_b64: sig });
 
-  const malformedSig = b64url(Buffer.alloc(72, 0xaa));
-  assert.equal((await post({ ...baseBody, proof_sig_b64: malformedSig })).status, 403);
+  const forgedSig = signDer(other.privKey, challengeMsg(account, sessionId, requester, target, grantId, challengeId));
+  assert.equal((await commit(forgedSig)).status, 403);
 
-  const forgedSig = signDer(other.privKey, revokeMsg(account, target, grantId, active.pubB64, now));
-  assert.equal((await post({ ...baseBody, proof_sig_b64: forgedSig })).status, 403);
+  const wrongTargetSig = signDer(
+    active.privKey,
+    challengeMsg(account, sessionId, requester, 'other-target', grantId, challengeId)
+  );
+  assert.equal((await commit(wrongTargetSig, target)).status, 403);
 
-  const wrongTargetSig = signDer(active.privKey, revokeMsg(account, 'other-device', grantId, active.pubB64, now));
-  assert.equal((await post({ ...baseBody, proof_sig_b64: wrongTargetSig })).status, 403);
+  const wrongSessionSig = signDer(
+    active.privKey,
+    challengeMsg(account, 'wrong-session-xx', requester, target, grantId, challengeId)
+  );
+  assert.equal((await commit(wrongSessionSig)).status, 403);
 
-  const goodSig = signDer(active.privKey, revokeMsg(account, target, grantId, active.pubB64, now));
-  assert.equal((await post({ ...baseBody, proof_sig_b64: goodSig })).status, 200);
+  const goodSig = signDer(
+    active.privKey,
+    challengeMsg(account, sessionId, requester, target, grantId, challengeId)
+  );
+  assert.equal((await commit(goodSig)).status, 200);
   assert.equal(svcCalls, 1);
 
-  assert.equal((await post({ ...baseBody, proof_sig_b64: goodSig })).status, 200);
-  assert.equal(svcCalls, 2);
+  globalThis.fetch = async (url) => {
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: account, email_confirmed_at: '2026-11-12' });
+    }
+    if (url.includes('tharmesh_device_revoke_challenge_get_svc')) {
+      return Response.json([
+        {
+          account_id: account,
+          session_id: sessionId,
+          requesting_device_id: requester,
+          target_device_id: target,
+          grant_id: grantId,
+          expires_at: new Date(Date.now() - 1000).toISOString(),
+          consumed_at: null,
+        },
+      ]);
+    }
+    if (url.includes('tharmesh_device_pubkey_lookup_svc')) {
+      return new Response(JSON.stringify(active.pubB64), { status: 200 });
+    }
+    return new Response(null, { status: 404 });
+  };
+  assert.equal((await commit(goodSig)).status, 403);
 
-  const stale = { ...baseBody, proof_ts: now - 600, proof_sig_b64: signDer(active.privKey, revokeMsg(account, target, grantId, active.pubB64, now - 600)) };
-  assert.equal((await post(stale)).status, 403);
-  void revoked;
+  globalThis.fetch = async (url) => {
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: 'f1000000-0000-4000-8000-0000000000b2', email_confirmed_at: '2026-11-12' });
+    }
+    if (url.includes('tharmesh_device_revoke_challenge_get_svc')) {
+      return Response.json([
+        {
+          account_id: account,
+          session_id: sessionId,
+          requesting_device_id: requester,
+          target_device_id: target,
+          grant_id: grantId,
+          expires_at: new Date(Date.now() + 120_000).toISOString(),
+          consumed_at: null,
+        },
+      ]);
+    }
+    return new Response(null, { status: 404 });
+  };
+  assert.equal((await commit(goodSig)).status, 403);
 });

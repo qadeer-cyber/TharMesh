@@ -69,12 +69,21 @@ object DeviceDirectory {
         anonKey: String,
         accessToken: String,
         accountId: String,
-        deviceId: String,
+        requestingDeviceId: String,
+        targetDeviceId: String,
         grantId: String,
         signer: DeviceSigner
     ): AuthCall {
         return TrustedDeviceRevoke.revoke(
-            http, baseUrl, anonKey, accessToken, accountId, deviceId, grantId, signer
+            http,
+            baseUrl,
+            anonKey,
+            accessToken,
+            accountId,
+            requestingDeviceId,
+            targetDeviceId,
+            grantId,
+            signer
         )
     }
 

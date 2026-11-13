@@ -27,7 +27,8 @@ for f in 202611120001_identity_provisioning.sql \
          202611120008_recovery_cas_revoke_fresh.sql \
          202611120009_recovery_lock_device_serialize.sql \
          202611120010_grant_session_atomic_recovery.sql \
-         202611120011_revoke_possession_jwt_claims.sql; do
+         202611120011_revoke_possession_jwt_claims.sql \
+         202611120012_revoke_challenge_possession.sql; do
   $PSQL -d "$DB_NAME" -f "$ROOT/migrations/$f"
 done
 $PSQL -d "$DB_NAME" -c "GRANT USAGE ON SCHEMA public TO authenticated, anon;

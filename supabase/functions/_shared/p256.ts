@@ -50,19 +50,22 @@ export async function verifyDerSpki(spkiB64: string, message: Uint8Array, derSig
   }
 }
 
-export function deviceRevokeMessage(
+/** Canonical bytes the requesting device must sign (server-bound challenge). */
+export function deviceRevokeChallengeMessage(
   account: string,
+  sessionId: string,
+  requestingDeviceId: string,
   targetDeviceId: string,
   grantId: string,
-  callerDevicePub: string,
-  proofTsSec: number,
+  challengeId: string,
 ): Uint8Array {
   return canonical([
-    "TM-DEVICE-REVOKE-v1",
+    "TM-DEVICE-REVOKE-CHALLENGE-v1",
     account,
+    sessionId,
+    requestingDeviceId.trim(),
     targetDeviceId.trim(),
     grantId,
-    callerDevicePub,
-    String(proofTsSec),
+    challengeId,
   ]);
 }

@@ -8,7 +8,7 @@
 | `device-enrollment` | yes | request body + user | yes (`_shared/amr.ts`) | n/a (crypto + svc) |
 | `sensitive-auth` | yes | `sub` vs user id | yes | issues session-bound grants (`recovery_rotate`, `device_revoke`) |
 | `recovery-rotate` | yes | `sub` vs user id | yes | `tharmesh_recovery_rotate_commit_svc` (grant consume + CAS put, one txn) |
-| `device-revoke` | yes | `sub` vs user id | yes (grant path) | Web Crypto proof (`TM-DEVICE-REVOKE-v1`) + `tharmesh_device_revoke_svc` |
+| `device-revoke` | yes | `sub` vs user id | yes (grant path) | Server challenge (`tharmesh_device_revoke_challenge_issue_svc`); Edge verifies `TM-DEVICE-REVOKE-CHALLENGE-v1` with DB pubkey lookup; `tharmesh_device_revoke_svc` |
 
 ## Write RPCs (service_role only)
 

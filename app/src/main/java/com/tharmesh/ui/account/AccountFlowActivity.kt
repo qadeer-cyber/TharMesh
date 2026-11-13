@@ -1322,6 +1322,13 @@ class AccountFlowActivity : AppCompatActivity() {
                 status.setText(R.string.account_reauth_required_revoke)
                 return@launch
             }
+            val requestingId = localDeviceId
+                ?: cloudDevices.firstOrNull { !it.revoked && it.isCurrent }?.deviceId
+                ?: cloudDevices.firstOrNull { !it.revoked }?.deviceId
+            if (requestingId.isNullOrBlank() || requestingId == id) {
+                status.setText(R.string.account_error_revoke_device)
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
                 DeviceDirectory.revoke(
                     http,
@@ -1329,6 +1336,7 @@ class AccountFlowActivity : AppCompatActivity() {
                     BuildConfig.SUPABASE_ANON_KEY,
                     access,
                     accountId,
+                    requestingId,
                     id,
                     grantId,
                     signer
