@@ -7,7 +7,7 @@
 | Cloud run | [bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9](https://cursor.com/agents/bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9) |
 | `originalModelName` | **composer-2.5** |
 | Branch | `cursor/universal-account-0939` |
-| Report commit | `ffa7432` (consolidated 0.7 evidence + enrollment Cat 2) |
+| Report commit | `ed415e6` (consolidated 0.7 evidence + enrollment Cat 2) |
 | Supervisor accepted | `b3d2dea` (CI [43408800759](https://github.com/qadeer-cyber/TharMesh/actions/runs/43408800759)) |
 
 ## B — PR / CI / artifacts
