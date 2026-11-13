@@ -65,7 +65,7 @@ API_LEVEL="$("$ADB" shell getprop ro.build.version.sdk | tr -d '\r')"
 API_RELEASE="$("$ADB" shell getprop ro.build.version.release | tr -d '\r')"
 AVD_NAME="$("$EMU" -list-avds | head -1)"
 BUILD_SHA="$(cd "$ROOT" && git rev-parse HEAD)"
-APK="$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
+APK="${TM_APK:-${HEAD_DEBUG_APK:-$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk}}"
 
 log "=== emulator metadata ==="
 log "AVD=$AVD_NAME API=$API_LEVEL (Android $API_RELEASE)"
@@ -74,7 +74,13 @@ if [ "${API_LEVEL:-0}" -lt 33 ]; then
   log "API 33+ image: NOT EXECUTED (only $AVD_NAME installed)"
 fi
 
-(cd "$ROOT" && ./gradlew assembleDebug -q)
+if [ "${SKIP_HEAD_ASSEMBLE:-0}" = "1" ]; then
+  test -f "$APK" || { log "FAIL APK missing at $APK (SKIP_HEAD_ASSEMBLE=1)"; exit 1; }
+  log "skip_gradle_assemble=1 apk=$APK"
+else
+  (cd "$ROOT" && ./gradlew assembleDebug -q)
+  test -f "$APK" || { log "FAIL APK missing at $APK"; exit 1; }
+fi
 SHA256=$(sha256sum "$APK" | awk '{print $1}')
 APK_SIZE=$(stat -c%s "$APK")
 log "APK sha256=$SHA256 size_bytes=$APK_SIZE"
