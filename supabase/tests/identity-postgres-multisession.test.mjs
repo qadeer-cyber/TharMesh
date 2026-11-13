@@ -306,10 +306,57 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
-  await t.test('migration idempotency re-apply 004', async () => {
+  await t.test('concurrent enrollment begin same nonce rejected', async () => {
+    const newDev = keyMaterial();
+    const nonce = b64url(randomBytes(9));
+    const expires = new Date(Date.now() + 600_000).toISOString();
+    await withJwt(admin, userA, 'authenticated', async () => {
+      const reqSig = signDer(newDev.privKey, enrollRequestMsg(userA, KEY122, newDev.pubB64, 'dup-nonce', nonce));
+      await admin.query('select public.tharmesh_enrollment_begin($1,$2,$3,$4,$5::timestamptz)', [
+        'dup-nonce',
+        newDev.pubB64,
+        nonce,
+        reqSig,
+        expires,
+      ]);
+      await assert.rejects(
+        () =>
+          admin.query('select public.tharmesh_enrollment_begin($1,$2,$3,$4,$5::timestamptz)', [
+            'dup-nonce-2',
+            newDev.pubB64,
+            nonce,
+            reqSig,
+            expires,
+          ]),
+        (e) => e.code === '42501'
+      );
+    });
+    stats.passed++;
+  });
+
+  await t.test('list devices is_current via self pubkey', async () => {
+    await withJwt(admin, userA, 'authenticated', async () => {
+      const list = (
+        await admin.query('select * from public.tharmesh_list_devices($1)', [trustedDev.pubB64])
+      ).rows;
+      assert.ok(list.some((r) => r.device_id === 'trusted-1' && r.is_current));
+    });
+    stats.passed++;
+  });
+
+  await t.test('explicit reset evidence blocks repeat reset flag', async () => {
+    await withJwt(admin, userA, 'authenticated', async () => {
+      await admin.query('select public.tharmesh_commit_explicit_reset()');
+      const ev = (await admin.query('select * from public.tharmesh_account_evidence()')).rows[0];
+      assert.equal(ev.explicit_reset_committed, true);
+    });
+    stats.passed++;
+  });
+
+  await t.test('migration idempotency re-apply 005', async () => {
     await admin.query('reset role');
     const mig = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120004_trusted_device_enrollment.sql'),
+      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120005_device_current_explicit_reset.sql'),
       'utf8'
     );
     await admin.query(mig);

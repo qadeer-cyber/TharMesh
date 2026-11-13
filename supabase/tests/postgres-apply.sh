@@ -20,7 +20,8 @@ $PSQL -d "$DB_NAME" -f "$ROOT/schema.sql"
 for f in 202611120001_identity_provisioning.sql \
          202611120002_identity_proof.sql \
          202611120003_identity_device_guard.sql \
-         202611120004_trusted_device_enrollment.sql; do
+         202611120004_trusted_device_enrollment.sql \
+         202611120005_device_current_explicit_reset.sql; do
   $PSQL -d "$DB_NAME" -f "$ROOT/migrations/$f"
 done
 $PSQL -d "$DB_NAME" -f "$ROOT/migrations/202611120004_verify_plpython.sql"

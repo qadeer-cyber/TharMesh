@@ -148,6 +148,7 @@ object CloudSessionStore {
     private const val ACCOUNT = "account_id"
     private const val LOCAL = "local_auth"
     private const val EMAIL_VERIFIED = "email_verified"
+    private const val EXPLICIT_RESET = "explicit_reset_committed"
 
     fun write(context: Context, record: InstallRecord) {
         val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -235,4 +236,13 @@ object CloudSessionStore {
             .putString(STATE, CloudCredential.SIGNED_OUT.name)
             .apply()
     }
+
+    fun markExplicitResetCommitted(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(EXPLICIT_RESET, true)
+            .apply()
+    }
+
+    fun readExplicitResetCommitted(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(EXPLICIT_RESET, false)
 }

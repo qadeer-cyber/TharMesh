@@ -12,7 +12,8 @@ object DeviceDirectory {
         val deviceId: String,
         val meshPublicKey: String,
         val devicePublicKey: String,
-        val revoked: Boolean
+        val revoked: Boolean,
+        val isCurrent: Boolean = false
     )
 
     data class AccountEvidence(
@@ -20,22 +21,26 @@ object DeviceDirectory {
         val meshPublicKey: String?,
         val deviceCount: Int,
         val activeDeviceCount: Int,
-        val hasRecoveryBlob: Boolean
+        val hasRecoveryBlob: Boolean,
+        val explicitResetCommitted: Boolean
     )
 
     fun list(
         http: HttpTransport,
         baseUrl: String,
         anonKey: String,
-        accessToken: String
+        accessToken: String,
+        selfDevicePublicKey: String? = null
     ): List<DeviceRow>? {
         if (!AuthBackend.configured(baseUrl, anonKey)) return null
         val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return null
+        val body = if (selfDevicePublicKey.isNullOrBlank()) "{}" else
+            JSONObject().put("p_self_device_pubkey", selfDevicePublicKey).toString()
         val response = try {
             http.post(
                 baseUrl.trimEnd('/') + "/rest/v1/rpc/tharmesh_list_devices",
                 headers,
-                "{}"
+                body
             )
         } catch (_: Throwable) {
             return null
@@ -50,7 +55,8 @@ object DeviceDirectory {
                         deviceId = o.getString("device_id"),
                         meshPublicKey = o.optString("mesh_public_key"),
                         devicePublicKey = o.optString("device_public_key"),
-                        revoked = !o.isNull("revoked_at")
+                        revoked = !o.isNull("revoked_at"),
+                        isCurrent = o.optBoolean("is_current")
                     )
                 )
             }
@@ -102,7 +108,8 @@ object DeviceDirectory {
             meshPublicKey = o.optString("mesh_public_key").takeIf { it.isNotBlank() },
             deviceCount = o.getInt("device_count"),
             activeDeviceCount = o.getInt("active_device_count"),
-            hasRecoveryBlob = o.getBoolean("has_recovery_blob")
+            hasRecoveryBlob = o.getBoolean("has_recovery_blob"),
+            explicitResetCommitted = o.optBoolean("explicit_reset_committed")
         )
     }
 }

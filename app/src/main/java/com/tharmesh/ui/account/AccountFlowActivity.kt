@@ -58,6 +58,7 @@ import com.tharmesh.account.PendingSignupStore
 import com.tharmesh.account.RecoveryRotation
 import com.tharmesh.account.RecoveryUpload
 import com.tharmesh.account.SupabaseDirectory
+import com.tharmesh.account.TrustedCloudEnrollment
 import com.tharmesh.account.UrlHttpTransport
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.data.UserProfile
@@ -94,6 +95,7 @@ class AccountFlowActivity : AppCompatActivity() {
     private var pendingPhrase: String? = null
     private var pendingRecord: InstallRecord? = null
     private var pendingEnrollment: com.tharmesh.account.EnrollmentRequest? = null
+    private var pendingEnrollmentExpiresAtMs: Long = 0L
     private var legacyReconcileMessage: LegacyReconciliation.Decision =
         LegacyReconciliation.Decision.REQUIRES_RECOVERY_OR_ENROLLMENT
     private var cloudDevices: List<DeviceDirectory.DeviceRow> = emptyList()
@@ -727,6 +729,22 @@ class AccountFlowActivity : AppCompatActivity() {
                         status.setText(R.string.account_error_conflict)
                         return@launch
                     }
+                    val device = AndroidDeviceKey.loadOrCreate()
+                    if (device != null) {
+                        val finger = UserPrefs.readIdentity(this@AccountFlowActivity)?.fingerprint?.take(16).orEmpty()
+                        if (finger.isNotBlank()) {
+                            withContext(Dispatchers.IO) {
+                                TrustedCloudEnrollment.bootstrapDevice(
+                                    http,
+                                    BuildConfig.SUPABASE_URL,
+                                    BuildConfig.SUPABASE_ANON_KEY,
+                                    auth.tokens.accessToken,
+                                    finger,
+                                    device.publicKeyBase64
+                                )
+                            }
+                        }
+                    }
                     PendingSignupStore.clear(this@AccountFlowActivity)
                     goHome()
                 }
@@ -746,12 +764,14 @@ class AccountFlowActivity : AppCompatActivity() {
                     }
                     val serverState = evidence?.identityState
                         ?: if (outcome.canonicalKey == null) "legacy_unknown" else "recovery_required"
+                    val resetFlag = CloudSessionStore.readExplicitResetCommitted(this@AccountFlowActivity) ||
+                        (evidence?.explicitResetCommitted == true)
                     legacyReconcileMessage = LegacyReconciliation.decide(
                         LegacyReconciliation.Evidence(
                             serverState = serverState,
                             canonicalMeshPublicKey = outcome.canonicalKey ?: evidence?.meshPublicKey,
                             localMesh = local,
-                            explicitResetCommitted = false,
+                            explicitResetCommitted = resetFlag,
                             cloudDeviceRows = evidence?.deviceCount ?: 0,
                             cloudRecoveryBlob = evidence?.hasRecoveryBlob ?: false
                         )
@@ -936,6 +956,15 @@ class AccountFlowActivity : AppCompatActivity() {
                     )
                 )
             }
+            CloudSessionStore.markExplicitResetCommitted(this@AccountFlowActivity)
+            val access = CloudSessionStore.readAccessToken(this@AccountFlowActivity)
+            if (!access.isNullOrBlank() && AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)) {
+                withContext(Dispatchers.IO) {
+                    TrustedCloudEnrollment.commitExplicitReset(
+                        http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access
+                    )
+                }
+            }
             finishSeal(created.record, built.second, status)
         }
     }
@@ -1045,15 +1074,19 @@ class AccountFlowActivity : AppCompatActivity() {
             status.setText(R.string.account_error_keystore)
             return
         }
-        val accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
+        val accountId = CloudSessionStore.readAccountId(this)
+            ?: intent.getStringExtra(EXTRA_ACCOUNT_ID)
             ?: UserPrefs.readProfile(this)?.userId
             ?: "local"
+        pendingEnrollmentExpiresAtMs = TrustedCloudEnrollment.defaultExpiryMs()
+        val expiresSec = pendingEnrollmentExpiresAtMs / 1000L
         val request = DeviceEnrollment.createRequest(
             accountId = accountId,
             meshPublicKey = identity.publicKeyBase64,
             device = device,
-            deviceId = identity.fingerprint,
-            nonce = ByteArray(16).also { random.nextBytes(it) }
+            deviceId = identity.fingerprint.take(16),
+            nonce = ByteArray(16).also { random.nextBytes(it) },
+            expiresAtEpochSec = expiresSec
         )
         pendingEnrollment = request
         val text = EnrollmentQr.encodeRequest(request)
@@ -1062,6 +1095,24 @@ class AccountFlowActivity : AppCompatActivity() {
         qr.visibility = View.VISIBLE
         qr.setImageBitmap(encodeQr(text, 512))
         status.text = identity.fingerprint
+        val access = CloudSessionStore.readAccessToken(this)
+        if (!access.isNullOrBlank() && AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)) {
+            lifecycleScope.launch {
+                val cloud = withContext(Dispatchers.IO) {
+                    TrustedCloudEnrollment.enrollmentBegin(
+                        http,
+                        BuildConfig.SUPABASE_URL,
+                        BuildConfig.SUPABASE_ANON_KEY,
+                        access,
+                        request,
+                        request.expiresAtEpochSec
+                    )
+                }
+                if (cloud is AuthCall.Failed) {
+                    status.text = getString(R.string.account_error_unrecognized) + " (" + cloud.reason + ")"
+                }
+            }
+        }
     }
 
     private fun acceptEnrollment(field: EditText, confirmed: Boolean, status: TextView) {
@@ -1082,7 +1133,31 @@ class AccountFlowActivity : AppCompatActivity() {
             return
         }
         val ok = DeviceEnrollment.accept(cert, accountPublic, request)
-        status.setText(if (ok) R.string.account_enroll_accepted else R.string.account_error_approve)
+        if (!ok) {
+            status.setText(R.string.account_error_approve)
+            return
+        }
+        val access = CloudSessionStore.readAccessToken(this)
+        if (!access.isNullOrBlank() && AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)) {
+            lifecycleScope.launch {
+                val cloud = withContext(Dispatchers.IO) {
+                    TrustedCloudEnrollment.enrollmentFinish(
+                        http,
+                        BuildConfig.SUPABASE_URL,
+                        BuildConfig.SUPABASE_ANON_KEY,
+                        access,
+                        cert.nonceB64,
+                        EnrollmentQr.encodeCertificate(cert)
+                    )
+                }
+                status.setText(
+                    if (cloud is AuthCall.Ok) R.string.account_enroll_accepted
+                    else R.string.account_error_approve
+                )
+            }
+        } else {
+            status.setText(R.string.account_enroll_accepted)
+        }
     }
 
     private fun refreshCloudDevices(status: TextView) {
@@ -1100,9 +1175,12 @@ class AccountFlowActivity : AppCompatActivity() {
         secondary.visibility = View.VISIBLE
         secondary.setText(R.string.account_action_revoke)
         secondary.setOnClickListener { revokeCloudDevice(f2, status) }
+        val selfPub = AndroidDeviceKey.loadOrCreate()?.publicKeyBase64
         lifecycleScope.launch {
             val rows = withContext(Dispatchers.IO) {
-                DeviceDirectory.list(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access)
+                DeviceDirectory.list(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, selfPub
+                )
             }
             cloudDevices = rows ?: emptyList()
             localDeviceId = UserPrefs.readIdentity(this@AccountFlowActivity)?.fingerprint?.take(16)
@@ -1110,7 +1188,7 @@ class AccountFlowActivity : AppCompatActivity() {
             else cloudDevices.joinToString("\n") { row ->
                 val mark = if (row.revoked) getString(R.string.account_devices_status_revoked)
                 else getString(R.string.account_devices_status_active)
-                val current = if (row.deviceId == localDeviceId) " " + getString(R.string.account_devices_label_current) else ""
+                val current = if (row.isCurrent) " " + getString(R.string.account_devices_label_current) else ""
                 "• ${row.deviceId} — $mark$current"
             }
             body.text = prefix + "\n\n" + listing + "\n\n" + getString(R.string.account_devices_lost_hint)
@@ -1212,7 +1290,49 @@ class AccountFlowActivity : AppCompatActivity() {
             status.setText(R.string.account_error_approve)
             return
         }
-        status.text = EnrollmentQr.encodeCertificate(cert)
+        val trustedDevice = AndroidDeviceKey.loadOrCreate()
+        val access = CloudSessionStore.readAccessToken(this)
+        val trustedId = cloudDevices.firstOrNull { !it.revoked && it.isCurrent }?.deviceId
+            ?: cloudDevices.firstOrNull { !it.revoked }?.deviceId
+            ?: UserPrefs.readIdentity(this)?.fingerprint?.take(16)
+        if (
+            trustedDevice != null && !access.isNullOrBlank() &&
+            AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY) &&
+            !trustedId.isNullOrBlank()
+        ) {
+            val expiresSec = when {
+                request.expiresAtEpochSec > 0L -> request.expiresAtEpochSec
+                pendingEnrollmentExpiresAtMs > 0L -> pendingEnrollmentExpiresAtMs / 1000L
+                else -> TrustedCloudEnrollment.defaultExpiryMs() / 1000L
+            }
+            val approveBody = TrustedCloudEnrollment.deviceApproveMessage(
+                CloudSessionStore.readAccountId(this) ?: localAccount,
+                request.devicePublicKey,
+                request.nonceB64,
+                expiresSec
+            )
+            val approvalSig = trustedDevice.sign(approveBody)
+            lifecycleScope.launch {
+                val cloud = withContext(Dispatchers.IO) {
+                    TrustedCloudEnrollment.enrollmentApprove(
+                        http,
+                        BuildConfig.SUPABASE_URL,
+                        BuildConfig.SUPABASE_ANON_KEY,
+                        access,
+                        request.nonceB64,
+                        trustedId,
+                        approvalSig
+                    )
+                }
+                if (cloud is AuthCall.Failed) {
+                    status.setText(R.string.account_error_approve)
+                    return@launch
+                }
+                status.text = EnrollmentQr.encodeCertificate(cert)
+            }
+        } else {
+            status.text = EnrollmentQr.encodeCertificate(cert)
+        }
     }
 
     private fun resend(email: EditText, status: TextView) {

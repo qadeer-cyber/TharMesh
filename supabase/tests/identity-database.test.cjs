@@ -26,6 +26,7 @@ test('canonical identity permissions, challenge lifecycle and legacy compatibili
         '202611120002_identity_proof.sql',
         '202611120003_identity_device_guard.sql',
         '202611120004_trusted_device_enrollment.sql',
+        '202611120005_device_current_explicit_reset.sql',
     ]) await apply('migrations/' + migration);
     await exec('grant select, insert, update, delete on public.devices to authenticated');
     const historical = 'e1000000-0000-4000-8000-000000000001';

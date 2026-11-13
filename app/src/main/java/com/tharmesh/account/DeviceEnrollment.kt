@@ -33,7 +33,8 @@ data class EnrollmentRequest(
     val devicePublicKey: String,
     val deviceId: String,
     val nonceB64: String,
-    val deviceSignature: String
+    val deviceSignature: String,
+    val expiresAtEpochSec: Long = 0L
 )
 
 data class DeviceCertificate(
@@ -83,7 +84,8 @@ object DeviceEnrollment {
         meshPublicKey: String,
         device: DeviceSigner,
         deviceId: String,
-        nonce: ByteArray
+        nonce: ByteArray,
+        expiresAtEpochSec: Long = 0L
     ): EnrollmentRequest {
         val nonceB64 = Base64Url.encode(nonce)
         val body = canonical(accountId, meshPublicKey, device.publicKeyBase64, deviceId, nonceB64, generation = 0)
@@ -93,7 +95,8 @@ object DeviceEnrollment {
             devicePublicKey = device.publicKeyBase64,
             deviceId = deviceId,
             nonceB64 = nonceB64,
-            deviceSignature = device.sign(body)
+            deviceSignature = device.sign(body),
+            expiresAtEpochSec = expiresAtEpochSec
         )
     }
 
@@ -165,14 +168,16 @@ object EnrollmentQr {
     const val CERT_PREFIX = "tharmesh://enroll-cert"
 
     fun encodeRequest(request: EnrollmentRequest): String {
-        return REQUEST_PREFIX + "?" + listOf(
+        val pairs = mutableListOf(
             "acct" to request.accountId,
             "mesh" to request.meshPublicKey,
             "dev" to request.devicePublicKey,
             "did" to request.deviceId,
             "nonce" to request.nonceB64,
             "sig" to request.deviceSignature
-        ).joinToString("&") { (k, v) -> "$k=" + URLEncoder.encode(v, "UTF-8") }
+        )
+        if (request.expiresAtEpochSec > 0L) pairs.add("exp" to request.expiresAtEpochSec.toString())
+        return REQUEST_PREFIX + "?" + pairs.joinToString("&") { (k, v) -> "$k=" + URLEncoder.encode(v, "UTF-8") }
     }
 
     fun decodeRequest(raw: String): EnrollmentRequest? {
@@ -185,7 +190,8 @@ object EnrollmentQr {
         val nonce = q["nonce"] ?: return null
         val sig = q["sig"] ?: return null
         if (accountId.isBlank() || mesh.isBlank() || sig.isBlank()) return null
-        return EnrollmentRequest(accountId, mesh, dev, did, nonce, sig)
+        val exp = q["exp"]?.toLongOrNull() ?: 0L
+        return EnrollmentRequest(accountId, mesh, dev, did, nonce, sig, exp)
     }
 
     fun encodeCertificate(certificate: DeviceCertificate): String {
