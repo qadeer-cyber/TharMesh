@@ -303,7 +303,8 @@ main() {
   if [ "${SKIP_HEAD_ASSEMBLE:-0}" != "1" ]; then
     (cd "$ROOT" && ./gradlew assembleDebug -q)
   fi
-  NEW_APK="$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk"
+  NEW_APK="${HEAD_DEBUG_APK:-${NEW_APK:-$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk}}"
+  test -f "$NEW_APK" || { log "FAIL head debug APK missing at $NEW_APK"; exit 1; }
   log "new_apk_file_sha256=$(file_apk_sha256 "$NEW_APK")"
   OLD_SHA="$(cert_sha256 "$OLD_APK")"
   NEW_SHA="$(cert_sha256 "$NEW_APK")"

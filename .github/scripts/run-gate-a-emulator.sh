@@ -7,6 +7,8 @@ export LEGACY_SOURCE_COMMIT="${LEGACY_SOURCE_COMMIT:-9fedae917868340e9b2b93f46b8
 export SKIP_HEAD_ASSEMBLE=1
 V6_APK="${V6_APK:-${GITHUB_WORKSPACE}/apk-artifacts/v6-room6-debug.apk}"
 NEW_APK="${GITHUB_WORKSPACE}/apk-artifacts/tharmesh-head-debug.apk"
+export HEAD_DEBUG_APK="$NEW_APK"
+export NEW_APK
 mkdir -p "$THARMESH_EVIDENCE_DIR"
 bash scripts/verify-pinned-apk.sh "$V6_APK"
 test -f "$NEW_APK"

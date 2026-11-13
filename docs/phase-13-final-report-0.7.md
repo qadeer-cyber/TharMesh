@@ -7,7 +7,7 @@
 | Cloud run | [bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9](https://cursor.com/agents/bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9) |
 | `originalModelName` | **composer-2.5** |
 | Branch | `cursor/universal-account-0939` |
-| Report commit | `c288b0b` (historical Room v6 rebuild + legacy upgrade script; device gates still open) |
+| Report commit | `16f9984` (Cat 6 emulator GitHub-hosted runner — split Gate A / Gate B×3) |
 | Supervisor | Accepted honest **NOT EXECUTED** on `c7af23e`; **Engineering ready = NO** until device gates close |
 
 ## B — PR / CI / artifacts
@@ -40,8 +40,8 @@
 | 3 PG 001–014 / 190 assertions | **EXECUTED** |
 | 4 Edge crypto | **EXECUTED** |
 | 5 Hosted staging | **NOT EXECUTED** |
-| **6 Emulator 3× full PASS** | **NOT EXECUTED** — `adb` never reached `device` after cold-boot (`connect 127.0.0.1:5555` **offline**; qemu running; see `legacy-build-transcript.txt`) |
-| **6b Legacy Room v6→v7 on device** | **PARTIAL** — historical APK **built & signed** (`9fedae9`); on-device seed/upgrade **NOT EXECUTED** (same `adb` failure). Script: `LEGACY_SOURCE_COMMIT=9fedae9 … debug-keystore-upgrade-evidence.sh` |
+| **6 Emulator (GitHub-hosted)** | **IN PROGRESS** — workflow `.github/workflows/emulator-evidence.yml` · [43467365228](https://github.com/qadeer-cyber/TharMesh/actions/runs/43467365228) on `16f9984` (Gate A job + Gate B passes 1–3, fresh emulator each) |
+| **6b Gate A v6→v7** | **PASS** on run [43460956240](https://github.com/qadeer-cyber/TharMesh/actions/runs/43460956240) (`50bcd5b`, monolithic; superseded by split jobs on `16f9984`) |
 | 7 Two-phone | **NOT EXECUTED** |
 | Signed QA upgrade | **NOT EXECUTED** |
 
