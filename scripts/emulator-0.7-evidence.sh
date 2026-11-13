@@ -7,10 +7,13 @@ EMU="${ANDROID_HOME:-/home/ubuntu/android-sdk}/emulator/emulator"
 ART="/opt/cursor/artifacts/ui/0.7-evidence"
 PKG="tharmesh.app"
 mkdir -p "$ART"
-LOG="$ART/adb-transcript.txt"
+LOG="${EMULATOR_EVIDENCE_LOG:-$ART/adb-transcript.txt}"
 UI_DUMP="$ART/ui-dump-latest.xml"
-: >"$LOG"
+if [ -z "${EMULATOR_KEEP_LOG:-}" ]; then
+  : >"$LOG"
+fi
 FAILED=0
+REBOOT_UI_MAX_ATTEMPTS="${REBOOT_UI_MAX_ATTEMPTS:-6}"
 
 log() { echo "$@" | tee -a "$LOG"; }
 
@@ -94,14 +97,47 @@ ui_dump_pull() {
 }
 
 dismiss_system_anr() {
+  "$ADB" shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >>"$LOG" 2>&1 || true
   ui_dump_pull
   if grep -qE "Process system isn't responding|System UI isn't responding" "$UI_DUMP" 2>/dev/null; then
-    log "dismissing system ANR dialog (Wait)"
+    log "dismissing system ANR dialog (uiautomator Wait)"
+    if grep -qF 'text="Wait"' "$UI_DUMP" 2>/dev/null; then
+      local bounds
+      bounds=$(grep -oE 'text="Wait"[^/]*bounds="[^"]+"' "$UI_DUMP" | head -1 | sed -n 's/.*bounds="\([^"]*\)".*/\1/p')
+      if [ -n "$bounds" ]; then
+        local x1 y1 x2 y2 cx cy
+        IFS='[],' read -r _ x1 y1 x2 y2 _ <<<"$bounds"
+        cx=$(( (x1 + x2) / 2 ))
+        cy=$(( (y1 + y2) / 2 ))
+        "$ADB" shell input tap "$cx" "$cy" >>"$LOG" 2>&1 || true
+      fi
+    fi
     "$ADB" shell input keyevent KEYCODE_DPAD_DOWN >>"$LOG" 2>&1 || true
     "$ADB" shell input keyevent KEYCODE_DPAD_CENTER >>"$LOG" 2>&1 || true
-  "$ADB" shell input tap 540 1450 >>"$LOG" 2>&1 || true
+    "$ADB" shell input tap 540 1450 >>"$LOG" 2>&1 || true
     sleep 3
   fi
+}
+
+wait_for_boot_settled() {
+  local i anim
+  for i in $(seq 1 90); do
+    if ! "$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1; then
+      sleep 2
+      continue
+    fi
+    anim=$("$ADB" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')
+    if [ "$anim" = "stopped" ] || [ -z "$anim" ]; then
+      log "boot settled (bootanim=$anim) after ${i}s"
+      "$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
+      "$ADB" shell wm dismiss-keyguard 2>>"$LOG" || true
+      sleep 2
+      return 0
+    fi
+    sleep 2
+  done
+  log "boot settled: timeout (bootanim still running)"
+  return 0
 }
 
 wait_for_ui() {
@@ -254,7 +290,8 @@ step_reboot_durability() {
     fi
     sleep 2
   done
-  sleep 20
+  wait_for_boot_settled
+  sleep 10
   "$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
   "$ADB" shell input keyevent KEYCODE_BACK >>"$LOG" 2>&1 || true
   "$ADB" shell svc wifi disable >>"$LOG" 2>&1 || true
@@ -264,21 +301,31 @@ step_reboot_durability() {
   db_snap post_reboot
   compare_snapshots pre_kill post_reboot || return 1
   log "reboot durability TSV match: PASS"
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
-  sleep 8
-  local reboot_needle="Evidence Peer A"
-  if ! wait_for_ui "$reboot_needle" "chats_post_reboot" 45; then
-    reboot_needle="OFFLINE_PERSISTENCE_SEED_A2"
-    if ! wait_for_ui "$reboot_needle" "chats_post_reboot_seed" 60; then
-      log "post-reboot uiautomator: soft-fail (TSV already matched; capture screencap)"
-      "$ADB" exec-out screencap -p >"$ART/06-offline-chats-post-reboot.png" || return 1
-    else
-      shot_after_ui "06-offline-chats-post-reboot.png" "$reboot_needle" "reboot_chats" 60 || return 1
+  wait_for_boot_settled
+  local attempt reboot_needle reboot_ok=0
+  for attempt in $(seq 1 "$REBOOT_UI_MAX_ATTEMPTS"); do
+    log "post-reboot UI attempt $attempt/$REBOOT_UI_MAX_ATTEMPTS"
+    for _ in 1 2 3 4; do dismiss_system_anr; sleep 1; done
+    "$ADB" shell am force-stop "$PKG"
+    "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
+    sleep 6
+    reboot_needle="Evidence Peer A"
+    if wait_for_ui "$reboot_needle" "chats_post_reboot" 50; then
+      reboot_ok=1
+      break
     fi
-  else
-    shot_after_ui "06-offline-chats-post-reboot.png" "$reboot_needle" "reboot_chats" 60 || return 1
+    reboot_needle="OFFLINE_PERSISTENCE_SEED_A2"
+    if wait_for_ui "$reboot_needle" "chats_post_reboot_seed" 50; then
+      reboot_ok=1
+      break
+    fi
+    wait_for_boot_settled
+  done
+  if [ "$reboot_ok" -ne 1 ]; then
+    fail "post-reboot UI assertion failed after $REBOOT_UI_MAX_ATTEMPTS attempts"
+    return 1
   fi
+  shot_after_ui "06-offline-chats-post-reboot.png" "$reboot_needle" "reboot_chats" 60 || return 1
   log_fatal || return 1
 }
 
@@ -340,8 +387,10 @@ step_layout_l10n() {
     fi
   done
   if [ "$l10n_ok" -lt 2 ]; then
-    log "ur/sd emulator layouts: NOT EXECUTED ($l10n_ok/2 captured; JVM AccountRecoveryStringsTest covers strings)"
+    fail "ur/sd emulator layouts: need 2/2 uiautomator passes ($l10n_ok captured)"
+    return 1
   fi
+  log "ur/sd emulator layouts: PASS (2/2)"
 }
 
 step_layout_l10n || FAILED=1
