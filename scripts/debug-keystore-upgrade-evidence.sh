@@ -58,7 +58,14 @@ apksigner_bin() {
 
 cert_sha256() {
   local apk="$1"
-  "$(apksigner_bin)" verify --print-certs "$apk" 2>/dev/null | awk '/Signer #1 certificate SHA-256/{print $6; exit}'
+  local out
+  out=$("$(apksigner_bin)" verify --print-certs "$apk" 2>/dev/null \
+    | sed -n 's/.*SHA-256 digest: //p' | head -1 | tr -d '[:space:]')
+  if [ -z "$out" ]; then
+    out=$("$(apksigner_bin)" verify --print-certs "$apk" 2>/dev/null \
+      | sed -n 's/.*SHA-256: //p' | head -1 | tr -d ': \r')
+  fi
+  echo "$out"
 }
 
 file_apk_sha256() {
@@ -68,9 +75,38 @@ file_apk_sha256() {
 db_pull_dir() {
   local dir="$1"
   mkdir -p "$dir"
+  local f
   for f in tharmesh.db tharmesh.db-wal tharmesh.db-shm; do
-    "$ADB" exec-out run-as "$PKG" cat "databases/$f" >"$dir/$f" 2>/dev/null || touch "$dir/$f"
+    rm -f "$dir/$f"
+    if "$ADB" exec-out run-as "$PKG" cat "databases/$f" >"$dir/$f" 2>/dev/null; then
+      [ -s "$dir/$f" ] || rm -f "$dir/$f"
+    fi
   done
+  if [ ! -s "$dir/tharmesh.db" ]; then
+    log "FAIL database pull: tharmesh.db missing or empty"
+    return 1
+  fi
+}
+
+wait_for_room_db() {
+  local probe="/tmp/tharmesh-db-probe"
+  local attempt
+  for attempt in $(seq 1 40); do
+    mkdir -p "$probe"
+    if "$ADB" exec-out run-as "$PKG" cat databases/tharmesh.db >"$probe/tharmesh.db" 2>/dev/null \
+      && [ -s "$probe/tharmesh.db" ] \
+      && head -c 15 "$probe/tharmesh.db" | grep -q 'SQLite format'; then
+      log "room database ready (attempt $attempt)"
+      rm -rf "$probe"
+      return 0
+    fi
+    rm -rf "$probe"
+    "$ADB" shell am force-stop "$PKG" >>"$LOG" 2>&1 || true
+    "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
+    sleep 5
+  done
+  log "FAIL room database never appeared"
+  return 1
 }
 
 wal_checkpoint_dir() {
@@ -102,8 +138,8 @@ db_snap() {
   local tag="$1"
   local dir="$ART/db-snapshot-$tag"
   mkdir -p "$dir"
-  db_pull_dir "$dir"
-  write_tsv "$dir" messages.tsv "select id,body,status from messages order by id;"
+  db_pull_dir "$dir" || return 1
+  write_tsv "$dir" messages.tsv "select id,body,status from messages order by id;" || true
   if table_exists "$dir" contacts; then
     write_tsv "$dir" contacts.tsv "select userId,displayName from contacts order by userId;"
   else
@@ -165,12 +201,11 @@ EOF
   "$ADB" push "$prefs" /sdcard/tharmesh_user_prefs.xml >>"$LOG" 2>&1
   "$ADB" shell run-as "$PKG" mkdir -p shared_prefs >>"$LOG" 2>&1 || true
   "$ADB" shell "run-as $PKG cp /sdcard/tharmesh_user_prefs.xml shared_prefs/tharmesh_user_prefs.xml" >>"$LOG" 2>&1
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
-  sleep 8
+  wait_for_room_db || return 1
   "$ADB" shell am force-stop "$PKG"
   local dir="/tmp/tharmesh-v6-seed"
   mkdir -p "$dir"
-  db_pull_dir "$dir"
+  db_pull_dir "$dir" || return 1
   local ver
   ver=$(room_user_version "$dir")
   log "v6 seed bootstrap room_version=$ver"
@@ -239,6 +274,10 @@ main() {
   NEW_SHA="$(cert_sha256 "$NEW_APK")"
   log "old_apk_sha256_cert=$OLD_SHA"
   log "new_apk_sha256_cert=$NEW_SHA"
+  if [ -z "$OLD_SHA" ] || [ -z "$NEW_SHA" ]; then
+    log "FAIL could not read APK signing certificate digests"
+    exit 1
+  fi
   if [ "$OLD_SHA" != "$NEW_SHA" ]; then
     log "FAIL signing cert mismatch (not a debug-keystore upgrade path)"
     exit 1
