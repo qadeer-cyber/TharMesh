@@ -1,5 +1,23 @@
 import { createSign } from 'node:crypto';
 
+export async function withServiceSession(client, userId, sessionId, fn, { commit = false } = {}) {
+  await client.query('begin');
+  try {
+    await client.query('set local role service_role');
+    await client.query("select set_config('request.jwt.claim.sub', $1, true)", [userId]);
+    if (sessionId) {
+      await client.query("select set_config('request.jwt.claim.session_id', $1, true)", [sessionId]);
+    }
+    const result = await fn();
+    if (commit) await client.query('commit');
+    else await client.query('rollback');
+    return result;
+  } catch (e) {
+    await client.query('rollback');
+    throw e;
+  }
+}
+
 export async function withSession(client, userId, sessionId, fn, { commit = false, claimsOnly = false } = {}) {
   await client.query('begin');
   try {

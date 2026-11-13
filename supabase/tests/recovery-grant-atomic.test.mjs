@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { blobFields, issueGrant, withSession } from './pg-test-helpers.mjs';
+import { blobFields, issueGrant, withServiceSession, withSession } from './pg-test-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { Pool } = require('/tmp/tharmesh-pg-tests/node_modules/pg');
@@ -82,6 +82,17 @@ test('recovery grant atomic and idempotent', async () => {
     const grant = await issueGrant(admin, userA, 'recovery_rotate', SID);
 
     await withSession(admin, userA, SID, async () => {
+      await assert.rejects(
+        () =>
+          admin.query(
+            'select public.tharmesh_recovery_rotate_commit_svc($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+            [userA, grant, SID, 'req-x', '00', 0, 'scrypt', 16384, 8, 1, 's', 'i', 'c']
+          ),
+        (e) => e.code === '42501' || String(e.message).includes('permission denied')
+      );
+    });
+
+    await withServiceSession(admin, userA, SID, async () => {
       const bad = blobFields(userA, 0, 'cipher-a');
       await assert.rejects(
         async () => {
@@ -118,7 +129,7 @@ test('recovery grant atomic and idempotent', async () => {
        values ($1,'scrypt',16384,8,1,'c2FsdA==','aXY=','already-there',1)`,
       [userA]
     );
-    await withSession(admin, userA, SID, async () => {
+    await withServiceSession(admin, userA, SID, async () => {
       const fields = blobFields(userA, 0, 'cipher-new');
       await assert.rejects(
         () => commitRotate(admin, userA, grant2, SID, { ...fields, requestId: 'req-cas-fail-01' }),
@@ -135,7 +146,7 @@ test('recovery grant atomic and idempotent', async () => {
     const req = 'req-success-00001';
     const fields = { ...blobFields(userA, 1, 'cipher-v2'), requestId: req };
     let gen;
-    await withSession(
+    await withServiceSession(
       admin,
       userA,
       SID,
@@ -149,7 +160,7 @@ test('recovery grant atomic and idempotent', async () => {
 
     const grant4 = await issueGrant(admin, userA, 'recovery_rotate', SID);
     let replay;
-    await withSession(admin, userA, SID, async () => {
+    await withServiceSession(admin, userA, SID, async () => {
       replay = (await commitRotate(admin, userA, grant4, SID, fields)).rows[0].g;
     }, { commit: true });
     assert.equal(replay, 2);
@@ -169,7 +180,7 @@ test('recovery grant atomic and idempotent', async () => {
     const attempt = async (grantId, fields) => {
       const c = await pool2.connect();
       try {
-        await withSession(
+        await withServiceSession(
           c,
           userA,
           SID,
