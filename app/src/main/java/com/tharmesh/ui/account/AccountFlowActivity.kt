@@ -30,6 +30,7 @@ import com.tharmesh.account.AccountActivation
 import com.tharmesh.account.AccountMaterial
 import com.tharmesh.account.AndroidAccountKeyBox
 import com.tharmesh.account.AndroidDeviceKey
+import com.tharmesh.account.DeviceListPresentation
 import com.tharmesh.account.AuthRedirect
 import com.tharmesh.account.AuthBackend
 import com.tharmesh.account.AuthCall
@@ -1297,8 +1298,15 @@ class AccountFlowActivity : AppCompatActivity() {
             localDeviceId = UserPrefs.readIdentity(this@AccountFlowActivity)?.fingerprint?.take(16)
             val listing = if (cloudDevices.isEmpty()) getString(R.string.account_devices_list_empty)
             else cloudDevices.joinToString("\n") { row ->
-                val mark = if (row.revoked) getString(R.string.account_devices_status_revoked)
-                else getString(R.string.account_devices_status_linked)
+                val mark = when (DeviceListPresentation.rowLabel(cloudDevicesConfirmed, row.revoked)) {
+                    DeviceListPresentation.LABEL_REVOKED ->
+                        getString(R.string.account_devices_status_revoked)
+                    DeviceListPresentation.LABEL_LINKED ->
+                        getString(R.string.account_devices_status_linked)
+                    DeviceListPresentation.LABEL_UNCONFIRMED ->
+                        getString(R.string.account_devices_list_unconfirmed)
+                    else -> getString(R.string.account_devices_list_loading)
+                }
                 val current = if (row.isCurrent) " " + getString(R.string.account_devices_label_current) else ""
                 "• ${row.deviceId} — $mark$current"
             }

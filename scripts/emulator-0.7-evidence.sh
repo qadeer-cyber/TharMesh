@@ -254,6 +254,25 @@ step_fake_provision || FAILED=1
 step_provision_relaunch || FAILED=1
 step_recovery || FAILED=1
 
+step_layout_l10n() {
+  log "=== layout l10n light/dark (debug preview) ==="
+  for spec in "account:false:layout-account-light.png" "account:true:layout-account-dark.png" \
+    "rotate_recovery:false:layout-rotate-light.png" "rotate_recovery:true:layout-rotate-dark.png"; do
+    IFS=: read -r screen night out <<<"$spec"
+    "$ADB" shell am force-stop "$PKG"
+    "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
+      --es screen "$screen" --ez night "$night" >>"$LOG" 2>&1
+    local needle="Rotate recovery key"
+    if [ "$screen" = "account" ]; then
+      needle="Create account"
+    fi
+    shot_after_ui "$out" "$needle" "$out" 30 || return 1
+  done
+  log "ur/sd layouts: NOT EXECUTED (preview uses default locale; values-ur/sd verified in JVM AccountRecoveryStringsTest)"
+}
+
+step_layout_l10n || FAILED=1
+
 if [ "$FAILED" -ne 0 ]; then
   log "RESULT=FAIL"
   exit 1
