@@ -45,6 +45,13 @@ signing are separate. Only use the QA private key for controlled test builds.
 
 ## Google
 
+The debug APK built by the main Android job is signed with the committed
+`app/debug.keystore`, not with the QA key. Its SHA-1 is
+`55:A7:A3:2D:CA:87:F5:39:3E:1B:F8:3B:0B:6F:3B:A5:DB:23:5A:DD`
+and its package is `tharmesh.app`. Register that Android OAuth client for
+debug installs. Register the QA certificate's SHA-1 as a second Android
+client only after the steps above are enabled.
+
 Configure the OAuth consent screen and add QA test users if the app is in
 Testing. Create an Android OAuth client for `tharmesh.app` with the QA
 APK's verified SHA-1. Use the verified SHA-256 where the consuming service

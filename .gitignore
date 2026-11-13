@@ -23,9 +23,11 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
-# Keystore files
+# Keystore files. The debug key is the public Android debug credential,
+# committed so CI and Google OAuth share one SHA-1. Production keys stay ignored.
 *.jks
 *.keystore
+!app/debug.keystore
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json

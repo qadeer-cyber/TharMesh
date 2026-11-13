@@ -35,6 +35,46 @@ the build until that environment exists and the job names it.
 
 `google-services.json` is gitignored and is not required for this HTTP client.
 
+## Custom SMTP (required before ordinary addresses receive mail)
+
+The built-in Supabase mailer only delivers to addresses on the Supabase org or team, and only about two messages an hour. A normal inbox gets nothing, and GoTrue returns `email_address_not_authorized`, which the app shows as an email delivery failure. Do not put the SMTP password in this repo, and do not send test mail from CI.
+
+Recommended provider: Resend. Brevo is the same shape if you already have an account.
+
+1. Verify a domain you control.
+2. Publish the provider’s DNS records before enabling SMTP:
+   - SPF TXT on the sending hostname
+   - the DKIM CNAME records the provider shows
+   - DMARC TXT at `_dmarc`, starting at `p=none` while you watch delivery, then `p=quarantine`
+3. In Supabase: Authentication → Emails → SMTP Settings:
+   - Enable custom SMTP
+   - Host: `smtp.resend.com` (Resend) or `smtp-relay.brevo.com` (Brevo)
+   - Port: `465` when the form uses implicit TLS. Use `587` only if the form says STARTTLS
+   - Username: `resend` (Resend) or the Brevo SMTP login
+   - Password: the provider API key or SMTP key, stored in the Supabase dashboard only
+   - Sender email: an address on the verified domain, such as `noreply@your-domain`
+   - Sender name: `TharMesh`
+4. Authentication → Emails → Templates. Both **Magic link** and **Confirm signup** must contain:
+
+```
+Your TharMesh code is {{ .Token }}
+```
+
+Confirm signup must also keep `{{ .ConfirmationURL }}`. Do not use `{{ .SiteURL }}` by itself. The six-digit code is `{{ .Token }}`. A template without it can still send a link and the in-app code screen has nothing to type.
+
+5. Send one message to a non-team address only after SMTP is saved. Check Supabase Auth logs and the provider bounce log if it does not arrive. The app does not retry a 429 by itself.
+
+## Google sign-in for the debug APK
+
+Package name: `tharmesh.app`
+
+The CI debug APK is signed with the committed `app/debug.keystore` (alias `androiddebugkey`, store password `android`):
+
+- SHA-1: `55:A7:A3:2D:CA:87:F5:39:3E:1B:F8:3B:0B:6F:3B:A5:DB:23:5A:DD`
+- SHA-256: `AC:1A:51:18:84:DF:9E:C2:CD:8B:0B:8D:69:6C:31:92:B6:71:CD:DC:6C:93:F8:E8:3A:E9:EF:D0:82:21:C2:EC`
+
+Create an Android OAuth client in Google Cloud with that package and SHA-1, and a Web client. Put the Web client id in the Actions variable `GOOGLE_WEB_CLIENT_ID`. In Supabase → Authentication → Providers → Google, enable the provider and paste the same Web client id and its secret. Until the variable is set and the provider is enabled, the Google button does not sign in. The separate QA certificate in `docs/qa-signing.md` is not this debug SHA-1. Register that SHA-1 only after QA signing is enabled.
+
 ## URL configuration (owner action in the Supabase dashboard)
 
 A confirmation link that opens `http://localhost:3000` was built from the project Site URL. GoTrue uses `redirect_to` only when that exact value is on the allow-list. If it is missing, GoTrue falls back to the Site URL and does not return an error to the app. An email sent before this APK, or before the allow-list was saved, keeps the old link. Resend from the new APK after the dashboard is saved. A user who is already confirmed will not get another mail.

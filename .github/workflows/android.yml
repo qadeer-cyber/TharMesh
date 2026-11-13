@@ -137,6 +137,9 @@ jobs:
           python3 .github/scripts/auth-settings-flags.py /tmp/supabase-auth-settings.json
           rm -f /tmp/supabase-auth-settings.json
 
+      - name: Debug certificate fingerprint
+        run: keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android | grep -E 'SHA1:|SHA256:'
+
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
 

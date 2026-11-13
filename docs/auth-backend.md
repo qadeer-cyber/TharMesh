@@ -59,15 +59,17 @@ A simulated success is not live authentication. Live sign-in has not been execut
   provider callback URL shown by Supabase in the Web client's redirect URIs.
   Set the GitHub Actions variable `GOOGLE_WEB_CLIENT_ID` to the Web client ID.
   Only the public client ID belongs in the Android build.
-- In Supabase Auth email settings, set the OTP length to six and use
-  `{{ .Token }}` in the Magic Link email template. Keep the Confirm Signup
-  link template for the legacy password confirmation path. Keep
-  `tharmesh://auth/callback` in the redirect allow-list for that path.
+- In Supabase Auth email settings, set the OTP length to six. Both the
+  Magic Link and Confirm Signup templates must include `{{ .Token }}`.
+  Confirm Signup also keeps `{{ .ConfirmationURL }}`. Keep
+  `tharmesh://auth/callback` in the redirect allow-list. The email-code
+  request sends that same value as `redirect_to`.
 - For public email delivery, verify a sending domain with an SMTP provider
   such as Resend. Publish the provider's SPF and DKIM records and configure
   DMARC for the sender domain. In Supabase Auth SMTP settings use
-  `smtp.resend.com`, port `587`, username `resend`, the provider API key as
-  the SMTP password, and an address on the verified domain as the sender.
+  `smtp.resend.com`, port `465` for implicit TLS (or `587` for STARTTLS),
+  username `resend`, the provider API key as the SMTP password, and an
+  address on the verified domain as the sender.
   Keep the SMTP credential in Supabase only. Review Auth rate limits and
   provider limits before increasing volume. For missing messages, check
   Supabase Auth logs and the provider delivery/bounce log first.
