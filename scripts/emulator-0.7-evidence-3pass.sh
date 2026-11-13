@@ -7,15 +7,20 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
 ADB="$SDK/platform-tools/adb"
 EMU="$SDK/emulator/emulator"
 PKG="tharmesh.app"
+HEAD_APK="${TM_APK:-${HEAD_DEBUG_APK:-$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk}}"
 mkdir -p "$ART"
 RESET_LOG="$ART/data-reset.log"
+chmod +x "$ROOT/scripts/cat6-reset-clean-app.sh" 2>/dev/null || true
 
 pass_count=0
 reset_before_pass() {
   local run="$1"
-  echo "APP_DATA_RESET $(date -u +%Y-%m-%dT%H:%M:%SZ) pass=${run}/3 reason=pre-pass-isolation" | tee -a "$RESET_LOG" "$ART/emulator-3pass-summary.txt"
-  "$ADB" shell am force-stop "$PKG" >>"$RESET_LOG" 2>&1 || true
-  "$ADB" shell pm clear "$PKG" >>"$RESET_LOG" 2>&1
+  echo "=== pass ${run}/3 clean state (uninstall+install) ===" | tee -a "$ART/emulator-3pass-summary.txt"
+  export CAT6_RESET_ADB="$ADB"
+  export CAT6_RESET_PASS_LABEL="${run}/3"
+  CAT6_RESET_ADB="$ADB" CAT6_RESET_PASS_LABEL="${run}/3" \
+    bash "$ROOT/scripts/cat6-reset-clean-app.sh" "pre-pass-isolation" "$HEAD_APK" "$RESET_LOG" \
+    | tee -a "$ART/emulator-3pass-summary.txt"
 }
 
 for run in 1 2 3; do

@@ -271,10 +271,18 @@ assert_persistence_fixtures() {
   [ "$pi" = "2" ] || { fail "expected 2 verified peer_identity rows for evidence peers"; return 1; }
   msg=$(sqlite3 "$db" "select count(*) from messages;" 2>/dev/null) || msg=query_failed
   [ "$msg" = "3" ] || { fail "expected exactly 3 messages; got $msg"; return 1; }
+  extra=$(sqlite3 "$db" "select count(*) from messages where peerUserId not in ('peer-evidence-01','peer-evidence-02');" 2>/dev/null) || extra=query_failed
+  [ "$extra" = "0" ] || { fail "unexpected message peerUserId rows; extra=$extra"; return 1; }
   for body in OFFLINE_PERSISTENCE_SEED_A1 OFFLINE_PERSISTENCE_SEED_A2 OFFLINE_PERSISTENCE_SEED_B1; do
     ids=$(sqlite3 "$db" "select count(*) from messages where body='$body';" 2>/dev/null) || ids=query_failed
     [ "$ids" = "1" ] || { fail "missing message body $body"; return 1; }
   done
+  ids=$(sqlite3 "$db" "select count(*) from messages where body='OFFLINE_PERSISTENCE_SEED_A1' and peerUserId='peer-evidence-01';" 2>/dev/null) || ids=query_failed
+  [ "$ids" = "1" ] || { fail "OFFLINE_PERSISTENCE_SEED_A1 must reference peer-evidence-01"; return 1; }
+  ids=$(sqlite3 "$db" "select count(*) from messages where body='OFFLINE_PERSISTENCE_SEED_A2' and peerUserId='peer-evidence-01';" 2>/dev/null) || ids=query_failed
+  [ "$ids" = "1" ] || { fail "OFFLINE_PERSISTENCE_SEED_A2 must reference peer-evidence-01"; return 1; }
+  ids=$(sqlite3 "$db" "select count(*) from messages where body='OFFLINE_PERSISTENCE_SEED_B1' and peerUserId='peer-evidence-02';" 2>/dev/null) || ids=query_failed
+  [ "$ids" = "1" ] || { fail "OFFLINE_PERSISTENCE_SEED_B1 must reference peer-evidence-02"; return 1; }
   legacy=$(sqlite3 "$db" "select count(*) from messages where body like 'LEGACY_V6%';" 2>/dev/null) || legacy=0
   [ "$legacy" = "0" ] || { fail "LEGACY_V6 seed messages must not be present"; return 1; }
   legacy=$(sqlite3 "$db" "select count(*) from contacts where userId in ('peer-a','peer-b');" 2>/dev/null) || legacy=0
@@ -315,11 +323,11 @@ step_offline_persistence() {
   assert_not_query_failed messages "$MSG" || return 1
   assert_not_query_failed contacts "$CONTACTS" || return 1
   assert_not_query_failed verified "$VERIFIED" || return 1
+  assert_persistence_fixtures "$dir" || return 1
   log "pre-kill: messages=$MSG contacts=$CONTACTS verified=$VERIFIED"
   [ "$MSG" = "3" ] || { fail "expected 3 messages"; return 1; }
   [ "$CONTACTS" = "2" ] || { fail "expected 2 contacts"; return 1; }
   [ "$VERIFIED" = "2" ] || { fail "expected 2 verified peers"; return 1; }
-  assert_persistence_fixtures "$dir" || return 1
   db_snap pre_kill
   "$ADB" shell am force-stop "$PKG"
   "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
