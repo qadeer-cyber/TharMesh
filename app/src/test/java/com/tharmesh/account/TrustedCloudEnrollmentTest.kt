@@ -49,9 +49,9 @@ class TrustedCloudEnrollmentTest {
             req,
             req.expiresAtEpochSec
         )
-        assertTrue(http.lastPath!!.endsWith("/rpc/tharmesh_enrollment_begin"))
-        assertTrue(http.lastBody!!.contains("p_nonce_b64"))
-        assertTrue(http.lastBody!!.contains("p_expires_at"))
+        assertTrue(http.lastPath!!.endsWith("/functions/v1/device-enrollment"))
+        assertTrue(http.lastBody!!.contains("operation"))
+        assertTrue(http.lastBody!!.contains("begin"))
     }
 
     private class RecordingHttp : HttpTransport {

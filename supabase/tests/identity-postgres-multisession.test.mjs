@@ -217,75 +217,74 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
-  await t.test('authorized enrollment with trusted device signature', async () => {
+  await t.test('enrollment svc transactional path (crypto gate off-DB)', async () => {
+    await admin.query('reset role');
     const newDev = keyMaterial();
     const nonce = b64url(randomBytes(12));
     const expires = new Date(Date.now() + 600_000).toISOString();
-    await withJwt(
-      admin,
-      userA,
-      'authenticated',
-      async () => {
-        const reqSig = signDer(newDev.privKey, enrollRequestMsg(userA, KEY122, newDev.pubB64, 'phone-2', nonce));
-        await admin.query('select public.tharmesh_enrollment_begin($1,$2,$3,$4,$5::timestamptz)', [
-          'phone-2',
-          newDev.pubB64,
-          nonce,
-          reqSig,
-          expires,
-        ]);
-        const epoch = (
-          await admin.query('select extract(epoch from $1::timestamptz)::bigint as e', [expires])
-        ).rows[0].e;
-        const apprSig = signDer(trustedDev.privKey, approveMsg(userA, newDev.pubB64, nonce, epoch));
-        await admin.query('select public.tharmesh_enrollment_approve($1,$2,$3)', [nonce, 'trusted-1', apprSig]);
-        await admin.query('select public.tharmesh_enrollment_finish($1,$2)', [nonce, 'cert:phone-2']);
-      },
-      { commit: true }
+    const reqSig = signDer(newDev.privKey, enrollRequestMsg(userA, KEY122, newDev.pubB64, 'phone-2', nonce));
+    await admin.query('set role service_role');
+    await admin.query(
+      'select public.tharmesh_enrollment_begin_svc($1::uuid,$2,$3,$4,$5,$6::timestamptz)',
+      [userA, 'phone-2', newDev.pubB64, nonce, reqSig, expires]
     );
-    await withJwt(admin, userA, 'authenticated', async () => {
-      await assert.rejects(
-        () => admin.query('select public.tharmesh_enrollment_finish($1,$2)', [nonce, 'cert:phone-2']),
-        (e) => e.code === '42501'
-      );
-    });
+    const epoch = (
+      await admin.query('select extract(epoch from $1::timestamptz)::bigint as e', [expires])
+    ).rows[0].e;
+    const apprSig = signDer(trustedDev.privKey, approveMsg(userA, newDev.pubB64, nonce, epoch));
+    await admin.query('select public.tharmesh_enrollment_approve_svc($1::uuid,$2,$3,$4)', [
+      userA,
+      nonce,
+      'trusted-1',
+      apprSig,
+    ]);
+    await admin.query('select public.tharmesh_enrollment_finish_svc($1::uuid,$2,$3)', [
+      userA,
+      nonce,
+      'cert:phone-2',
+    ]);
+    await assert.rejects(
+      () => admin.query('select public.tharmesh_enrollment_finish_svc($1::uuid,$2,$3)', [userA, nonce, 'cert:phone-2']),
+      (e) => e.code === '42501'
+    );
     stats.passed++;
   });
 
-  await t.test('unauthorized approval and cross-account', async () => {
-    const newDev = keyMaterial();
+  await t.test('approve svc denied without trusted device rows', async () => {
+    await admin.query('reset role');
+    const uid = 'f1000000-0000-4000-8000-000000000077';
+    await admin.query('insert into auth.users values ($1, now()) on conflict do nothing', [uid]);
+    await activateUser(admin, uid);
     const nonce = b64url(randomBytes(8));
-    await withJwt(admin, userA, 'authenticated', async () => {
-      const reqSig = signDer(
-        newDev.privKey,
-        enrollRequestMsg(userA, KEY122, newDev.pubB64, 'phone-x', nonce)
-      );
-      const expires = new Date(Date.now() + 600_000).toISOString();
-      await admin.query('select public.tharmesh_enrollment_begin($1,$2,$3,$4,$5::timestamptz)', [
-        'phone-x',
-        newDev.pubB64,
-        nonce,
-        reqSig,
-        expires,
-      ]);
-    });
-    await assert.rejects(
-      () =>
-        withJwt(admin, userB, 'authenticated', () =>
-          admin.query('select public.tharmesh_enrollment_approve($1,$2,$3)', [nonce, 'trusted-1', b64url(randomBytes(8))])
-        ),
-      () => true
+    await admin.query('set role service_role');
+    await admin.query(
+      'select public.tharmesh_enrollment_begin_svc($1::uuid,$2,$3,$4,$5,now() + interval \'10 min\')',
+      [uid, 'x-dev', trustedDev.pubB64, nonce, 'sig-placeholder-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']
     );
+    try {
+      await assert.rejects(
+        () =>
+          admin.query('select public.tharmesh_enrollment_approve_svc($1::uuid,$2,$3,$4)', [
+            uid,
+            nonce,
+            'none',
+            'sig-placeholder-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+          ]),
+        (e) => e.code === '42501'
+      );
+    } finally {
+      await admin.query('rollback');
+    }
     stats.passed++;
   });
 
   await t.test('revocation and authenticated device list', async () => {
     await withJwt(admin, userA, 'authenticated', async () => {
-      const list = (await admin.query('select * from public.tharmesh_list_devices()')).rows;
+      const list = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
       assert.ok(list.length >= 1);
       const revokeId = list.find((r) => r.device_id !== 'trusted-1')?.device_id ?? 'trusted-1';
       await admin.query('select public.tharmesh_device_revoke($1)', [revokeId]);
-      const after = (await admin.query('select * from public.tharmesh_list_devices()')).rows;
+      const after = (await admin.query('select * from public.tharmesh_list_devices($1)', [null])).rows;
       assert.ok(after.find((r) => r.device_id === revokeId)?.revoked_at);
     });
     stats.passed++;
@@ -293,7 +292,7 @@ test('local Postgres multi-session suite', async (t) => {
 
   await t.test('RLS grants: anon denied, direct insert blocked', async () => {
     await assert.rejects(
-      () => withJwt(admin, userA, 'anon', () => admin.query('select * from public.tharmesh_list_devices()')),
+      () => withJwt(admin, userA, 'anon', () => admin.query('select * from public.tharmesh_list_devices($1)', [null])),
       () => true
     );
     await assert.rejects(
@@ -306,31 +305,25 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
-  await t.test('concurrent enrollment begin same nonce rejected', async () => {
+  await t.test('concurrent enrollment begin same nonce rejected (svc)', async () => {
+    await admin.query('reset role');
     const newDev = keyMaterial();
     const nonce = b64url(randomBytes(9));
     const expires = new Date(Date.now() + 600_000).toISOString();
-    await withJwt(admin, userA, 'authenticated', async () => {
-      const reqSig = signDer(newDev.privKey, enrollRequestMsg(userA, KEY122, newDev.pubB64, 'dup-nonce', nonce));
-      await admin.query('select public.tharmesh_enrollment_begin($1,$2,$3,$4,$5::timestamptz)', [
-        'dup-nonce',
-        newDev.pubB64,
-        nonce,
-        reqSig,
-        expires,
-      ]);
-      await assert.rejects(
-        () =>
-          admin.query('select public.tharmesh_enrollment_begin($1,$2,$3,$4,$5::timestamptz)', [
-            'dup-nonce-2',
-            newDev.pubB64,
-            nonce,
-            reqSig,
-            expires,
-          ]),
-        (e) => e.code === '42501'
-      );
-    });
+    await admin.query('set role service_role');
+    const reqSig = signDer(newDev.privKey, enrollRequestMsg(userA, KEY122, newDev.pubB64, 'dup-nonce', nonce));
+    await admin.query(
+      'select public.tharmesh_enrollment_begin_svc($1::uuid,$2,$3,$4,$5,$6::timestamptz)',
+      [userA, 'dup-nonce', newDev.pubB64, nonce, reqSig, expires]
+    );
+    await assert.rejects(
+      () =>
+        admin.query(
+          'select public.tharmesh_enrollment_begin_svc($1::uuid,$2,$3,$4,$5,$6::timestamptz)',
+          [userA, 'dup-nonce-2', newDev.pubB64, nonce, reqSig, expires]
+        ),
+      (e) => e.code === '42501'
+    );
     stats.passed++;
   });
 
@@ -353,13 +346,26 @@ test('local Postgres multi-session suite', async (t) => {
     stats.passed++;
   });
 
-  await t.test('migration idempotency re-apply 005', async () => {
+  await t.test('migration idempotency re-apply 006', async () => {
     await admin.query('reset role');
     const mig = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120005_device_current_explicit_reset.sql'),
+      join(dirname(fileURLToPath(import.meta.url)), '../migrations/202611120006_enrollment_fail_closed_edge.sql'),
       'utf8'
     );
     await admin.query(mig);
+    stats.passed++;
+  });
+
+  await t.test('in-DB verifier removed (fail closed)', async () => {
+    await admin.query('reset role');
+    await admin.query('reset role');
+    const exists = (
+      await admin.query(
+        "select count(*)::int as c from pg_proc p join pg_namespace n on n.oid = p.pronamespace " +
+          "where n.nspname = 'tharmesh_private' and p.proname = 'verify_ecdsa_p256_spki'"
+      )
+    ).rows[0].c;
+    assert.equal(exists, 0);
     stats.passed++;
   });
 

@@ -38,7 +38,7 @@ import com.tharmesh.account.CloudCredential
 import com.tharmesh.account.CloudSessionStore
 import com.tharmesh.account.DeviceDirectory
 import com.tharmesh.account.DeviceEnrollment
-import com.tharmesh.account.RecentReauth
+import com.tharmesh.account.ServerFreshAuth
 import com.tharmesh.account.RecoveryRotationStage
 import com.tharmesh.account.EnrollmentReplayGuard
 import com.tharmesh.account.EnrollmentQr
@@ -352,11 +352,22 @@ class AccountFlowActivity : AppCompatActivity() {
                 } else {
                     getString(R.string.account_rotate_recovery_body)
                 }
-                if (!RecentReauth.isFresh(this) && staged == null) {
-                    status.setText(R.string.account_reauth_required)
-                    primary.setText(R.string.account_action_sign_in)
-                    primary.setOnClickListener { bind(Screen.SIGN_IN) }
-                } else if (staged != null) {
+                val accessForFresh = CloudSessionStore.readAccessToken(this)
+                if (staged == null && !accessForFresh.isNullOrBlank()) {
+                    lifecycleScope.launch {
+                        val fresh = withContext(Dispatchers.IO) {
+                            ServerFreshAuth.isFreshOnServer(
+                                http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, accessForFresh
+                            )
+                        }
+                        if (!fresh) {
+                            status.setText(R.string.account_reauth_required)
+                            primary.setText(R.string.account_action_sign_in)
+                            primary.setOnClickListener { bind(Screen.SIGN_IN) }
+                        }
+                    }
+                }
+                if (staged != null) {
                     pendingPhrase = staged.phrase
                     RecoveryRotationStage.sealedFromStaged(staged)?.let { sealed ->
                         pendingRecord = InstallRecord(
@@ -671,7 +682,13 @@ class AccountFlowActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val expiresAt = now + result.tokens.expiresInSeconds * 1000L
         val provider = if (screen == Screen.GOOGLE) UserPrefs.PROVIDER_GOOGLE else UserPrefs.PROVIDER_EMAIL
-        RecentReauth.mark(this)
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                ServerFreshAuth.recordSession(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, result.tokens.accessToken
+                )
+            }
+        }
         val login = IdentityLifecycle.cloudLogin(
             record = InstallRecord(mesh = mesh, provider = provider),
             accountId = result.tokens.accountId,
@@ -1220,20 +1237,39 @@ class AccountFlowActivity : AppCompatActivity() {
 
     private fun rotateRecovery(status: TextView) {
         if (authBusy) return
-        if (!RecentReauth.isFresh(this)) {
+        val access = CloudSessionStore.readAccessToken(this)
+        if (access.isNullOrBlank()) {
             status.setText(R.string.account_reauth_required)
             return
         }
+        authBusy = true
+        lifecycleScope.launch {
+            val fresh = withContext(Dispatchers.IO) {
+                ServerFreshAuth.isFreshOnServer(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access
+                )
+            }
+            if (!fresh) {
+                authBusy = false
+                status.setText(R.string.account_reauth_required)
+                return@launch
+            }
+            rotateRecoveryAfterReauth(status)
+        }
+    }
+
+    private fun rotateRecoveryAfterReauth(status: TextView) {
         val mesh = UserPrefs.readIdentity(this) ?: run {
+            authBusy = false
             status.setText(R.string.account_error_held)
             return
         }
         val accountId = CloudSessionStore.readAccountId(this) ?: UserPrefs.readProfile(this)?.userId
         if (accountId.isNullOrBlank()) {
+            authBusy = false
             status.setText(R.string.account_error_not_configured)
             return
         }
-        authBusy = true
         lifecycleScope.launch {
             val outcome = withContext(Dispatchers.Default) {
                 RecoveryRotation.rotate(mesh.privateKeyBase64, mesh.publicKeyBase64, random)
@@ -1321,7 +1357,9 @@ class AccountFlowActivity : AppCompatActivity() {
                         access,
                         request.nonceB64,
                         trustedId,
-                        approvalSig
+                        request.devicePublicKey,
+                        approvalSig,
+                        expiresSec
                     )
                 }
                 if (cloud is AuthCall.Failed) {

@@ -2,11 +2,9 @@
 
 package com.tharmesh.account
 
-import com.tharmesh.identity.Base64Url
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
-/** Server trusted-device enrollment RPCs (migration 004+). */
+/** Trusted enrollment via Edge Function (Web Crypto), not direct enrollment RPCs. */
 object TrustedCloudEnrollment {
 
     fun deviceApproveMessage(
@@ -37,20 +35,19 @@ object TrustedCloudEnrollment {
         accessToken: String,
         request: EnrollmentRequest,
         expiresAtEpochSec: Long
-    ): AuthCall {
-        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
-        val epoch = if (expiresAtEpochSec > 0L) expiresAtEpochSec else defaultExpiryMs() / 1000L
-        val iso = java.time.Instant.ofEpochSecond(epoch).toString()
-        val body = JSONObject()
-            .put("p_device_id", request.deviceId)
-            .put("p_new_device_pubkey", request.devicePublicKey)
-            .put("p_nonce_b64", request.nonceB64)
-            .put("p_request_sig_b64", request.deviceSignature)
-            .put("p_expires_at", iso)
-            .toString()
-        return postRpc(http, baseUrl, headers, "tharmesh_enrollment_begin", body)
-    }
+    ): AuthCall = postEdge(
+        http, baseUrl, anonKey, accessToken,
+        JSONObject()
+            .put("operation", "begin")
+            .put("device_id", request.deviceId)
+            .put("new_device_pubkey", request.devicePublicKey)
+            .put("nonce_b64", request.nonceB64)
+            .put("request_sig_b64", request.deviceSignature)
+            .put("mesh_public_key", request.meshPublicKey)
+            .put("expires_at", java.time.Instant.ofEpochSecond(
+                if (expiresAtEpochSec > 0L) expiresAtEpochSec else defaultExpiryEpochSec()
+            ).toString())
+    )
 
     fun enrollmentApprove(
         http: HttpTransport,
@@ -59,17 +56,19 @@ object TrustedCloudEnrollment {
         accessToken: String,
         nonceB64: String,
         trustedDeviceId: String,
-        approvalSigB64: String
-    ): AuthCall {
-        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
-        val body = JSONObject()
-            .put("p_nonce_b64", nonceB64)
-            .put("p_trusted_device_id", trustedDeviceId)
-            .put("p_approval_sig_b64", approvalSigB64)
-            .toString()
-        return postRpc(http, baseUrl, headers, "tharmesh_enrollment_approve", body)
-    }
+        newDevicePublicKey: String,
+        approvalSigB64: String,
+        expiresAtEpochSec: Long
+    ): AuthCall = postEdge(
+        http, baseUrl, anonKey, accessToken,
+        JSONObject()
+            .put("operation", "approve")
+            .put("nonce_b64", nonceB64)
+            .put("trusted_device_id", trustedDeviceId)
+            .put("new_device_pubkey", newDevicePublicKey)
+            .put("approval_sig_b64", approvalSigB64)
+            .put("expires_epoch", expiresAtEpochSec)
+    )
 
     fun enrollmentFinish(
         http: HttpTransport,
@@ -78,15 +77,13 @@ object TrustedCloudEnrollment {
         accessToken: String,
         nonceB64: String,
         certificate: String
-    ): AuthCall {
-        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
-        val body = JSONObject()
-            .put("p_nonce_b64", nonceB64)
-            .put("p_certificate", certificate)
-            .toString()
-        return postRpc(http, baseUrl, headers, "tharmesh_enrollment_finish", body)
-    }
+    ): AuthCall = postEdge(
+        http, baseUrl, anonKey, accessToken,
+        JSONObject()
+            .put("operation", "finish")
+            .put("nonce_b64", nonceB64)
+            .put("certificate", certificate)
+    )
 
     fun bootstrapDevice(
         http: HttpTransport,
@@ -96,16 +93,14 @@ object TrustedCloudEnrollment {
         deviceId: String,
         devicePublicKey: String,
         certificate: String? = null
-    ): AuthCall {
-        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
-        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
-        val body = JSONObject()
-            .put("p_device_id", deviceId)
-            .put("p_device_pubkey", devicePublicKey)
-            .put("p_certificate", certificate ?: "")
-            .toString()
-        return postRpc(http, baseUrl, headers, "tharmesh_bootstrap_device", body)
-    }
+    ): AuthCall = postEdge(
+        http, baseUrl, anonKey, accessToken,
+        JSONObject()
+            .put("operation", "bootstrap_device")
+            .put("device_id", deviceId)
+            .put("device_pubkey", devicePublicKey)
+            .put("certificate", certificate ?: "")
+    )
 
     fun commitExplicitReset(
         http: HttpTransport,
@@ -117,10 +112,27 @@ object TrustedCloudEnrollment {
         return postRpc(http, baseUrl, headers, "tharmesh_commit_explicit_reset", "{}")
     }
 
-    fun defaultExpiryMs(): Long = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(10)
+    fun defaultExpiryMs(): Long = System.currentTimeMillis() + java.util.concurrent.TimeUnit.MINUTES.toMillis(10)
 
-    fun epochSecondsFromIso(iso: String): Long =
-        java.time.Instant.parse(iso).epochSecond
+    fun defaultExpiryEpochSec(): Long = defaultExpiryMs() / 1000L
+
+    private fun postEdge(
+        http: HttpTransport,
+        baseUrl: String,
+        anonKey: String,
+        accessToken: String,
+        body: JSONObject
+    ): AuthCall {
+        if (!AuthBackend.configured(baseUrl, anonKey)) return AuthCall.Failed("cloud_auth_not_configured")
+        val headers = SupabaseHeaders.build(anonKey, accessToken) ?: return AuthCall.Failed("unauthorized")
+        val response = try {
+            http.post(baseUrl.trimEnd('/') + "/functions/v1/device-enrollment", headers, body.toString())
+        } catch (_: Throwable) {
+            return AuthCall.Failed("network")
+        }
+        return if (response.code in 200..299) AuthCall.Ok(AuthTokens("", "", 0L))
+        else AuthCall.Failed("http_${response.code}")
+    }
 
     private fun postRpc(
         http: HttpTransport,

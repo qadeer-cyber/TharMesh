@@ -21,10 +21,10 @@ for f in 202611120001_identity_provisioning.sql \
          202611120002_identity_proof.sql \
          202611120003_identity_device_guard.sql \
          202611120004_trusted_device_enrollment.sql \
-         202611120005_device_current_explicit_reset.sql; do
+         202611120005_device_current_explicit_reset.sql \
+         202611120006_enrollment_fail_closed_edge.sql; do
   $PSQL -d "$DB_NAME" -f "$ROOT/migrations/$f"
 done
-$PSQL -d "$DB_NAME" -f "$ROOT/migrations/202611120004_verify_plpython.sql"
 $PSQL -d "$DB_NAME" -c "GRANT USAGE ON SCHEMA public TO authenticated, anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated, service_role;
