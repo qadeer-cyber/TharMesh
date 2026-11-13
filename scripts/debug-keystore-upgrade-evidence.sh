@@ -260,16 +260,16 @@ INSERT OR REPLACE INTO peer_identity (userId, publicKeyBase64, fingerprint, firs
   ('peer-a', 'PUBKEYA', 'fpa', 100, 1, 101),
   ('peer-b', 'PUBKEYB', 'fpb', 100, 1, 101);
 SQL
-  "$ADB" push "$dir/tharmesh.db" /sdcard/tharmesh.db >>"$LOG" 2>&1
+  "$ADB" push "$dir/tharmesh.db" /data/local/tmp/tharmesh.db >>"$LOG" 2>&1
   "$ADB" shell run-as "$PKG" mkdir -p databases >>"$LOG" 2>&1 || true
-  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh.db databases/tharmesh.db" >>"$LOG" 2>&1
+  "$ADB" shell run-as "$PKG" cp /data/local/tmp/tharmesh.db databases/tharmesh.db >>"$LOG" 2>&1
   rm -f "$dir/tharmesh.db-wal" "$dir/tharmesh.db-shm"
   : >"$dir/tharmesh.db-wal"
   : >"$dir/tharmesh.db-shm"
-  "$ADB" push "$dir/tharmesh.db-wal" /sdcard/tharmesh.db-wal >>"$LOG" 2>&1 || true
-  "$ADB" push "$dir/tharmesh.db-shm" /sdcard/tharmesh.db-shm >>"$LOG" 2>&1 || true
-  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh.db-wal databases/tharmesh.db-wal" >>"$LOG" 2>&1 || true
-  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh.db-shm databases/tharmesh.db-shm" >>"$LOG" 2>&1 || true
+  "$ADB" push "$dir/tharmesh.db-wal" /data/local/tmp/tharmesh.db-wal >>"$LOG" 2>&1 || true
+  "$ADB" push "$dir/tharmesh.db-shm" /data/local/tmp/tharmesh.db-shm >>"$LOG" 2>&1 || true
+  "$ADB" shell run-as "$PKG" cp /data/local/tmp/tharmesh.db-wal databases/tharmesh.db-wal >>"$LOG" 2>&1 || true
+  "$ADB" shell run-as "$PKG" cp /data/local/tmp/tharmesh.db-shm databases/tharmesh.db-shm >>"$LOG" 2>&1 || true
   log "v6 sqlite seed complete"
 }
 
