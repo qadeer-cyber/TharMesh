@@ -186,6 +186,28 @@ compare_snapshots() {
   done
 }
 
+v6_complete_anonymous_login() {
+  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.auth.LoginActivity" >>"$LOG" 2>&1 || true
+  sleep 4
+  local ui="/tmp/v6-login-ui.xml"
+  "$ADB" shell uiautomator dump /sdcard/v6-login-ui.xml >>"$LOG" 2>&1 || true
+  "$ADB" pull /sdcard/v6-login-ui.xml "$ui" >>"$LOG" 2>&1 || true
+  if grep -qF 'text="Continue anonymously"' "$ui" 2>/dev/null; then
+    local bounds cx cy x1 y1 x2 y2
+    bounds=$(grep -oE 'text="Continue anonymously"[^/]*bounds="[^"]+"' "$ui" | head -1 | sed -n 's/.*bounds="\([^"]*\)".*/\1/p')
+    if [ -n "$bounds" ]; then
+      IFS='[],' read -r _ x1 y1 x2 y2 _ <<<"$bounds"
+      cx=$(( (x1 + x2) / 2 ))
+      cy=$(( (y1 + y2) / 2 ))
+      "$ADB" shell input tap "$cx" "$cy" >>"$LOG" 2>&1 || true
+      sleep 5
+      return 0
+    fi
+  fi
+  "$ADB" shell input tap 540 1680 >>"$LOG" 2>&1 || true
+  sleep 5
+}
+
 grant_runtime_permissions() {
   local p
   for p in \
@@ -209,9 +231,11 @@ seed_legacy_v6_sqlite() {
     <string name="auth_provider">anonymous</string>
 </map>
 EOF
-  "$ADB" push "$prefs" /sdcard/tharmesh_user_prefs.xml >>"$LOG" 2>&1
+  "$ADB" push "$prefs" /data/local/tmp/tharmesh_user_prefs.xml >>"$LOG" 2>&1
   "$ADB" shell run-as "$PKG" mkdir -p shared_prefs >>"$LOG" 2>&1 || true
-  "$ADB" shell "run-as $PKG cp /sdcard/tharmesh_user_prefs.xml shared_prefs/tharmesh_user_prefs.xml" >>"$LOG" 2>&1
+  "$ADB" shell run-as "$PKG" cp /data/local/tmp/tharmesh_user_prefs.xml shared_prefs/tharmesh_user_prefs.xml >>"$LOG" 2>&1 \
+    || "$ADB" shell "base64 < /data/local/tmp/tharmesh_user_prefs.xml | run-as $PKG sh -c 'base64 -d > shared_prefs/tharmesh_user_prefs.xml'" >>"$LOG" 2>&1
+  v6_complete_anonymous_login || true
   wait_for_room_db || return 1
   "$ADB" shell am force-stop "$PKG"
   local dir="/tmp/tharmesh-v6-seed"
@@ -253,8 +277,7 @@ seed_old_app() {
   "$ADB" shell am force-stop "$PKG"
   if [ -n "$LEGACY_SOURCE_COMMIT" ]; then
     log "legacy seed via sqlite (historical commit $LEGACY_SOURCE_COMMIT)"
-    seed_legacy_v6_sqlite
-    return 0
+    seed_legacy_v6_sqlite || return 1
   fi
   if "$ADB" shell pm dump "$PKG" 2>/dev/null | grep -q OfflineRoomPersistenceSmokeActivity; then
     "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.OfflineRoomPersistenceSmokeActivity" >>"$LOG" 2>&1
