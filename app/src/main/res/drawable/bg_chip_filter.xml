@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Filter chips use readable theme text and a clear selected outline.
+
+  Selected: neutral fill + high-contrast visible outline.
+  Unselected: surface-2 fill + softer hairline.
+-->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_activated="true">
         <shape android:shape="rectangle">
