@@ -385,12 +385,11 @@ step_layout_l10n() {
     shot_after_ui "$out" "$needle" "$out" 30 || return 1
   done
   local l10n_ok=0
-  for pair in "ur-PK:layout-account-ur.png:اکاؤنٹ بنائیں" "sd-PK:layout-account-sd.png:اڪائونٽ ٺاهيو"; do
+  for pair in "ur:layout-account-ur.png:اکاؤنٹ بنائیں" "sd:layout-account-sd.png:اڪائونٽ ٺاهيو"; do
     IFS=: read -r locale out needle <<<"$pair"
-  "$ADB" shell settings put system system_locales "$locale" >>"$LOG" 2>&1 || { log "locale $locale: set failed"; continue; }
     "$ADB" shell am force-stop "$PKG"
     "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
-      --es screen account --ez night false >>"$LOG" 2>&1 || continue
+      --es screen account --ez night false --es locale "$locale" >>"$LOG" 2>&1 || continue
     if shot_after_ui "$out" "$needle" "$locale" 45; then
       l10n_ok=$((l10n_ok + 1))
     fi

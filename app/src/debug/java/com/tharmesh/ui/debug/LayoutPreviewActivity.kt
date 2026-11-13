@@ -3,8 +3,10 @@
 
 package com.tharmesh.ui.debug
 
+import android.content.res.Configuration
 import android.os.BatteryManager
 import android.os.Bundle
+import java.util.Locale
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -27,6 +29,7 @@ import tharmesh.app.R
 class LayoutPreviewActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyPreviewLocale(intent.getStringExtra(EXTRA_LOCALE))
         val night = intent.getBooleanExtra(EXTRA_NIGHT, false)
         val desired = if (night) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         if (AppCompatDelegate.getDefaultNightMode() != desired) {
@@ -55,6 +58,20 @@ class LayoutPreviewActivity : AppCompatActivity() {
             setContentView(root)
         }
     }
+
+  private fun applyPreviewLocale(localeTag: String?) {
+    if (localeTag.isNullOrBlank()) return
+    val locale = when {
+      localeTag.startsWith("sd") -> Locale("sd")
+      localeTag.startsWith("ur") -> Locale("ur")
+      else -> Locale.forLanguageTag(localeTag.replace('_', '-'))
+    }
+    Locale.setDefault(locale)
+    val config = Configuration(resources.configuration)
+    config.setLocale(locale)
+    @Suppress("DEPRECATION")
+    resources.updateConfiguration(config, resources.displayMetrics)
+  }
 
     private fun seed(name: String?) {
         when (name) {
@@ -234,6 +251,7 @@ class LayoutPreviewActivity : AppCompatActivity() {
         const val EXTRA_SCREEN = "screen"
         const val EXTRA_PALETTE = "palette"
         const val EXTRA_NIGHT = "night"
+        const val EXTRA_LOCALE = "locale"
 
         private val SCREENS = mapOf(
             "login" to R.layout.activity_login,
