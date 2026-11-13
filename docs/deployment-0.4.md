@@ -9,6 +9,7 @@ does not deploy production or toggle admission.
 2. `supabase/migrations/202611120001_identity_provisioning.sql`
 3. `supabase/migrations/202611120002_identity_proof.sql`
 4. `supabase/migrations/202611120003_identity_device_guard.sql`
+5. `supabase/migrations/202611120004_trusted_device_enrollment.sql`
 
 Verify: `select enabled from tharmesh_private.identity_admission` → **`false`**.
 
@@ -49,6 +50,7 @@ Emergency disable (same as pause in `docs/identity-provisioning.md`).
 - [ ] Google provider + Android OAuth SHA-1 for `tharmesh.app` debug APK
 - [ ] Run `supabase/tests/identity_provisioning.sql` as migration owner
 - [ ] Run `node --test supabase/tests/identity-database.test.cjs` (PGlite, single session)
+- [ ] Run `bash supabase/tests/postgres-apply.sh tharmesh_pgtest` then `node --test supabase/tests/identity-postgres-multisession.test.mjs` (**local Postgres multi-session, not hosted Supabase**)
 - [ ] Run `node --test supabase/tests/identity-proof.test.mjs` (mocked HTTP)
 - [ ] Android QA signing environment approved before `THARMESH_QA_SIGNING_ENABLED=true`
 

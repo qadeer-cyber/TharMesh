@@ -68,7 +68,26 @@ class LayoutPreviewActivity : AppCompatActivity() {
             "status" -> seedHealth()
             "contact" -> seedContact()
             "otp", "otp_code" -> seedOtp(name)
+            "devices" -> seedAccountDevices()
+            "rotate_recovery" -> seedRotateRecovery()
         }
+    }
+
+    private fun seedAccountDevices() {
+        findViewById<TextView>(R.id.account_title)?.setText(R.string.account_devices_title)
+        findViewById<TextView>(R.id.account_body)?.text =
+            getString(R.string.account_devices_body) + "\n\n• trusted-1 — active (this phone)"
+        findViewById<TextView>(R.id.account_primary)?.setText(R.string.account_action_show_qr)
+        findViewById<TextView>(R.id.account_secondary)?.apply {
+            visibility = View.VISIBLE
+            setText(R.string.account_action_revoke)
+        }
+    }
+
+    private fun seedRotateRecovery() {
+        findViewById<TextView>(R.id.account_title)?.setText(R.string.account_rotate_recovery_title)
+        findViewById<TextView>(R.id.account_body)?.setText(R.string.account_rotate_recovery_body)
+        findViewById<TextView>(R.id.account_primary)?.setText(R.string.account_rotate_recovery_action)
     }
 
     private fun seedOtp(name: String?) {
@@ -216,6 +235,8 @@ class LayoutPreviewActivity : AppCompatActivity() {
             "account" to R.layout.activity_account_flow,
             "otp" to R.layout.activity_account_flow,
             "otp_code" to R.layout.activity_account_flow,
+            "devices" to R.layout.activity_account_flow,
+            "rotate_recovery" to R.layout.activity_account_flow,
             "scanner" to R.layout.activity_scan_qr,
             "qr" to R.layout.activity_my_qr,
             "terms" to R.layout.activity_terms_gate,

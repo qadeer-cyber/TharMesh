@@ -84,4 +84,11 @@
     <string name="contacts_empty_hint">QR اسڪين ڪريو يا دعوت لکو. محفوظ رابطو ويجهو فون نه آهي.</string>
     <string name="contacts_screen_hint">اوهان جا محفوظ ماڻهو. ويجهو فون ڊوائيس واري ٽيب تي آهن.</string>
     <string name="account_otp_resend">نئون ڪوڊ موڪليو</string>
+    <string name="settings_account_backup">بيڪ اپ ۽ بحالي</string>
+    <string name="settings_account_backup_sub">بحالي جي چاٻي مٽايو</string>
+    <string name="account_rotate_recovery_title">بحالي جي چاٻي مٽايو</string>
+    <string name="account_rotate_recovery_body">نئون بحالي جملو ملندو ۽ نئون مهر ٿيل بيڪ اپ اپلوڊ ٿيندو. پراڻا بيڪ اپ پراڻي چاٻي سان کلي سگهن ٿا.</string>
+    <string name="account_devices_lost_hint">فون وڃي ويو هجي ته هتي منسوخ ڪريو ۽ نئي انسٽال تي بحالي واري چاٻي استعمال ڪريو. منسوخي ٻئي فون جو ڊيٽا نه مٽائي.</string>
+    <string name="account_reauth_required">بحالي جي چاٻي مٽائڻ کان اڳ ٻيهر سائن ان ڪريو.</string>
+    <string name="account_action_revoke">ڊوائيس منسوخ ڪريو</string>
 </resources>

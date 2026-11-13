@@ -84,4 +84,11 @@
     <string name="contacts_empty_hint">QR اسکین کریں یا دعوت لکھیں۔ محفوظ رابطہ قریبی فون نہیں۔</string>
     <string name="contacts_screen_hint">آپ کے محفوظ لوگ۔ قریبی فون آلات والے ٹیب پر ہیں۔</string>
     <string name="account_otp_resend">نیا کوڈ بھیجیں</string>
+    <string name="settings_account_backup">بیک اپ اور بحالی</string>
+    <string name="settings_account_backup_sub">بحالی کی کلید بدلیں</string>
+    <string name="account_rotate_recovery_title">بحالی کی کلید بدلیں</string>
+    <string name="account_rotate_recovery_body">نیا بحالی جملہ ملے گا اور نئی مہر والا بیک اپ اپ لوڈ ہوگا۔ پرانے بیک اپ پرانے جملے سے کھل سکتے ہیں۔</string>
+    <string name="account_devices_lost_hint">فون کھو گیا ہو تو یہاں منسوخ کریں اور نئی انسٹال پر بحالی کلید استعمال کریں۔ منسوخی دوسرے فون کا ڈیٹا نہیں مٹاتی۔</string>
+    <string name="account_reauth_required">بحالی کی کلید بدلنے سے پہلے دوبارہ سائن ان کریں۔</string>
+    <string name="account_action_revoke">آلہ منسوخ کریں</string>
 </resources>

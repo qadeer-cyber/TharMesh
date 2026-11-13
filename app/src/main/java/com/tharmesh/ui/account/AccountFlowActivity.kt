@@ -36,7 +36,10 @@ import com.tharmesh.account.AuthCall
 import com.tharmesh.account.AuthRateLimiter
 import com.tharmesh.account.CloudCredential
 import com.tharmesh.account.CloudSessionStore
+import com.tharmesh.account.DeviceDirectory
 import com.tharmesh.account.DeviceEnrollment
+import com.tharmesh.account.RecentReauth
+import com.tharmesh.account.RecoveryRotationStage
 import com.tharmesh.account.EnrollmentReplayGuard
 import com.tharmesh.account.EnrollmentQr
 import com.tharmesh.account.LegacyReconciliation
@@ -93,6 +96,8 @@ class AccountFlowActivity : AppCompatActivity() {
     private var pendingEnrollment: com.tharmesh.account.EnrollmentRequest? = null
     private var legacyReconcileMessage: LegacyReconciliation.Decision =
         LegacyReconciliation.Decision.REQUIRES_RECOVERY_OR_ENROLLMENT
+    private var cloudDevices: List<DeviceDirectory.DeviceRow> = emptyList()
+    private var localDeviceId: String? = null
     private var resendBlockedUntilMs: Long = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val resendTick = Runnable { if (screen == Screen.EMAIL_OTP) paintOtpCooldown() else paintResendCooldown() }
@@ -339,9 +344,40 @@ class AccountFlowActivity : AppCompatActivity() {
             }
             Screen.ROTATE_RECOVERY -> {
                 title.setText(R.string.account_rotate_recovery_title)
-                body.setText(R.string.account_rotate_recovery_body)
-                primary.setText(R.string.account_rotate_recovery_action)
-                primary.setOnClickListener { rotateRecovery(status) }
+                val staged = RecoveryRotationStage.read(this)
+                body.text = if (staged != null) {
+                    getString(R.string.account_rotate_resume_body)
+                } else {
+                    getString(R.string.account_rotate_recovery_body)
+                }
+                if (!RecentReauth.isFresh(this) && staged == null) {
+                    status.setText(R.string.account_reauth_required)
+                    primary.setText(R.string.account_action_sign_in)
+                    primary.setOnClickListener { bind(Screen.SIGN_IN) }
+                } else if (staged != null) {
+                    pendingPhrase = staged.phrase
+                    RecoveryRotationStage.sealedFromStaged(staged)?.let { sealed ->
+                        pendingRecord = InstallRecord(
+                            accountId = staged.accountId,
+                            mesh = UserPrefs.readIdentity(this)?.let { mesh ->
+                                MeshMaterial.from(mesh, UserPrefs.readProfile(this)?.userId ?: staged.accountId)
+                            },
+                            recoverySealed = sealed,
+                            provider = UserPrefs.readProfile(this)?.authProvider ?: UserPrefs.PROVIDER_EMAIL
+                        )
+                    }
+                    primary.setText(R.string.account_rotate_resume_upload)
+                    primary.setOnClickListener { bind(Screen.SAVE_RECOVERY) }
+                    secondary.visibility = View.VISIBLE
+                    secondary.setText(R.string.account_rotate_discard_stage)
+                    secondary.setOnClickListener {
+                        RecoveryRotationStage.clear(this)
+                        bind(Screen.ROTATE_RECOVERY)
+                    }
+                } else {
+                    primary.setText(R.string.account_rotate_recovery_action)
+                    primary.setOnClickListener { rotateRecovery(status) }
+                }
             }
             Screen.DEVICES -> {
                 title.setText(R.string.account_devices_title)
@@ -363,6 +399,8 @@ class AccountFlowActivity : AppCompatActivity() {
                 primary.setOnClickListener { showEnrollment(qr, secret, confirm.isChecked, status) }
                 secondary.setOnClickListener { approveEnrollment(f1, confirm.isChecked, status) }
                 tertiary.setOnClickListener { acceptEnrollment(f1, confirm.isChecked, status) }
+                show(f2, R.string.account_field_revoke_device)
+                refreshCloudDevices(status)
             }
             Screen.OFFLINE -> {
                 title.setText(R.string.account_offline_title)
@@ -631,6 +669,7 @@ class AccountFlowActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val expiresAt = now + result.tokens.expiresInSeconds * 1000L
         val provider = if (screen == Screen.GOOGLE) UserPrefs.PROVIDER_GOOGLE else UserPrefs.PROVIDER_EMAIL
+        RecentReauth.mark(this)
         val login = IdentityLifecycle.cloudLogin(
             record = InstallRecord(mesh = mesh, provider = provider),
             accountId = result.tokens.accountId,
@@ -695,14 +734,26 @@ class AccountFlowActivity : AppCompatActivity() {
                     canonicalRecovery = true
                     expectedRecoveryKey = outcome.canonicalKey
                     val local = UserPrefs.readIdentity(this@AccountFlowActivity)
+                    val evidence = withContext(Dispatchers.IO) {
+                        val access = CloudSessionStore.readAccessToken(this@AccountFlowActivity)
+                        if (access.isNullOrBlank()) null
+                        else DeviceDirectory.fetchEvidence(
+                            http,
+                            BuildConfig.SUPABASE_URL,
+                            BuildConfig.SUPABASE_ANON_KEY,
+                            access
+                        )
+                    }
+                    val serverState = evidence?.identityState
+                        ?: if (outcome.canonicalKey == null) "legacy_unknown" else "recovery_required"
                     legacyReconcileMessage = LegacyReconciliation.decide(
                         LegacyReconciliation.Evidence(
-                            serverState = if (outcome.canonicalKey == null) "legacy_unknown" else "recovery_required",
-                            canonicalMeshPublicKey = outcome.canonicalKey,
+                            serverState = serverState,
+                            canonicalMeshPublicKey = outcome.canonicalKey ?: evidence?.meshPublicKey,
                             localMesh = local,
                             explicitResetCommitted = false,
-                            cloudDeviceRows = 0,
-                            cloudRecoveryBlob = false
+                            cloudDeviceRows = evidence?.deviceCount ?: 0,
+                            cloudRecoveryBlob = evidence?.hasRecoveryBlob ?: false
                         )
                     )
                     when (legacyReconcileMessage) {
@@ -971,9 +1022,12 @@ class AccountFlowActivity : AppCompatActivity() {
                     access, accountId, sealed
                 )
             }
-            status.setText(
-                if (result is AuthCall.Ok) R.string.account_uploaded else R.string.account_saved_local_only
-            )
+            if (result is AuthCall.Ok) {
+                RecoveryRotationStage.clear(this@AccountFlowActivity)
+                status.setText(R.string.account_uploaded)
+            } else {
+                status.setText(R.string.account_rotate_upload_pending)
+            }
         }
     }
 
@@ -1031,8 +1085,67 @@ class AccountFlowActivity : AppCompatActivity() {
         status.setText(if (ok) R.string.account_enroll_accepted else R.string.account_error_approve)
     }
 
+    private fun refreshCloudDevices(status: TextView) {
+        val access = CloudSessionStore.readAccessToken(this)
+        val body = findViewById<TextView>(R.id.account_body)
+        val finger = UserPrefs.readIdentity(this)?.fingerprint
+        val prefix = if (finger.isNullOrBlank()) getString(R.string.account_devices_body)
+        else getString(R.string.account_devices_body) + "\n\n" + getString(R.string.account_devices_current, finger)
+        if (access.isNullOrBlank() || !AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)) {
+            body.text = prefix + "\n\n" + getString(R.string.account_devices_list_offline)
+            return
+        }
+        val secondary = findViewById<TextView>(R.id.account_secondary)
+        val f2 = field(R.id.account_field_2)
+        secondary.visibility = View.VISIBLE
+        secondary.setText(R.string.account_action_revoke)
+        secondary.setOnClickListener { revokeCloudDevice(f2, status) }
+        lifecycleScope.launch {
+            val rows = withContext(Dispatchers.IO) {
+                DeviceDirectory.list(http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access)
+            }
+            cloudDevices = rows ?: emptyList()
+            localDeviceId = UserPrefs.readIdentity(this@AccountFlowActivity)?.fingerprint?.take(16)
+            val listing = if (cloudDevices.isEmpty()) getString(R.string.account_devices_list_empty)
+            else cloudDevices.joinToString("\n") { row ->
+                val mark = if (row.revoked) getString(R.string.account_devices_status_revoked)
+                else getString(R.string.account_devices_status_active)
+                val current = if (row.deviceId == localDeviceId) " " + getString(R.string.account_devices_label_current) else ""
+                "• ${row.deviceId} — $mark$current"
+            }
+            body.text = prefix + "\n\n" + listing + "\n\n" + getString(R.string.account_devices_lost_hint)
+        }
+    }
+
+    private fun revokeCloudDevice(field: EditText, status: TextView) {
+        val id = field.text.toString().trim()
+        if (id.isEmpty()) {
+            status.setText(R.string.account_error_revoke_device)
+            return
+        }
+        val access = CloudSessionStore.readAccessToken(this) ?: run {
+            status.setText(R.string.account_error_not_configured)
+            return
+        }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                DeviceDirectory.revoke(
+                    http, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, access, id
+                )
+            }
+            status.setText(
+                if (result is AuthCall.Ok) R.string.account_devices_revoked else R.string.account_error_revoke_device
+            )
+            refreshCloudDevices(status)
+        }
+    }
+
     private fun rotateRecovery(status: TextView) {
         if (authBusy) return
+        if (!RecentReauth.isFresh(this)) {
+            status.setText(R.string.account_reauth_required)
+            return
+        }
         val mesh = UserPrefs.readIdentity(this) ?: run {
             status.setText(R.string.account_error_held)
             return
@@ -1048,6 +1161,7 @@ class AccountFlowActivity : AppCompatActivity() {
                 RecoveryRotation.rotate(mesh.privateKeyBase64, mesh.publicKeyBase64, random)
             }
             pendingPhrase = outcome.phrase
+            RecoveryRotationStage.save(this@AccountFlowActivity, outcome.phrase, outcome.sealed, accountId)
             pendingRecord = InstallRecord(
                 accountId = accountId,
                 mesh = MeshMaterial.from(
