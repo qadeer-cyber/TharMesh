@@ -278,6 +278,7 @@ seed_old_app() {
   if [ -n "$LEGACY_SOURCE_COMMIT" ]; then
     log "legacy seed via sqlite (historical commit $LEGACY_SOURCE_COMMIT)"
     seed_legacy_v6_sqlite || return 1
+    return 0
   fi
   if "$ADB" shell pm dump "$PKG" 2>/dev/null | grep -q OfflineRoomPersistenceSmokeActivity; then
     "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.OfflineRoomPersistenceSmokeActivity" >>"$LOG" 2>&1
