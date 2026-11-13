@@ -23,6 +23,7 @@ for t in "${NODE_TESTS[@]}"; do
   node --test "$t"
 done
 node supabase/tests/identity-postgres-multisession.test.mjs
+node --test supabase/tests/postgres-fresh-upgrade.test.mjs
 
 bash supabase/tests/postgres-migration-full-apply-twice.sh "${DB}_idem2"
 

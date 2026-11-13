@@ -13,5 +13,17 @@
         <activity
             android:name="com.tharmesh.ui.debug.OfflineRelaunchSmokeActivity"
             android:exported="true" />
+        <activity
+            android:name="com.tharmesh.ui.debug.OfflineRoomPersistenceSmokeActivity"
+            android:exported="true" />
+        <activity
+            android:name="com.tharmesh.ui.debug.RecoveryStageDeathSmokeActivity"
+            android:exported="true" />
+        <activity
+            android:name="com.tharmesh.ui.debug.FakeProvisionSmokeActivity"
+            android:exported="true" />
+        <activity
+            android:name="com.tharmesh.ui.debug.ProvisionRelaunchSmokeActivity"
+            android:exported="true" />
     </application>
 </manifest>
