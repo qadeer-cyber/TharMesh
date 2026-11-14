@@ -19,6 +19,9 @@ class MeshEngineFaultInjectionTest {
         val tA = FaultInjectionTransport()
         val tB = FaultInjectionTransport()
         val tC = FaultInjectionTransport()
+        tA.dropOutboundMatching = { payload ->
+            String(payload, Charsets.UTF_8).startsWith("BUNDLE|")
+        }
         tA.dropOutboundCount = 1
         val cEvents: MutableList<MeshEvent> = CopyOnWriteArrayList()
         val a = MeshEngine("A", tA)
@@ -36,10 +39,18 @@ class MeshEngineFaultInjectionTest {
             hops = 4,
             bundleIdHint = "bid-fault-1"
         )
-        if (cEvents.none { it is MeshEvent.BundleDelivered }) {
-            tA.dropOutboundCount = 0
-            a.retryBundle(bundle.bundleId)
-        }
+        assertEquals(
+            "drop must block first forward — no delivery before retry",
+            0,
+            cEvents.filterIsInstance<MeshEvent.BundleDelivered>().size
+        )
+        assertTrue(
+            "at least one BUNDLE forward must be dropped at the radio boundary",
+            tA.outboundDropped >= 1
+        )
+        tA.dropOutboundCount = 0
+        tA.dropOutboundMatching = null
+        assertTrue("retry after drop restores delivery", a.retryBundle(bundle.bundleId))
         val delivered = cEvents.filterIsInstance<MeshEvent.BundleDelivered>()
         assertEquals(1, delivered.size)
         assertEquals("fault-inject-msg", delivered[0].bundle.payloadCiphertext)
