@@ -35,19 +35,17 @@
 
         <TextView
             android:id="@+id/row_title"
+            style="@style/Text.Name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="?attr/tmTextPrimary"
-            android:textSize="17sp"
             android:text="Account" />
 
         <TextView
             android:id="@+id/row_subtitle"
+            style="@style/Text.Meta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:textColor="?attr/tmTextSecondary"
-            android:textSize="13sp"
             android:text="Security notifications, change number"
             android:visibility="visible" />
     </LinearLayout>

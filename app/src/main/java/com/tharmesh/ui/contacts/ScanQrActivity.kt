@@ -1,5 +1,6 @@
 package com.tharmesh.ui.contacts
 
+import com.tharmesh.ui.theme.Appearance
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -50,6 +51,7 @@ class ScanQrActivity : AppCompatActivity() {
     private var hasReturned = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scan_qr)
         title = getString(R.string.scan_qr_title)

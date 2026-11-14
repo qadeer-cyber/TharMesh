@@ -17,7 +17,7 @@
 
     <style name="Text.H1" parent="TextAppearance.AppCompat">
         <item name="android:textColor">?attr/tmTextPrimary</item>
-        <item name="android:textSize">24sp</item>
+        <item name="android:textSize">32sp</item>
         <item name="android:textStyle">bold</item>
         <!-- Slight negative letter spacing tightens the large title look. -->
         <item name="android:letterSpacing">-0.015</item>
@@ -25,19 +25,19 @@
 
     <style name="Text.H2" parent="TextAppearance.AppCompat">
         <item name="android:textColor">?attr/tmTextPrimary</item>
-        <item name="android:textSize">18sp</item>
+        <item name="android:textSize">22sp</item>
         <item name="android:textStyle">bold</item>
     </style>
 
     <style name="Text.H3" parent="TextAppearance.AppCompat">
         <item name="android:textColor">?attr/tmTextPrimary</item>
-        <item name="android:textSize">15sp</item>
+        <item name="android:textSize">18sp</item>
         <item name="android:textStyle">bold</item>
     </style>
 
     <style name="Text.Body" parent="TextAppearance.AppCompat">
         <item name="android:textColor">?attr/tmTextPrimary</item>
-        <item name="android:textSize">14sp</item>
+        <item name="android:textSize">16sp</item>
     </style>
 
     <!-- Stage 7.5 — name row: 16sp medium per the polish brief.
@@ -61,7 +61,7 @@
 
     <style name="Text.Caption" parent="TextAppearance.AppCompat">
         <item name="android:textColor">?attr/tmTextSecondary</item>
-        <item name="android:textSize">12sp</item>
+        <item name="android:textSize">14sp</item>
     </style>
 
     <style name="Text.Tag" parent="TextAppearance.AppCompat">
@@ -93,6 +93,8 @@
 
     <style name="TmButton.Ghost" parent="Widget.AppCompat.Button">
         <item name="android:background">@drawable/bg_button_ghost</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:backgroundTint">@null</item>
         <item name="android:textColor">?attr/tmTextPrimary</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:minHeight">48dp</item>
@@ -104,13 +106,18 @@
          deliberately empty so the AppCompat Button parent doesn't apply its
          backgroundTint from colorAccent (which was painting every chip
          saturated WhatsApp green regardless of activated state). -->
+    <style name="TmPanel">
+        <item name="android:background">@drawable/bg_panel</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
     <style name="TmChip.Filter" parent="">
         <item name="android:background">@drawable/bg_chip_filter</item>
         <item name="android:backgroundTint">@null</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">13sp</item>
         <item name="android:minWidth">0dp</item>
-        <item name="android:minHeight">0dp</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:paddingStart">14dp</item>
         <item name="android:paddingEnd">14dp</item>
         <item name="android:paddingTop">8dp</item>

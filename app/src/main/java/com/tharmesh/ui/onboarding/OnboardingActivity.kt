@@ -3,6 +3,7 @@
 
 package com.tharmesh.ui.onboarding
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -89,6 +90,7 @@ class OnboardingActivity : AppCompatActivity() {
     private val ioScope = CoroutineScope(Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_onboarding)
         title = ""

@@ -28,14 +28,14 @@
         android:id="@+id/onb_first_scan"
         style="@style/TmButton.Primary"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:text="@string/onb_first_scan_qr" />
 
     <Button
         android:id="@+id/onb_first_show_my_qr"
-        style="?android:attr/borderlessButtonStyle"
+        style="@style/TmButton.Ghost"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:layout_marginTop="8dp"
         android:text="@string/onb_first_show_my_qr" />
 
@@ -48,14 +48,14 @@
         android:id="@+id/onb_first_done"
         style="@style/TmButton.Primary"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:text="@string/onb_finish" />
 
     <Button
         android:id="@+id/onb_first_skip"
-        style="?android:attr/borderlessButtonStyle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        style="@style/TmButton.Ghost"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
         android:layout_marginTop="8dp"
         android:text="@string/onb_skip_for_now" />
 </LinearLayout>

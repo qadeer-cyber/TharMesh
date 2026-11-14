@@ -12,6 +12,6 @@
     <gradient
         android:type="radial"
         android:gradientRadius="60%p"
-        android:startColor="?attr/tmGlowGreen20"
+        android:startColor="@color/tm_light_glow_green_20"
         android:endColor="@android:color/transparent" />
 </shape>

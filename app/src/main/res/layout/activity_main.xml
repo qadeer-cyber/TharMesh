@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient"
+    android:background="?attr/tmBg"
     android:orientation="vertical"
     android:fitsSystemWindows="true">
 
@@ -60,30 +60,16 @@
       legacy 1dp top divider is removed — the glass card's stroke handles
       the surface separation now.
     -->
-    <com.google.android.material.card.MaterialCardView
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginTop="6dp"
-        android:layout_marginBottom="10dp"
-        app:cardBackgroundColor="?attr/tmSurfaceGlassFloating"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="8dp"
-        app:strokeColor="?attr/tmStrokeSoft"
-        app:strokeWidth="1dp">
-
-        <com.google.android.material.bottomnavigation.BottomNavigationView
-            android:id="@+id/bottom_nav"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@android:color/transparent"
-            android:minHeight="64dp"
-            app:itemBackground="@drawable/bg_nav_pill"
-            app:itemIconTint="@color/nav_item_color"
-            app:itemTextColor="@color/nav_item_color"
-            app:labelVisibilityMode="labeled"
-            app:menu="@menu/bottom_nav" />
-    </com.google.android.material.card.MaterialCardView>
+        android:background="?attr/tmSurface"
+        android:minHeight="64dp"
+        app:itemBackground="@drawable/bg_nav_pill"
+        app:itemIconTint="@color/nav_item_color"
+        app:itemTextColor="@color/nav_item_color"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/bottom_nav" />
 
 </LinearLayout>

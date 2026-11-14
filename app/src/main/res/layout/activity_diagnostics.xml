@@ -3,17 +3,18 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?attr/tmBg"
+    android:fitsSystemWindows="true"
     android:orientation="vertical">
 
     <TextView
+        style="@style/Text.H1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/tmBg"
-        android:padding="16dp"
-        android:text="@string/diagnostics_title"
-        android:textColor="@android:color/white"
-        android:textSize="20sp"
-        android:textStyle="bold" />
+        android:paddingStart="20dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="4dp"
+        android:text="@string/diagnostics_title" />
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
@@ -37,7 +38,7 @@
                 android:text="@string/diagnostics_subtitle" />
 
             <LinearLayout
-                style="@style/TmCard"
+                style="@style/TmPanel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -60,7 +61,7 @@
             </LinearLayout>
 
             <LinearLayout
-                style="@style/TmCard"
+                style="@style/TmPanel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -85,7 +86,7 @@
 
             <!-- Stage 5.3 — Field Test retry-tuning toggles. -->
             <LinearLayout
-                style="@style/TmCard"
+                style="@style/TmPanel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"

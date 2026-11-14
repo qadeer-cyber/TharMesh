@@ -1,5 +1,6 @@
 package com.tharmesh.ui.contacts
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -44,6 +45,7 @@ class ContactProfileActivity : AppCompatActivity() {
     private var contact: ContactEntity? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
         if (userId.isBlank()) { finish(); return }

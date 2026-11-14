@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient"
+    android:background="?attr/tmBg"
     android:clipToPadding="false"
     android:paddingBottom="16dp"
     android:fillViewport="true">
@@ -50,16 +50,11 @@
                     android:text="@string/app_subtagline" />
             </LinearLayout>
 
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="@string/cd_search"
-                android:src="@drawable/ic_search" />
         </LinearLayout>
 
         <!-- Connected status card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
@@ -107,9 +102,17 @@
                 android:src="@drawable/ic_wifi" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/account_offline_mode"
+            style="@style/Text.Caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
         <!-- Signal strength card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -128,30 +131,27 @@
                     android:layout_weight="1"
                     android:text="@string/dash_signal_title" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_chip_green"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp"
-                    android:text="@string/dash_signal_unknown"
-                    android:textColor="?attr/tmNeonGreen"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/signal_empty"
+                style="@style/Text.Body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/dash_signal_empty" />
 
             <com.tharmesh.ui.widget.SignalBarsView
                 android:id="@+id/network_signal_bars"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="12dp" />
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Network mesh graph card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -171,6 +171,7 @@
                     android:text="@string/dash_network_title" />
 
                 <TextView
+                    android:id="@+id/network_live"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_chip_cyan"
@@ -179,9 +180,10 @@
                     android:paddingTop="4dp"
                     android:paddingBottom="4dp"
                     android:text="@string/dash_network_live"
-                    android:textColor="?attr/tmNeonCyan"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
+                    android:textColor="?attr/tmNeonGreen"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <com.tharmesh.ui.widget.MeshGraphView
@@ -193,7 +195,7 @@
 
         <!-- Nearby devices card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"

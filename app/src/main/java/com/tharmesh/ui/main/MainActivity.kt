@@ -5,6 +5,7 @@
 
 package com.tharmesh.ui.main
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var disasterText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         if (!UserPrefs.hasProfile(this)) {
             startActivity(Intent(this, LoginActivity::class.java))
@@ -63,6 +65,18 @@ class MainActivity : AppCompatActivity() {
         // correct downstream activity once accepted.
         if (!UserPrefs.hasAcceptedCurrentTerms(this)) {
             startActivity(Intent(this, com.tharmesh.ui.legal.TermsActivity::class.java))
+            finish()
+            return
+        }
+        // Cloud login on a phone with no mesh key holds generation. Do not
+        // enter the mesh UI, which would call ensureIdentity and mint a key.
+        if (UserPrefs.isIdentityHeld(this) && UserPrefs.readIdentity(this) == null) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this,
+                    com.tharmesh.ui.account.AccountFlowActivity.Screen.RECOVER
+                )
+            )
             finish()
             return
         }

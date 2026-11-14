@@ -7,9 +7,43 @@ def localPropsFile = rootProject.file("local.properties")
 if (localPropsFile.exists()) {
     localProps.load(new FileInputStream(localPropsFile))
 }
-def googleWebClientId = (localProps.getProperty("GOOGLE_WEB_CLIENT_ID")
-        ?: project.findProperty("GOOGLE_WEB_CLIENT_ID")
-        ?: "").toString()
+// A blank local.properties entry must not hide a CI environment variable.
+def firstNonBlank = { String name ->
+    def candidates = [
+            localProps.getProperty(name),
+            System.getenv(name),
+            project.findProperty(name)
+    ]
+    for (candidate in candidates) {
+        if (candidate != null && candidate.toString().trim()) {
+            return candidate.toString().trim()
+        }
+    }
+    return ""
+}
+def googleWebClientId = firstNonBlank("GOOGLE_WEB_CLIENT_ID")
+
+// Supabase project URL and the public publishable key. Both stay empty in git.
+// A blank value makes AuthBackend fail closed. Never put a service-role key here.
+def supabaseUrl = firstNonBlank("SUPABASE_URL")
+def supabaseAnonKey = firstNonBlank("SUPABASE_ANON_KEY")
+def supabaseStagingProjectRef = firstNonBlank("THARMESH_STAGING_PROJECT_REF")
+if (!supabaseStagingProjectRef) {
+    supabaseStagingProjectRef = firstNonBlank("SUPABASE_STAGING_PROJECT_REF")
+}
+def supabaseProductionProjectRef = firstNonBlank("THARMESH_PRODUCTION_PROJECT_REF")
+if (!supabaseProductionProjectRef) {
+    supabaseProductionProjectRef = firstNonBlank("SUPABASE_PRODUCTION_PROJECT_REF")
+}
+def supabaseDebugProjectRef = firstNonBlank("THARMESH_DEBUG_PROJECT_REF")
+if (!supabaseDebugProjectRef) {
+    supabaseDebugProjectRef = firstNonBlank("SUPABASE_DEBUG_PROJECT_REF")
+}
+// Unit tests + local debug only; release/qa buildTypes override to empty (fail-closed).
+def supabaseDebugProjectRefForDebug = supabaseDebugProjectRef ?: "example"
+def escapeBuildConfig = { String value ->
+    value.replace("\\", "\\\\").replace("\"", "\\\"")
+}
 
 // Stage 10.1 — short commit hash exposed via BuildConfig.GIT_COMMIT_HASH and
 // rendered on the About screen. Defensive: silently falls back to "—" when
@@ -30,6 +64,11 @@ try {
     // Keep fallback.
 }
 
+def qaKeyPath = System.getenv("THARMESH_QA_KEYSTORE_PATH")
+def qaSigningValues = ["THARMESH_QA_STORE_PASSWORD", "THARMESH_QA_KEY_ALIAS", "THARMESH_QA_KEY_PASSWORD"]
+        .collect { System.getenv(it) }
+def qaSigningReady = qaKeyPath && file(qaKeyPath).isFile() && qaSigningValues.every { it }
+
 android {
     compileSdkVersion 30
     buildToolsVersion "30.0.3"
@@ -43,14 +82,52 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${googleWebClientId}\""
+        buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${escapeBuildConfig(googleWebClientId)}\""
         buildConfigField "String", "GIT_COMMIT_HASH", "\"${gitCommitHash}\""
+        buildConfigField "String", "SUPABASE_URL", "\"${escapeBuildConfig(supabaseUrl)}\""
+        buildConfigField "String", "SUPABASE_ANON_KEY", "\"${escapeBuildConfig(supabaseAnonKey)}\""
+        buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"unset\""
+        buildConfigField "String", "SUPABASE_STAGING_PROJECT_REF", "\"${escapeBuildConfig(supabaseStagingProjectRef)}\""
+        buildConfigField "String", "SUPABASE_PRODUCTION_PROJECT_REF", "\"${escapeBuildConfig(supabaseProductionProjectRef)}\""
+        buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"${escapeBuildConfig(supabaseDebugProjectRefForDebug)}\""
+    }
+
+    signingConfigs {
+        debug {
+            // Public Android debug password. Pins the SHA-1 of the CI debug APK.
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+        qa {
+            if (qaSigningReady) {
+                storeFile file(qaKeyPath)
+                storeType "PKCS12"
+                storePassword qaSigningValues[0]
+                keyAlias qaSigningValues[1]
+                keyPassword qaSigningValues[2]
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+            buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"unset\""
+            buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"${escapeBuildConfig(supabaseDebugProjectRefForDebug)}\""
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"release\""
+            buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"\""
+        }
+        qa {
+            initWith release
+            signingConfig signingConfigs.qa
+            buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"staging\""
+            buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"\""
         }
     }
 
@@ -65,6 +142,14 @@ android {
 
     testOptions {
         unitTests.returnDefaultValues = true
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (!qaSigningReady && graph.allTasks.any {
+        it.project == project && it.name in ["assembleQa", "bundleQa", "packageQa"]
+    }) {
+        throw new GradleException("QA signing is missing. Configure the persistent TharMesh QA keystore.")
     }
 }
 

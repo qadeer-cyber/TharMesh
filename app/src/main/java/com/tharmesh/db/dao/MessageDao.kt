@@ -36,6 +36,10 @@ interface MessageDao {
     )
     fun countOutgoingTo(myUserId: String, peerUserId: String): Int
 
+    /** Deletes this chat's messages. Does not touch contacts or peer trust. */
+    @Query("DELETE FROM messages WHERE peerUserId = :peerUserId")
+    fun deleteByPeer(peerUserId: String): Int
+
     @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
     fun getById(id: Long): MessageEntity?
 

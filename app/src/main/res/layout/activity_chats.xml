@@ -11,14 +11,14 @@
         android:orientation="vertical">
 
         <TextView
+            style="@style/Text.H1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="?attr/tmBg"
-            android:padding="16dp"
-            android:text="@string/tab_chats"
-            android:textColor="@android:color/white"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:paddingStart="20dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="8dp"
+            android:text="@string/tab_chats" />
 
         <FrameLayout
             android:layout_width="match_parent"
@@ -30,16 +30,47 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:paddingBottom="72dp" />
+                android:paddingBottom="88dp" />
 
-            <TextView
+            <LinearLayout
                 android:id="@+id/text_empty"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="@string/empty_chats"
-                android:textColor="?attr/tmTextSecondary"
-                android:visibility="gone" />
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:padding="32dp"
+                android:visibility="gone">
+
+                <FrameLayout
+                    android:layout_width="88dp"
+                    android:layout_height="88dp"
+                    android:background="@drawable/bg_round_icon_green">
+
+                    <ImageView
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_message" />
+                </FrameLayout>
+
+                <TextView
+                    style="@style/Text.H2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center"
+                    android:text="@string/empty_chats" />
+
+                <TextView
+                    style="@style/Text.Meta"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center"
+                    android:text="@string/empty_chats_hint" />
+            </LinearLayout>
         </FrameLayout>
 
         <com.google.android.material.bottomnavigation.BottomNavigationView
@@ -47,8 +78,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="?attr/tmSurface"
-            app:itemIconTint="?attr/tmBg"
-            app:itemTextColor="?attr/tmBg"
+            android:minHeight="64dp"
+            app:itemIconTint="@color/nav_item_color"
+            app:itemTextColor="@color/nav_item_color"
+            app:labelVisibilityMode="labeled"
             app:menu="@menu/bottom_nav" />
 
     </LinearLayout>
@@ -60,7 +93,8 @@
         android:layout_gravity="bottom|end"
         android:layout_margin="20dp"
         android:contentDescription="@string/new_chat"
-        android:src="@android:drawable/ic_dialog_email"
-        app:backgroundTint="?attr/tmNeonCyan" />
+        android:src="@drawable/ic_plus"
+        app:backgroundTint="?attr/tmNeonGreen"
+        app:tint="?attr/tmBg" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

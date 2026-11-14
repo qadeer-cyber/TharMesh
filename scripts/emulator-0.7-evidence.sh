@@ -1,0 +1,607 @@
+#!/usr/bin/env bash
+# Category 6 — FAIL-CLOSED emulator evidence (TharMesh Update 0.7 Phase 0).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
+ADB="$SDK/platform-tools/adb"
+EMU="$SDK/emulator/emulator"
+ART="${THARMESH_EVIDENCE_DIR:-/opt/cursor/artifacts/ui/0.7-evidence}"
+PKG="tharmesh.app"
+mkdir -p "$ART"
+LOG="${EMULATOR_EVIDENCE_LOG:-$ART/adb-transcript.txt}"
+UI_DUMP="$ART/ui-dump-latest.xml"
+if [ -z "${EMULATOR_KEEP_LOG:-}" ]; then
+  : >"$LOG"
+fi
+FAILED=0
+REBOOT_UI_MAX_ATTEMPTS="${REBOOT_UI_MAX_ATTEMPTS:-6}"
+REBOOT_BOOT_MAX_SEC="${REBOOT_BOOT_MAX_SEC:-240}"
+BOOT_SETTLE_MAX_SEC="${BOOT_SETTLE_MAX_SEC:-180}"
+EVIDENCE_STAGE_DEADLINE_SEC="${EVIDENCE_STAGE_DEADLINE_SEC:-180}"
+ADB_SHELL_TIMEOUT_SEC="${ADB_SHELL_TIMEOUT_SEC:-90}"
+ADB_START_WAIT_TIMEOUT_SEC="${ADB_START_WAIT_TIMEOUT_SEC:-120}"
+ADB_START_NO_WAIT_TIMEOUT_SEC="${ADB_START_NO_WAIT_TIMEOUT_SEC:-45}"
+RUN_AS_TIMEOUT_SEC="${RUN_AS_TIMEOUT_SEC:-20}"
+
+log() { echo "$@" | tee -a "$LOG"; }
+
+fail() {
+  log "FAIL: $*"
+  FAILED=1
+}
+
+assert_not_query_failed() {
+  local label="$1"
+  local value="$2"
+  if [ "$value" = "query_failed" ] || [ -z "$value" ]; then
+    fail "$label: db query_failed"
+    return 1
+  fi
+}
+
+log_fatal() {
+  if "$ADB" logcat -d -t 500 2>/dev/null | grep -E 'FATAL EXCEPTION' | grep -qE 'tharmesh|tharmesh\.app'; then
+    fail "logcat tharmesh FATAL"
+    "$ADB" logcat -d -t 200 2>/dev/null | grep -E 'FATAL|AndroidRuntime' | grep tharmesh | tail -25 | tee -a "$LOG"
+    return 1
+  fi
+  log "logcat: no tharmesh FATAL"
+}
+
+log_activity_top() {
+  "$ADB" shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity' | head -3 | tee -a "$LOG" || true
+}
+
+ensure_emulator() {
+  if ! "$ADB" devices | grep -q emulator; then
+    AVD="$("$EMU" -list-avds | head -1)"
+    test -n "$AVD"
+    "$EMU" -avd "$AVD" -no-window -no-audio -gpu swiftshader_indirect &
+    for _ in $(seq 1 120); do
+      "$ADB" wait-for-device shell getprop sys.boot_completed 2>/dev/null | grep -q 1 && break
+      sleep 2
+    done
+  fi
+}
+
+ensure_emulator
+
+API_LEVEL="$("$ADB" shell getprop ro.build.version.sdk | tr -d '\r')"
+API_RELEASE="$("$ADB" shell getprop ro.build.version.release | tr -d '\r')"
+AVD_NAME="$("$EMU" -list-avds | head -1)"
+BUILD_SHA="$(cd "$ROOT" && git rev-parse HEAD)"
+APK="${TM_APK:-${HEAD_DEBUG_APK:-$ROOT/app/build/outputs/apk/debug/tharmesh.app-debug.apk}}"
+
+log "=== emulator metadata ==="
+log "AVD=$AVD_NAME API=$API_LEVEL (Android $API_RELEASE)"
+log "source_commit=$BUILD_SHA"
+if [ "${API_LEVEL:-0}" -lt 33 ]; then
+  log "API 33+ image: NOT EXECUTED (only $AVD_NAME installed)"
+fi
+
+if [ "${SKIP_HEAD_ASSEMBLE:-0}" = "1" ]; then
+  test -f "$APK" || { log "FAIL APK missing at $APK (SKIP_HEAD_ASSEMBLE=1)"; exit 1; }
+  log "skip_gradle_assemble=1 apk=$APK"
+else
+  (cd "$ROOT" && ./gradlew assembleDebug -q)
+  test -f "$APK" || { log "FAIL APK missing at $APK"; exit 1; }
+fi
+SHA256=$(sha256sum "$APK" | awk '{print $1}')
+APK_SIZE=$(stat -c%s "$APK")
+log "APK sha256=$SHA256 size_bytes=$APK_SIZE"
+
+"$ADB" install -r "$APK" >>"$LOG" 2>&1
+"$ADB" shell settings put global window_animation_scale 0 >>"$LOG" 2>&1 || true
+"$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
+
+for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION; do
+  "$ADB" shell pm grant "$PKG" "android.permission.$perm" >>"$LOG" 2>&1 || true
+done
+if [ "${API_LEVEL:-0}" -ge 31 ]; then
+  for perm in BLUETOOTH_CONNECT BLUETOOTH_SCAN BLUETOOTH_ADVERTISE; do
+    "$ADB" shell pm grant "$PKG" "android.permission.$perm" >>"$LOG" 2>&1 || true
+  done
+else
+  log "skipped BLUETOOTH_* (API $API_LEVEL < 31)"
+fi
+
+ui_dump_pull() {
+  timeout 45 "$ADB" shell uiautomator dump /sdcard/ui-evidence.xml >>"$LOG" 2>&1 || true
+  timeout 25 "$ADB" pull /sdcard/ui-evidence.xml "$UI_DUMP" >>"$LOG" 2>&1 || true
+}
+
+dismiss_system_anr() {
+  "$ADB" shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >>"$LOG" 2>&1 || true
+  ui_dump_pull
+  if grep -qE "Process system isn't responding|System UI isn't responding" "$UI_DUMP" 2>/dev/null; then
+    log "dismissing system ANR dialog (uiautomator Wait)"
+    if grep -qF 'text="Wait"' "$UI_DUMP" 2>/dev/null; then
+      local bounds
+      bounds=$(grep -oE 'text="Wait"[^/]*bounds="[^"]+"' "$UI_DUMP" | head -1 | sed -n 's/.*bounds="\([^"]*\)".*/\1/p')
+      if [ -n "$bounds" ]; then
+        local x1 y1 x2 y2 cx cy
+        IFS='[],' read -r _ x1 y1 x2 y2 _ <<<"$bounds"
+        cx=$(( (x1 + x2) / 2 ))
+        cy=$(( (y1 + y2) / 2 ))
+        "$ADB" shell input tap "$cx" "$cy" >>"$LOG" 2>&1 || true
+      fi
+    fi
+    "$ADB" shell input keyevent KEYCODE_DPAD_DOWN >>"$LOG" 2>&1 || true
+    "$ADB" shell input keyevent KEYCODE_DPAD_CENTER >>"$LOG" 2>&1 || true
+    "$ADB" shell input tap 540 1450 >>"$LOG" 2>&1 || true
+    sleep 3
+  fi
+}
+
+emit_adb_diagnostics() {
+  local tag="$1"
+  log "=== adb diagnostics ($tag) ==="
+  "$ADB" devices -l 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell getprop sys.boot_completed 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell getprop init.svc.bootanim 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell getprop dev.bootcomplete 2>&1 | tee -a "$LOG" || true
+  "$ADB" logcat -d -t 120 -s AndroidRuntime:E 2>&1 | tee -a "$LOG" || true
+  "$ADB" shell dumpsys activity activities 2>/dev/null | head -50 | tee -a "$LOG" || true
+}
+
+stage_fail_diagnostics() {
+  local stage="$1"
+  log "STAGE_FAIL_DIAGNOSTICS stage=$stage"
+  timeout 30 "$ADB" logcat -d -t 400 2>&1 | tee -a "$LOG" | tail -100 || true
+  timeout 20 "$ADB" shell dumpsys activity activities 2>/dev/null | head -80 | tee -a "$LOG" || true
+  timeout 15 "$ADB" shell "ps -A | grep -E '$PKG|tharmesh'" 2>&1 | tee -a "$LOG" || true
+  if [ -f "$UI_DUMP" ]; then
+    log "last uiautomator dump ($(wc -c <"$UI_DUMP") bytes):"
+    tail -25 "$UI_DUMP" | tee -a "$LOG" || true
+    cp -f "$UI_DUMP" "$ART/stage-fail-${stage}-ui.xml" 2>/dev/null || true
+  else
+    log "last uiautomator dump: (none)"
+  fi
+}
+
+adb_shell_timeout() {
+  local limit="$1"
+  shift
+  timeout "$limit" "$ADB" shell "$@" >>"$LOG" 2>&1
+}
+
+adb_am_force_stop() {
+  adb_shell_timeout "$ADB_SHELL_TIMEOUT_SEC" am force-stop "$PKG" || {
+    fail "adb force-stop timeout"
+    return 1
+  }
+}
+
+# am start -W can hang forever when a debug smoke Activity calls finish() in onCreate (no launch-complete).
+adb_am_start_wait() {
+  local component="$1"
+  shift
+  local extra="$*"
+  local limit="$ADB_START_WAIT_TIMEOUT_SEC"
+  if timeout "$limit" "$ADB" shell am start -W -n "$component" $extra >>"$LOG" 2>&1; then
+    return 0
+  fi
+  local rc=$?
+  if [ "$rc" -eq 124 ]; then
+    fail "adb am start -W TIMEOUT component=$component limit=${limit}s (root_cause=launch_wait_no_complete)"
+    log "hint: self-finishing smoke activities must use adb_am_start_fire_and_forget"
+    return 1
+  fi
+  fail "adb am start -W failed rc=$rc component=$component"
+  return 1
+}
+
+adb_am_start_fire_and_forget() {
+  local component="$1"
+  shift
+  local extra="$*"
+  if timeout "$ADB_START_NO_WAIT_TIMEOUT_SEC" "$ADB" shell am start -n "$component" $extra >>"$LOG" 2>&1; then
+    return 0
+  fi
+  local rc=$?
+  if [ "$rc" -eq 124 ]; then
+    fail "adb am start TIMEOUT component=$component"
+    return 1
+  fi
+  fail "adb am start failed rc=$rc component=$component"
+  return 1
+}
+
+run_as_prefs_ls() {
+  timeout "$RUN_AS_TIMEOUT_SEC" "$ADB" shell "run-as $PKG ls shared_prefs" 2>/dev/null | tr -d '\r' || true
+}
+
+wait_for_recovery_stage_prefs() {
+  local limit="${1:-45}"
+  local i prefs
+  for i in $(seq 1 "$limit"); do
+    prefs=$(run_as_prefs_ls | grep tharmesh_recovery_rotation_stage || true)
+    if [ -n "$prefs" ]; then
+      log "staged prefs: $prefs (${i}s)"
+      return 0
+    fi
+    sleep 1
+  done
+  fail "recovery stage prefs missing after ${limit}s"
+  return 1
+}
+
+invoke_evidence_stage() {
+  local name="$1"
+  local fn="$2"
+  log "STAGE_BEGIN $name deadline=${EVIDENCE_STAGE_DEADLINE_SEC}s"
+  local runner
+  runner=$(mktemp)
+  {
+    echo '#!/usr/bin/env bash'
+    echo 'set -uo pipefail'
+    printf 'ROOT=%q\nSDK=%q\nADB=%q\nEMU=%q\nART=%q\nPKG=%q\nLOG=%q\nUI_DUMP=%q\nFAILED=%q\n' \
+      "$ROOT" "$SDK" "$ADB" "$EMU" "$ART" "$PKG" "$LOG" "$UI_DUMP" "$FAILED"
+    printf 'REBOOT_UI_MAX_ATTEMPTS=%q\nREBOOT_BOOT_MAX_SEC=%q\nBOOT_SETTLE_MAX_SEC=%q\nTHARMESH_STRICT_BOOT=%q\nAPI_LEVEL=%q\n' \
+      "$REBOOT_UI_MAX_ATTEMPTS" "$REBOOT_BOOT_MAX_SEC" "$BOOT_SETTLE_MAX_SEC" "${THARMESH_STRICT_BOOT:-0}" "$API_LEVEL"
+    printf 'EVIDENCE_STAGE_DEADLINE_SEC=%q\nADB_SHELL_TIMEOUT_SEC=%q\nADB_START_WAIT_TIMEOUT_SEC=%q\nADB_START_NO_WAIT_TIMEOUT_SEC=%q\nRUN_AS_TIMEOUT_SEC=%q\n' \
+      "$EVIDENCE_STAGE_DEADLINE_SEC" "$ADB_SHELL_TIMEOUT_SEC" "$ADB_START_WAIT_TIMEOUT_SEC" "$ADB_START_NO_WAIT_TIMEOUT_SEC" "$RUN_AS_TIMEOUT_SEC"
+    declare -f
+    echo "if $fn; then exit 0; fi"
+    echo 'exit 1'
+  } >"$runner"
+  if timeout --preserve-status --kill-after=15 "$EVIDENCE_STAGE_DEADLINE_SEC" bash "$runner" >>"$LOG" 2>&1; then
+    rm -f "$runner"
+    log "STAGE_END $name ok"
+    return 0
+  fi
+  local rc=$?
+  rm -f "$runner"
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    fail "STAGE_TIMEOUT $name (${EVIDENCE_STAGE_DEADLINE_SEC}s)"
+  else
+    fail "STAGE_FAIL $name exit=$rc"
+  fi
+  stage_fail_diagnostics "$name"
+  return 1
+}
+
+wait_for_boot_settled() {
+  local i anim
+  local max=$((BOOT_SETTLE_MAX_SEC / 2))
+  for i in $(seq 1 "$max"); do
+    if ! "$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1; then
+      sleep 2
+      continue
+    fi
+    anim=$("$ADB" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')
+    if [ "$anim" = "stopped" ] || [ -z "$anim" ]; then
+      log "boot settled (bootanim=$anim) after ${i}s"
+      "$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
+      "$ADB" shell wm dismiss-keyguard 2>>"$LOG" || true
+      sleep 2
+      return 0
+    fi
+    sleep 2
+  done
+  log "boot settled: TIMEOUT after ${BOOT_SETTLE_MAX_SEC}s (bootanim still running)"
+  emit_adb_diagnostics boot_settle_timeout
+  if [ "${THARMESH_STRICT_BOOT:-0}" = "1" ]; then
+    fail "BOOT_SETTLE_TIMEOUT"
+    return 1
+  fi
+  return 0
+}
+
+wait_for_ui() {
+  local needle="$1"
+  local label="${2:-$needle}"
+  local timeout="${3:-90}"
+  local i
+  for i in $(seq 1 "$timeout"); do
+    dismiss_system_anr
+    ui_dump_pull
+    if grep -qF "$needle" "$UI_DUMP" 2>/dev/null; then
+      log "ui ready ($label): ${i}s"
+      return 0
+    fi
+    sleep 1
+  done
+  fail "UI_WAIT_TIMEOUT label=$label timeout=${timeout}s"
+  log_activity_top
+  emit_adb_diagnostics "ui_wait_$label"
+  return 1
+}
+
+shot_after_ui() {
+  local name="$1"
+  local needle="$2"
+  local label="$3"
+  local timeout="${4:-60}"
+  wait_for_ui "$needle" "$label" "$timeout" || return 1
+  "$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
+  local sz attempt
+  for attempt in 1 2 3 4; do
+    sleep 2
+    "$ADB" exec-out screencap -p >"$ART/$name"
+    sz=$(stat -c%s "$ART/$name" 2>/dev/null || echo 0)
+    [ "$sz" -ge 45000 ] && break
+  done
+  if [ "$sz" -lt 22000 ]; then
+    fail "blank screenshot $name ($sz)"
+    return 1
+  fi
+  if [ "$sz" -lt 45000 ]; then
+    log "screenshot $name ($sz bytes) under desktop threshold; ui needle already matched"
+  else
+    log "screenshot $name ($sz bytes)"
+  fi
+  cp -f "$UI_DUMP" "$ART/${name%.png}-ui.xml"
+}
+
+db_pull_dir() {
+  local dir="$1"
+  mkdir -p "$dir"
+  for f in tharmesh.db tharmesh.db-wal tharmesh.db-shm; do
+    "$ADB" exec-out run-as "$PKG" cat "databases/$f" >"$dir/$f" 2>/dev/null || touch "$dir/$f"
+  done
+  sqlite3 "$dir/tharmesh.db" "PRAGMA wal_checkpoint(FULL);" >/dev/null 2>&1 || true
+}
+
+db_query_in() {
+  local sql="$1"
+  local dir="$2"
+  sqlite3 "$dir/tharmesh.db" "$sql" 2>/dev/null || echo "query_failed"
+}
+
+write_tsv() {
+  local dir="$1"
+  local file="$2"
+  local sql="$3"
+  local out
+  if ! out=$(sqlite3 "$dir/tharmesh.db" "$sql" 2>/dev/null); then
+    echo "query_failed" >"$dir/$file"
+    return 1
+  fi
+  printf '%s\n' "$out" >"$dir/$file"
+}
+
+db_snap() {
+  local tag="$1"
+  local dir="$ART/db-snapshot-$tag"
+  mkdir -p "$dir"
+  db_pull_dir "$dir"
+  write_tsv "$dir" messages.tsv "select id,body,status from messages order by id;" || fail "snapshot $tag messages"
+  write_tsv "$dir" contacts.tsv "select userId,displayName from contacts order by userId;" || fail "snapshot $tag contacts"
+  write_tsv "$dir" peer_identity.tsv "select userId,fingerprint,verified from peer_identity order by userId;" || fail "snapshot $tag peers"
+  "$ADB" shell run-as "$PKG" cat shared_prefs/tharmesh_user_prefs.xml 2>/dev/null >"$dir/user_prefs.xml" || echo query_failed >"$dir/user_prefs.xml"
+  sed -n 's/.*identity_fingerprint">\([^<]*\).*/\1/p' "$dir/user_prefs.xml" | head -1 >"$dir/mesh_fingerprint.txt"
+  [ -s "$dir/mesh_fingerprint.txt" ] || echo query_failed >"$dir/mesh_fingerprint.txt"
+  log "snapshot $tag mesh_fp=$(cat "$dir/mesh_fingerprint.txt") lines=$(wc -l <"$dir/messages.tsv")"
+}
+
+assert_persistence_fixtures() {
+  local dir="$1"
+  local db="$dir/tharmesh.db"
+  local q extra cc pi msg ids bodies
+  extra=$(sqlite3 "$db" "select count(*) from contacts where userId not in ('peer-evidence-01','peer-evidence-02');" 2>/dev/null) || extra=query_failed
+  assert_not_query_failed contacts_extra "$extra" || return 1
+  [ "$extra" = "0" ] || { fail "unexpected contact rows (legacy v6 peers must be absent); extra=$extra"; return 1; }
+  cc=$(sqlite3 "$db" "select count(*) from contacts where userId='peer-evidence-01' and displayName='Evidence Peer A';" 2>/dev/null) || cc=query_failed
+  assert_not_query_failed contact_a "$cc" || return 1
+  [ "$cc" = "1" ] || { fail "missing contact peer-evidence-01 / Evidence Peer A"; return 1; }
+  cc=$(sqlite3 "$db" "select count(*) from contacts where userId='peer-evidence-02' and displayName='Evidence Peer B';" 2>/dev/null) || cc=query_failed
+  [ "$cc" = "1" ] || { fail "missing contact peer-evidence-02 / Evidence Peer B"; return 1; }
+  extra=$(sqlite3 "$db" "select count(*) from peer_identity where userId not in ('peer-evidence-01','peer-evidence-02');" 2>/dev/null) || extra=query_failed
+  [ "$extra" = "0" ] || { fail "unexpected peer_identity rows; extra=$extra"; return 1; }
+  pi=$(sqlite3 "$db" "select count(*) from peer_identity where userId in ('peer-evidence-01','peer-evidence-02') and verified=1;" 2>/dev/null) || pi=query_failed
+  [ "$pi" = "2" ] || { fail "expected 2 verified peer_identity rows for evidence peers"; return 1; }
+  msg=$(sqlite3 "$db" "select count(*) from messages;" 2>/dev/null) || msg=query_failed
+  [ "$msg" = "3" ] || { fail "expected exactly 3 messages; got $msg"; return 1; }
+  extra=$(sqlite3 "$db" "select count(*) from messages where peerUserId not in ('peer-evidence-01','peer-evidence-02');" 2>/dev/null) || extra=query_failed
+  [ "$extra" = "0" ] || { fail "unexpected message peerUserId rows; extra=$extra"; return 1; }
+  for body in OFFLINE_PERSISTENCE_SEED_A1 OFFLINE_PERSISTENCE_SEED_A2 OFFLINE_PERSISTENCE_SEED_B1; do
+    ids=$(sqlite3 "$db" "select count(*) from messages where body='$body';" 2>/dev/null) || ids=query_failed
+    [ "$ids" = "1" ] || { fail "missing message body $body"; return 1; }
+  done
+  ids=$(sqlite3 "$db" "select count(*) from messages where body='OFFLINE_PERSISTENCE_SEED_A1' and peerUserId='peer-evidence-01';" 2>/dev/null) || ids=query_failed
+  [ "$ids" = "1" ] || { fail "OFFLINE_PERSISTENCE_SEED_A1 must reference peer-evidence-01"; return 1; }
+  ids=$(sqlite3 "$db" "select count(*) from messages where body='OFFLINE_PERSISTENCE_SEED_A2' and peerUserId='peer-evidence-01';" 2>/dev/null) || ids=query_failed
+  [ "$ids" = "1" ] || { fail "OFFLINE_PERSISTENCE_SEED_A2 must reference peer-evidence-01"; return 1; }
+  ids=$(sqlite3 "$db" "select count(*) from messages where body='OFFLINE_PERSISTENCE_SEED_B1' and peerUserId='peer-evidence-02';" 2>/dev/null) || ids=query_failed
+  [ "$ids" = "1" ] || { fail "OFFLINE_PERSISTENCE_SEED_B1 must reference peer-evidence-02"; return 1; }
+  legacy=$(sqlite3 "$db" "select count(*) from messages where body like 'LEGACY_V6%';" 2>/dev/null) || legacy=0
+  [ "$legacy" = "0" ] || { fail "LEGACY_V6 seed messages must not be present"; return 1; }
+  legacy=$(sqlite3 "$db" "select count(*) from contacts where userId in ('peer-a','peer-b');" 2>/dev/null) || legacy=0
+  [ "$legacy" = "0" ] || { fail "legacy v6 contacts peer-a/peer-b must not be present"; return 1; }
+  bodies=$(sqlite3 "$db" "select body from messages order by body;" 2>/dev/null | tr '\n' ',' )
+  log "fixture ok: messages=[$bodies] contacts=peer-evidence-01,peer-evidence-02"
+  return 0
+}
+
+compare_snapshots() {
+  local before="$ART/db-snapshot-$1"
+  local after="$ART/db-snapshot-$2"
+  for f in messages.tsv contacts.tsv peer_identity.tsv mesh_fingerprint.txt; do
+  if [ ! -f "$before/$f" ] || [ ! -f "$after/$f" ]; then
+      fail "missing snapshot file $f"
+      continue
+    fi
+    if ! diff -q "$before/$f" "$after/$f" >>"$LOG" 2>&1; then
+      fail "snapshot mismatch $f"
+      diff "$before/$f" "$after/$f" | head -15 | tee -a "$LOG" || true
+    else
+      log "snapshot ok $f"
+    fi
+  done
+}
+
+step_offline_persistence() {
+  log "=== offline room seed + persistence ==="
+  "$ADB" logcat -c >>"$LOG" 2>&1 || true
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.OfflineRoomPersistenceSmokeActivity" || return 1
+  sleep 3
+  local dir="/tmp/tharmesh-pre"
+  db_pull_dir "$dir"
+  local MSG CONTACTS VERIFIED
+  MSG=$(db_query_in "select count(*) from messages where body like 'OFFLINE_PERSISTENCE_SEED_%';" "$dir")
+  CONTACTS=$(db_query_in "select count(*) from contacts;" "$dir")
+  VERIFIED=$(db_query_in "select count(*) from peer_identity where verified=1;" "$dir")
+  assert_not_query_failed messages "$MSG" || return 1
+  assert_not_query_failed contacts "$CONTACTS" || return 1
+  assert_not_query_failed verified "$VERIFIED" || return 1
+  assert_persistence_fixtures "$dir" || return 1
+  log "pre-kill: messages=$MSG contacts=$CONTACTS verified=$VERIFIED"
+  [ "$MSG" = "3" ] || { fail "expected 3 messages"; return 1; }
+  [ "$CONTACTS" = "2" ] || { fail "expected 2 contacts"; return 1; }
+  [ "$VERIFIED" = "2" ] || { fail "expected 2 verified peers"; return 1; }
+  db_snap pre_kill
+  adb_am_force_stop || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || true
+  sleep 5
+  for _ in 1 2 3; do dismiss_system_anr; done
+  shot_after_ui "04-chats-after-seed.png" "Evidence Peer A" "chats_seed" 90 || return 1
+  grep -qF "TharMesh" "$UI_DUMP" || { fail "missing TharMesh title"; return 1; }
+  grep -qF "Chats" "$UI_DUMP" || { fail "missing Chats nav"; return 1; }
+
+  "$ADB" shell svc wifi disable >>"$LOG" 2>&1 || true
+  "$ADB" shell svc data disable >>"$LOG" 2>&1 || true
+  adb_am_force_stop || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || return 1
+  db_snap post_relaunch
+  compare_snapshots pre_kill post_relaunch || return 1
+  wait_for_ui "Evidence Peer A" "chats_a" 60 || return 1
+  wait_for_ui "Evidence Peer B" "chats_b" 60 || return 1
+  wait_for_ui "OFFLINE_PERSISTENCE_SEED_A2" "preview" 60 || return 1
+  shot_after_ui "05-offline-chats-relaunch.png" "Evidence Peer A" "chats_shot" 30 || return 1
+  log_activity_top
+  log_fatal || return 1
+}
+
+step_reboot_durability() {
+  log "=== emulator reboot durability ==="
+  if ! "$ADB" reboot 2>>"$LOG"; then
+    log "emulator reboot: NOT EXECUTED (adb reboot unsupported on this AVD)"
+    return 0
+  fi
+  local i boot_ok=0 max=$((REBOOT_BOOT_MAX_SEC / 2))
+  for i in $(seq 1 "$max"); do
+    if "$ADB" wait-for-device shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1; then
+      log "boot_completed after reboot: $((i * 2))s"
+      boot_ok=1
+      break
+    fi
+    sleep 2
+  done
+  if [ "$boot_ok" -ne 1 ]; then
+    fail "REBOOT_BOOT_TIMEOUT ${REBOOT_BOOT_MAX_SEC}s"
+    emit_adb_diagnostics reboot_boot
+    return 1
+  fi
+  wait_for_boot_settled || return 1
+  sleep 10
+  "$ADB" shell input keyevent KEYCODE_WAKEUP >>"$LOG" 2>&1 || true
+  "$ADB" shell input keyevent KEYCODE_BACK >>"$LOG" 2>&1 || true
+  "$ADB" shell svc wifi disable >>"$LOG" 2>&1 || true
+  "$ADB" shell svc data disable >>"$LOG" 2>&1 || true
+  adb_am_force_stop || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || return 1
+  db_snap post_reboot
+  compare_snapshots pre_kill post_reboot || return 1
+  log "reboot durability TSV match: PASS"
+  wait_for_boot_settled
+  local attempt reboot_needle reboot_ok=0
+  for attempt in $(seq 1 "$REBOOT_UI_MAX_ATTEMPTS"); do
+    log "post-reboot UI attempt $attempt/$REBOOT_UI_MAX_ATTEMPTS"
+    for _ in 1 2 3 4; do dismiss_system_anr; sleep 1; done
+    adb_am_force_stop || true
+    adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || true
+    sleep 6
+    reboot_needle="Evidence Peer A"
+    if wait_for_ui "$reboot_needle" "chats_post_reboot" 50; then
+      reboot_ok=1
+      break
+    fi
+    reboot_needle="OFFLINE_PERSISTENCE_SEED_A2"
+    if wait_for_ui "$reboot_needle" "chats_post_reboot_seed" 50; then
+      reboot_ok=1
+      break
+    fi
+    wait_for_boot_settled
+  done
+  if [ "$reboot_ok" -ne 1 ]; then
+    fail "post-reboot UI assertion failed after $REBOOT_UI_MAX_ATTEMPTS attempts"
+    return 1
+  fi
+  shot_after_ui "06-offline-chats-post-reboot.png" "$reboot_needle" "reboot_chats" 60 || return 1
+  log_fatal || return 1
+}
+
+step_fake_provision() {
+  log "=== fake provisioning ==="
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.FakeProvisionSmokeActivity" || return 1
+  sleep 2
+  shot_after_ui "01-fake-provision.png" "Account security" "provision" 60
+}
+
+step_provision_relaunch() {
+  log "=== provision relaunch ==="
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.ProvisionRelaunchSmokeActivity" || return 1
+  sleep 2
+  shot_after_ui "02-provision-relaunch.png" "Account security" "relaunch" 60
+}
+
+step_recovery() {
+  log "=== recovery stage death ==="
+  log "recovery_harness: avoid am start -W on instant-finish smoke (launch-complete wait can hang indefinitely)"
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.RecoveryStageDeathSmokeActivity" || return 1
+  sleep 2
+  wait_for_recovery_stage_prefs 60 || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" --es screen rotate_recovery || return 1
+  shot_after_ui "03-recovery-rotate.png" "Rotate recovery key" "recovery" 45
+}
+
+invoke_evidence_stage offline_persistence step_offline_persistence || FAILED=1
+invoke_evidence_stage reboot_durability step_reboot_durability || FAILED=1
+invoke_evidence_stage fake_provision step_fake_provision || FAILED=1
+invoke_evidence_stage provision_relaunch step_provision_relaunch || FAILED=1
+invoke_evidence_stage recovery_stage_death step_recovery || FAILED=1
+
+step_layout_l10n() {
+  log "=== layout l10n light/dark (debug preview) ==="
+  for spec in "account:false:layout-account-light.png" "account:true:layout-account-dark.png" \
+    "rotate_recovery:false:layout-rotate-light.png" "rotate_recovery:true:layout-rotate-dark.png"; do
+    IFS=: read -r screen night out <<<"$spec"
+    adb_am_force_stop || return 1
+    adb_am_start_wait "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
+      --es screen "$screen" --ez night "$night" || return 1
+    local needle="Rotate recovery key"
+    if [ "$screen" = "account" ]; then
+      needle="Create account"
+    fi
+    shot_after_ui "$out" "$needle" "$out" 30 || return 1
+  done
+  local l10n_ok=0
+  for pair in "ur:layout-account-ur.png:اکاؤنٹ بنائیں" "sd:layout-account-sd.png:اڪائونٽ ٺاهيو"; do
+    IFS=: read -r locale out needle <<<"$pair"
+    adb_am_force_stop || continue
+    adb_am_start_wait "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
+      --es screen account --ez night false --es locale "$locale" || continue
+    if shot_after_ui "$out" "$needle" "$locale" 45; then
+      l10n_ok=$((l10n_ok + 1))
+    fi
+  done
+  if [ "$l10n_ok" -lt 2 ]; then
+    fail "ur/sd emulator layouts: need 2/2 uiautomator passes ($l10n_ok captured)"
+    return 1
+  fi
+  log "ur/sd emulator layouts: PASS (2/2)"
+}
+
+invoke_evidence_stage layout_l10n step_layout_l10n || FAILED=1
+
+if [ "$FAILED" -ne 0 ]; then
+  log "RESULT=FAIL"
+  exit 1
+fi
+log "RESULT=PASS"
+exit 0

@@ -234,6 +234,15 @@ The screen also includes:
 
 ---
 
+## Accounts
+
+Cloud accounts are optional. The mesh does not call them. The design is in
+[docs/identity-lifecycle.md](docs/identity-lifecycle.md). The backend choice
+(Supabase GoTrue, fail closed when unconfigured) is in
+[docs/auth-backend.md](docs/auth-backend.md). Setup that is **not** in this
+repository is listed in [docs/account-setup.md](docs/account-setup.md). Live
+sign-in is not configured here.
+
 ## Known Limitations
 
 - **Android only.** TharMesh depends on Google Nearby Connections, which is Android-specific. There is no iOS or desktop client.

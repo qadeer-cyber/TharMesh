@@ -1,5 +1,6 @@
 package com.tharmesh.ui.devices
 
+import com.tharmesh.ui.theme.Appearance
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import tharmesh.app.R
@@ -12,6 +13,7 @@ import tharmesh.app.R
  */
 class DevicesActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_devices)
         if (savedInstanceState == null) {

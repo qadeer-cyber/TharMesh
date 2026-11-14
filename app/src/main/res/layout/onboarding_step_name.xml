@@ -49,9 +49,9 @@
 
     <Button
         android:id="@+id/onb_pick_photo"
-        style="?android:attr/borderlessButtonStyle"
+        style="@style/TmButton.Ghost"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:text="@string/onb_name_pick_photo" />
 
     <EditText
@@ -59,10 +59,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
+        android:background="@drawable/bg_input"
         android:hint="@string/onb_name_hint"
         android:imeOptions="actionDone"
         android:inputType="textPersonName"
         android:maxLength="32"
+        android:minHeight="48dp"
+        android:padding="12dp"
         android:textColor="?attr/tmTextPrimary"
         android:textColorHint="?attr/tmTextSecondary" />
 
@@ -75,7 +78,7 @@
         android:id="@+id/onb_name_continue"
         style="@style/TmButton.Primary"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:layout_marginTop="16dp"
         android:enabled="false"
         android:text="@string/onb_continue" />

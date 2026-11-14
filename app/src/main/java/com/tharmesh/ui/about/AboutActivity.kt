@@ -4,6 +4,7 @@
 // distribution, or use is strictly prohibited. See LICENSE for details.
 package com.tharmesh.ui.about
 
+import com.tharmesh.ui.theme.Appearance
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.content.ActivityNotFoundException
@@ -49,6 +50,7 @@ class AboutActivity : AppCompatActivity() {
     private var heroHaloAnim: ObjectAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_about)
 
