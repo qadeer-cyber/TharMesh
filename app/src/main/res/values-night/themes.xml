@@ -18,6 +18,8 @@
         <item name="colorOnSurface">@color/tm_dark_text_primary</item>
         <item name="android:colorBackground">@color/tm_dark_bg</item>
         <item name="android:textColorPrimary">@color/tm_dark_text_primary</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.TharMesh.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.TharMesh.Dialog</item>
         <item name="android:textColorSecondary">@color/tm_dark_text_secondary</item>
         <item name="android:windowBackground">@color/tm_dark_bg</item>
         <item name="android:statusBarColor" tools:targetApi="l">@color/tm_dark_bg</item>
@@ -75,5 +77,30 @@
         <item name="tmDotSearching">@color/tm_dark_dot_searching</item>
         <item name="tmDotOffline">@color/tm_dark_dot_offline</item>
         <item name="tmDotDegraded">@color/tm_dark_dot_degraded</item>
+    </style>
+
+    <style name="Theme.TharMesh.Rose" parent="Theme.TharMesh">
+        <item name="colorPrimary">@color/tm_rose_dark_primary</item>
+        <item name="colorOnPrimary">@color/tm_rose_dark_bg</item>
+        <item name="colorSecondary">@color/tm_rose_dark_primary</item>
+        <item name="android:colorBackground">@color/tm_rose_dark_bg</item>
+        <item name="android:windowBackground">@color/tm_rose_dark_bg</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/tm_rose_dark_bg</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@color/tm_rose_dark_bg</item>
+        <item name="android:textColorPrimary">@color/tm_rose_dark_text</item>
+        <item name="tmBg">@color/tm_rose_dark_bg</item>
+        <item name="tmTextPrimary">@color/tm_rose_dark_text</item>
+        <item name="tmTextSecondary">@color/tm_rose_primary_soft</item>
+        <item name="tmNeonCyan">@color/tm_rose_dark_primary</item>
+        <item name="tmNeonGreen">@color/tm_rose_dark_primary</item>
+        <item name="tmNeonGreenDim">@color/tm_rose_primary</item>
+        <item name="tmBubbleTextMe">@color/tm_rose_dark_bg</item>
+        <item name="tmBubbleMeStart">@color/tm_rose_dark_primary</item>
+        <item name="tmBubbleMeEnd">@color/tm_rose_dark_primary</item>
+        <item name="tmUnreadBadge">@color/tm_rose_dark_primary</item>
+        <item name="tmTickRead">@color/tm_rose_dark_primary</item>
+        <item name="tmGradientAccentStart">@color/tm_rose_dark_primary</item>
+        <item name="tmGradientAccentEnd">@color/tm_rose_dark_primary</item>
+        <item name="tmDotConnected">@color/tm_rose_dark_primary</item>
     </style>
 </resources>

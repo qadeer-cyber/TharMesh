@@ -90,6 +90,9 @@ class NewChatSheet : BottomSheetDialogFragment() {
         view.findViewById<View>(R.id.new_chat_action_userid).setOnClickListener {
             promptUserIdAdd()
         }
+        view.findViewById<View>(R.id.new_chat_action_username).setOnClickListener {
+            promptUsernameSearch()
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -125,6 +128,69 @@ class NewChatSheet : BottomSheetDialogFragment() {
         }
     }
 
+    private fun promptUsernameSearch() {
+        val ctx = requireContext()
+        val input = EditText(ctx)
+        input.hint = getString(R.string.new_chat_username_hint)
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.new_chat_action_search_username)
+            .setMessage(R.string.new_chat_directory_not_nearby)
+            .setView(input)
+            .setPositiveButton(R.string.dialog_start) { _, _ ->
+                val query = input.text?.toString()?.trim().orEmpty()
+                if (query.isEmpty()) return@setPositiveButton
+                val local = adapter.current().filter {
+                    it.displayName.contains(query, ignoreCase = true) ||
+                        it.userId.contains(query, ignoreCase = true)
+                }
+                if (local.size == 1) {
+                    openChat(local[0].userId, local[0].displayName)
+                    return@setPositiveButton
+                }
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        com.tharmesh.account.DirectoryLookup.search(
+                            com.tharmesh.account.UrlHttpTransport(),
+                            tharmesh.app.BuildConfig.SUPABASE_URL,
+                            tharmesh.app.BuildConfig.SUPABASE_ANON_KEY,
+                            com.tharmesh.account.CloudSessionStore.readAccessToken(requireContext()),
+                            query
+                        )
+                    }
+                    when (result) {
+                        is com.tharmesh.account.DirectoryLookup.Result.Unavailable -> {
+                            android.widget.Toast.makeText(
+                                ctx,
+                                if (result.reason == "cloud_auth_not_configured") {
+                                    getString(R.string.new_chat_directory_unavailable)
+                                } else {
+                                    getString(R.string.account_error_network)
+                                },
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        is com.tharmesh.account.DirectoryLookup.Result.Hits -> {
+                            if (result.people.isEmpty()) {
+                                android.widget.Toast.makeText(
+                                    ctx,
+                                    R.string.new_chat_directory_empty,
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                val person = result.people.first()
+                                withContext(Dispatchers.IO) {
+                                    repository.addContact(person.accountId, person.displayName)
+                                }
+                                openChat(person.accountId, person.displayName)
+                            }
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
     private fun promptUserIdAdd() {
         val ctx = requireContext()
         val input = EditText(ctx)
@@ -135,6 +201,14 @@ class NewChatSheet : BottomSheetDialogFragment() {
             .setPositiveButton(R.string.dialog_start) { _, _ ->
                 val userId = input.text?.toString()?.trim().orEmpty()
                 if (userId.isEmpty()) return@setPositiveButton
+                if (com.tharmesh.identity.ContactIdentity.isTruncatedMeshId(userId)) {
+                    android.widget.Toast.makeText(
+                        ctx,
+                        R.string.identity_invalid_toast,
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    return@setPositiveButton
+                }
                 viewLifecycleOwner.lifecycleScope.launch {
                     withContext(Dispatchers.IO) { repository.addContact(userId) }
                     openChat(userId, userId)
@@ -186,6 +260,8 @@ class NewChatSheet : BottomSheetDialogFragment() {
             items.addAll(list)
             notifyDataSetChanged()
         }
+
+        fun current(): List<ContactEntity> = items.toList()
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val v = LayoutInflater.from(parent.context).inflate(R.layout.item_contact, parent, false)

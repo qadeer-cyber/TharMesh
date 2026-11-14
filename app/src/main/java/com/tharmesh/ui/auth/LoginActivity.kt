@@ -5,31 +5,35 @@
 
 package com.tharmesh.ui.auth
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import tharmesh.app.BuildConfig
 import tharmesh.app.R
-import com.tharmesh.TharMeshApp
+import com.tharmesh.account.AuthBackend
+import com.tharmesh.account.RegistrationGate
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
-import com.tharmesh.data.UserProfile
+import com.tharmesh.ui.account.AccountFlowActivity
 import com.tharmesh.ui.main.MainActivity
 import com.tharmesh.ui.onboarding.OnboardingActivity
 
 /**
- * First-run gate. If a profile already exists, skip straight to [MainActivity]. Otherwise
- * show "Continue with Google" (if `BuildConfig.GOOGLE_WEB_CLIENT_ID` is configured) and
- * "Continue anonymously" (always available — kept so the app still runs without OAuth
- * credentials during development).
+ * First-run gate. An existing local profile, including older installs that
+ * never had a cloud account, goes straight in. A fresh install must register.
+ * If the account server is not configured, this screen says so and does not
+ * create a local stand-in account.
  */
 class LoginActivity : AppCompatActivity() {
 
     private val googleAuth by lazy { GoogleAuthService(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         if (UserPrefs.hasProfile(this)) {
             goToNext()
@@ -40,82 +44,43 @@ class LoginActivity : AppCompatActivity() {
         val status: TextView = findViewById(R.id.login_status)
         val googleBtn: Button = findViewById(R.id.login_google_button)
         val anonBtn: Button = findViewById(R.id.login_anonymous_button)
-
-        if (googleAuth.isAvailable) {
-            googleBtn.isEnabled = true
-            status.text = getString(R.string.login_ready)
-            // Silent sign-in if the user was already signed in via Google earlier.
-            val cached = googleAuth.lastSignedInAccount(this)
-            if (cached != null) {
-                val sub = cached.id
-                if (sub != null) {
-                    finishWith(
-                        UserProfile(
-                            userId = UserPrefs.userIdFromGoogleSub(sub),
-                            username = cached.displayName?.takeIf { it.isNotBlank() }
-                                ?: (cached.email ?: "user"),
-                            email = cached.email,
-                            avatarUrl = cached.photoUrl?.toString(),
-                            authProvider = UserPrefs.PROVIDER_GOOGLE
-                        )
-                    )
-                    return
-                }
-            }
-        } else {
-            googleBtn.isEnabled = false
-            status.text = getString(R.string.login_missing_oauth)
-        }
-
-        googleBtn.setOnClickListener {
-            val intent = googleAuth.silentSignInIntent()
-            if (intent != null) {
-                startActivityForResult(intent, REQUEST_GOOGLE_SIGN_IN)
-            } else {
-                status.text = getString(R.string.login_missing_oauth)
-            }
-        }
-
+        val createBtn: Button = findViewById(R.id.login_create_button)
+        val signInBtn: Button = findViewById(R.id.login_signin_button)
+        val cloudReady = AuthBackend.configured(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+        val gate = RegistrationGate.decide(hasExistingProfile = false, cloudConfigured = cloudReady)
+        anonBtn.visibility = android.view.View.GONE
         anonBtn.setOnClickListener {
-            val profile = UserPrefs.ensureProfile(this)
-            finishWith(profile.copy(authProvider = UserPrefs.PROVIDER_ANONYMOUS))
+            status.setText(R.string.login_registration_required)
         }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_GOOGLE_SIGN_IN) {
-            val result = googleAuth.profileFromIntent(data)
-            val status: TextView = findViewById(R.id.login_status)
-            result.onSuccess { profile ->
-                finishWith(profile)
-            }.onFailure { e ->
-                status.text = getString(R.string.login_failed_fmt, e.message ?: "")
+        if (gate == RegistrationGate.Decision.BLOCKED_UNCONFIGURED) {
+            status.setText(R.string.account_error_not_configured)
+            val blocked = android.view.View.OnClickListener {
+                status.setText(R.string.account_error_not_configured)
             }
+            createBtn.setOnClickListener(blocked)
+            signInBtn.setOnClickListener(blocked)
+            googleBtn.setOnClickListener(blocked)
+            return
         }
-    }
-
-    private fun finishWith(profile: UserProfile) {
-        UserPrefs.saveProfile(this, profile)
-        // Stage 8.4 \u2014 do NOT start the mesh *transport* here (i.e. don't
-        // call ensureMeshStarted): if a returning user has Nearby
-        // permissions already granted but has not yet accepted the
-        // current Terms version, starting the transport would mean we
-        // begin advertising / discovering / processing inbound bundles
-        // before the compliance gate. The transport is now started
-        // exclusively in [TermsActivity.routeOnward] (via the targeted
-        // activities) and [MainActivity.onCreate], both of which only
-        // run once [UserPrefs.hasAcceptedCurrentTerms] is true.
-        //
-        // We DO still need to construct the mesh graph (engine,
-        // repository, etc.) here so that downstream screens like
-        // [com.tharmesh.ui.onboarding.OnboardingActivity] can access
-        // [TharMeshApp.repository] during onboarding step 3 (QR scan).
-        // [TharMeshApp.ensureMeshReady] is permission-safe and
-        // transport-safe \u2014 it only constructs objects in memory
-        // and starts no advertising / discovery.
-        TharMeshApp.get().ensureMeshReady()
-        goToNext()
+        createBtn.setOnClickListener {
+            val pending = com.tharmesh.account.PendingSignupStore.read(this)
+            val screen = if (pending != null) {
+                AccountFlowActivity.Screen.VERIFY_EMAIL
+            } else {
+                AccountFlowActivity.Screen.EMAIL_OTP
+            }
+            startActivity(AccountFlowActivity.intent(this, screen))
+        }
+        signInBtn.setOnClickListener {
+            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.SIGN_IN))
+        }
+        if (!googleAuth.isAvailable) {
+            googleBtn.isEnabled = false
+            status.setText(R.string.login_missing_oauth)
+        }
+        googleBtn.setOnClickListener {
+            startActivity(AccountFlowActivity.intent(this, AccountFlowActivity.Screen.GOOGLE))
+        }
     }
 
     /**
@@ -148,7 +113,4 @@ class LoginActivity : AppCompatActivity() {
         finish()
     }
 
-    companion object {
-        private const val REQUEST_GOOGLE_SIGN_IN = 7001
-    }
 }

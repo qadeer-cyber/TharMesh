@@ -438,6 +438,17 @@ class MessageRepository(
         }
     }
 
+    /**
+     * Removes the conversation and its messages on this phone.
+     * The contact row and the QR trust pin are kept.
+     */
+    suspend fun deleteLocalChat(peerUserId: String) {
+        runIo {
+            db.messageDao().deleteByPeer(peerUserId)
+            db.conversationDao().deleteByUserId(peerUserId)
+        }
+    }
+
     suspend fun addContact(userId: String, displayName: String = userId): ContactEntity {
         // Stage 8.3 — refuse to (re-)create a contact row for a blocked
         // peer. This covers QR scan, manual invite, nearby pick, and

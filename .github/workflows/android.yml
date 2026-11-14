@@ -7,22 +7,65 @@ name: Android CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, cursor/universal-account-0939]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  postgres:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/universal-account-0939'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      THARMESH_PG_USER: postgres
+      THARMESH_PG_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Run Category 3 Postgres tests
+        run: bash .github/scripts/ci-postgres-tests.sh
+
   build:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || vars.THARMESH_QA_SIGNING_ENABLED == 'true'
     runs-on: ubuntu-22.04
 
     env:
       GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
       ANDROID_COMPILE_SDK: "30"
       ANDROID_BUILD_TOOLS: "30.0.3"
+      # Public client values only. Never a service-role key. Empty is a valid fail-closed build.
+      # This repository has no GitHub Environment (Actions environments list is empty),
+      # so this job does not set `environment:`. Environment secrets would be invisible
+      # until a real environment name is declared. Repository secrets win over variables.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+      GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +113,65 @@ jobs:
           test -x "$JAVA_HOME/bin/java"
           "$JAVA_HOME/bin/java" -version 2>&1 | grep -q '"11' || { echo "JAVA_HOME is not JDK 11"; exit 1; }
 
+      - name: Report whether cloud client values are present
+        env:
+          SECRET_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VAR_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SECRET_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VAR_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          SECRET_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          VAR_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          # Print only present/absent. Do not echo the values.
+          source_of() {
+            key="$1"
+            secret_val="$2"
+            var_val="$3"
+            if [ -n "$secret_val" ]; then
+              echo "${key}_repository_secret=present"
+            else
+              echo "${key}_repository_secret=absent"
+            fi
+            if [ -n "$var_val" ]; then
+              echo "${key}_repository_variable=present"
+            else
+              echo "${key}_repository_variable=absent"
+            fi
+          }
+          source_of SUPABASE_URL "$SECRET_SUPABASE_URL" "$VAR_SUPABASE_URL"
+          source_of SUPABASE_ANON_KEY "$SECRET_SUPABASE_ANON_KEY" "$VAR_SUPABASE_ANON_KEY"
+          source_of GOOGLE_WEB_CLIENT_ID "$SECRET_GOOGLE_WEB_CLIENT_ID" "$VAR_GOOGLE_WEB_CLIENT_ID"
+          echo "github_environment_on_job=none"
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            echo "supabase_configured=true"
+          else
+            echo "supabase_configured=false"
+          fi
+          if [ -n "$GOOGLE_WEB_CLIENT_ID" ]; then
+            echo "google_web_client_configured=true"
+          else
+            echo "google_web_client_configured=false"
+          fi
+
+      - name: Supabase auth health
+        if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''
+        run: |
+          code=$(curl -sS -o /tmp/supabase-auth-health.json -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL%/}/auth/v1/health")
+          echo "auth_health_http=${code}"
+          echo "live_signup_executed=false"
+          rm -f /tmp/supabase-auth-health.json
+          settings=$(curl -sS -o /tmp/supabase-auth-settings.json -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL%/}/auth/v1/settings" || true)
+          echo "auth_settings_http=${settings}"
+          python3 .github/scripts/auth-settings-flags.py /tmp/supabase-auth-settings.json
+          rm -f /tmp/supabase-auth-settings.json
+
+      - name: Debug certificate fingerprint
+        run: keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android | grep -E 'SHA1:|SHA256:'
+
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
 
@@ -93,3 +195,64 @@ jobs:
             app/build/reports/tests/testDebugUnitTest
             app/build/test-results/testDebugUnitTest
           if-no-files-found: ignore
+
+
+  signed-qa:
+    if: github.event_name == 'push' && github.repository == 'qadeer-cyber/TharMesh' && github.ref == 'refs/heads/cursor/universal-account-0939' && vars.THARMESH_QA_SIGNING_ENABLED == 'true'
+    needs: build
+    environment: tharmesh-qa-signing
+    runs-on: ubuntu-22.04
+    env:
+      ANDROID_COMPILE_SDK: "30"
+      ANDROID_BUILD_TOOLS: "30.0.3"
+      SUPABASE_URL: ${{ vars.SUPABASE_URL || secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
+      GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID || secrets.GOOGLE_WEB_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # sdkmanager shipped with current GitHub-hosted runners is JDK-17
+      # bytecode, so it will not load under a JDK 11 JVM. Install JDK 17
+      # FIRST, run setup-android while it is active, then overwrite JAVA_HOME
+      # with JDK 11 for the actual build (Gradle 6.5 / AGP 4.1.3 won't start
+      # on JDK 17+). setup-java@v4 writes JAVA_HOME to the job env, so the
+      # later step wins.
+      - name: Set up JDK 17 (for sdkmanager only)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+
+      - name: Set up JDK 11 (for Gradle + AGP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Build and verify stable QA APK
+        env:
+          THARMESH_QA_KEYSTORE_BASE64: ${{ secrets.THARMESH_QA_KEYSTORE_BASE64 }}
+          THARMESH_QA_STORE_PASSWORD: ${{ secrets.THARMESH_QA_STORE_PASSWORD }}
+          THARMESH_QA_KEY_ALIAS: ${{ secrets.THARMESH_QA_KEY_ALIAS }}
+          THARMESH_QA_KEY_PASSWORD: ${{ secrets.THARMESH_QA_KEY_PASSWORD }}
+          THARMESH_QA_CERT_SHA256: ${{ vars.THARMESH_QA_CERT_SHA256 }}
+        run: bash .github/scripts/build-qa-apk.sh
+
+      - name: Upload verified QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tharmesh-app-qa
+          path: |
+            app/build/outputs/apk/qa/*.apk
+            app/build/outputs/apk/qa/certificate-fingerprints.txt
+          if-no-files-found: error

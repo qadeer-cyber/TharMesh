@@ -3,6 +3,7 @@
 
 package com.tharmesh.ui.legal
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -40,6 +41,7 @@ import tharmesh.app.R
 class TermsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_terms_gate)
 

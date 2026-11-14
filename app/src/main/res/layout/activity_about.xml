@@ -18,13 +18,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient"
+    android:background="?attr/tmBg"
     android:orientation="vertical">
 
     <!-- Top bar: back arrow + screen title. Mirrors the rest of Settings. -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="64dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="4dp"
@@ -32,8 +32,8 @@
 
         <ImageView
             android:id="@+id/about_back"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/profile_back"
             android:padding="10dp"
@@ -125,7 +125,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
-                android:background="@drawable/bg_glass_floating"
+                android:background="@drawable/bg_panel"
                 android:gravity="center_horizontal"
                 android:orientation="vertical"
                 android:padding="20dp">
@@ -205,7 +205,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:background="@drawable/bg_glass_floating"
+                android:background="@drawable/bg_panel"
                 android:orientation="vertical"
                 android:padding="20dp">
 
@@ -234,7 +234,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:background="@drawable/bg_glass_floating"
+                android:background="@drawable/bg_panel"
                 android:orientation="vertical"
                 android:padding="20dp">
 
@@ -331,7 +331,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:background="@drawable/bg_glass_floating"
+                android:background="@drawable/bg_panel"
                 android:orientation="vertical"
                 android:padding="8dp">
 

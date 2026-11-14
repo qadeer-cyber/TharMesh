@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: LicenseRef-TharMesh-Proprietary
+// Copyright (c) 2026 Abdul Qadeer (Qadeer Cyber). All rights reserved.
+
+package com.tharmesh.ui.theme
+
+import java.io.File
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * UNIT. Reads layout and drawable XML. Does not render pixels.
+ */
+class LayoutReconstructionTest {
+
+    @Test
+    fun chatScreen_usesComposerBackAndFlatBubbles() {
+        val chat = read("layout/activity_chat.xml")
+        assertTrue(chat.contains("button_chat_back"))
+        assertTrue(chat.contains("@drawable/bg_composer"))
+        assertTrue(chat.contains("android:minHeight=\"48dp\""))
+        assertFalse(chat.contains("bg_screen_gradient"))
+        assertFalse(chat.contains("bg_glass_floating"))
+        val bubble = read("drawable/bg_bubble_me.xml")
+        assertFalse(bubble.contains("<gradient"))
+        val canvas = read("drawable/bg_screen_gradient.xml")
+        assertFalse(canvas.contains("android:type=\"radial\""))
+        assertFalse(canvas.contains("android:type=\"linear\""))
+    }
+
+    @Test
+    fun chatsList_showsPinMuteAndExplainsNewChatActions() {
+        val row = read("layout/item_chat.xml")
+        assertTrue(row.contains("@+id/text_pin"))
+        assertTrue(row.contains("@+id/text_mute"))
+        assertTrue(row.contains("@string/chat_row_pinned"))
+        val sheet = read("layout/sheet_new_chat.xml")
+        assertTrue(sheet.contains("@+id/new_chat_action_scan"))
+        assertTrue(sheet.contains("@+id/new_chat_action_nearby"))
+        assertTrue(sheet.contains("@+id/new_chat_action_username"))
+        assertTrue(sheet.contains("@+id/new_chat_action_userid"))
+        assertTrue(sheet.contains("@string/new_chat_nearby_hint"))
+        assertTrue(sheet.contains("@string/new_chat_username_hint_row"))
+        assertTrue(sheet.contains("@drawable/ic_wifi"))
+        assertTrue(sheet.contains("android:minHeight=\"64dp\""))
+    }
+
+    @Test
+    fun transcript_usesDayChipAndUnavailableScreensStayHonest() {
+        val chat = read("layout/activity_chat.xml")
+        assertTrue(chat.contains("@drawable/bg_date_chip"))
+        assertTrue(chat.contains("@string/chat_header_encrypted"))
+        val day = read("layout/item_msg_date.xml")
+        assertTrue(day.contains("@+id/text_day"))
+        assertTrue(day.contains("@drawable/bg_date_chip"))
+        val unavailable = read("layout/activity_unavailable.xml")
+        assertTrue(unavailable.contains("@+id/unavailable_body"))
+        assertTrue(unavailable.contains("android:minHeight=\"48dp\"") || unavailable.contains("48dp"))
+        val contacts = read("layout/activity_contacts.xml")
+        assertFalse(contacts.contains("@android:color/white"))
+        assertTrue(contacts.contains("@+id/text_empty"))
+        assertTrue(contacts.contains("@+id/btn_my_qr"))
+        val diagnostics = read("layout/activity_diagnostics.xml")
+        assertFalse(diagnostics.contains("android:textColor=\"@android:color/white\""))
+    }
+
+    @Test
+    fun sharedPanels_coverDevicesDashboardStatusAndOnboarding() {
+        assertTrue(read("layout/fragment_devices.xml").contains("android:layout_height=\"48dp\""))
+        assertTrue(read("layout/fragment_devices.xml").contains("@+id/button_scan"))
+        assertFalse(read("layout/fragment_dashboard.xml").contains("TmCard"))
+        assertTrue(read("layout/fragment_dashboard.xml").contains("TmPanel"))
+        assertFalse(read("layout/fragment_status.xml").contains("TmCard"))
+        assertTrue(read("layout/onboarding_step_name.xml").contains("@drawable/bg_input"))
+        assertTrue(read("layout/fragment_contacts.xml").contains("@drawable/bg_input"))
+        assertTrue(read("layout/fragment_settings.xml").contains("@drawable/bg_panel"))
+        val harness = java.io.File("src/debug/AndroidManifest.xml").let {
+            if (it.isFile) it else java.io.File("app/src/debug/AndroidManifest.xml")
+        }
+        assertTrue(harness.isFile)
+        assertTrue(harness.readText().contains("LayoutPreviewActivity"))
+        val main = read("../AndroidManifest.xml")
+        assertFalse(main.contains("LayoutPreviewActivity"))
+    }
+
+    @Test
+    fun sendButtonAndWelcomeDoNotUseTheOldAccent() {
+        val send = read("drawable/bg_send_button_active.xml")
+        assertFalse(send.contains("<gradient"))
+        assertTrue(send.contains("?attr/tmNeonGreen"))
+        val login = read("layout/activity_login.xml")
+        assertFalse(login.contains("bg_composer"))
+        assertTrue(login.contains("@drawable/ic_google"))
+        assertFalse(read("layout/fragment_contacts.xml").contains("bg_brand_accent_underline"))
+        assertFalse(read("layout/fragment_status.xml").contains("bg_brand_accent_underline"))
+        assertTrue(read("layout/fragment_dashboard.xml").contains("@+id/signal_empty"))
+        assertFalse(read("layout/part_health_stat.xml").contains("86%"))
+    }
+
+    @Test
+    fun radialGlows_doNotUseThemeAttributes() {
+        for (name in listOf(
+            "drawable/bg_nav_pill_glow.xml",
+            "drawable/bg_avatar_glow_online.xml",
+            "drawable/bg_pulse_red.xml",
+            "drawable-night/bg_nav_pill_glow.xml",
+            "drawable-night/bg_avatar_glow_online.xml",
+            "drawable-night/bg_pulse_red.xml"
+        )) {
+            val xml = read(name)
+            assertFalse(name, xml.contains("?attr/"))
+            assertTrue(name, xml.contains("gradientRadius"))
+        }
+    }
+
+    private fun read(relative: String): String {
+        val file = listOf(
+            File("src/main/res/$relative"),
+            File("app/src/main/res/$relative")
+        ).first { it.isFile }
+        return file.readText()
+    }
+}

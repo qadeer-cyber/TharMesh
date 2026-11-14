@@ -3,6 +3,7 @@
 
 package com.tharmesh.ui.legal
 
+import com.tharmesh.ui.theme.Appearance
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -39,6 +40,7 @@ class BlockedContactsActivity : AppCompatActivity() {
     private lateinit var emptyView: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_blocked_contacts)
         listContainer = findViewById(R.id.blocked_list)

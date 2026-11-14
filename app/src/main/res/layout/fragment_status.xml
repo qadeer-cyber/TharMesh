@@ -3,7 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient"
+    android:background="?attr/tmBg"
     android:clipToPadding="false"
     android:paddingBottom="16dp"
     android:fillViewport="true">
@@ -46,12 +46,6 @@
             android:layout_marginTop="2dp"
             android:text="@string/app_subtagline" />
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="2dp"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_brand_accent_underline" />
-
         <!-- Emergency broadcast card. Stage 9.2 wrapped in a parent FrameLayout
              with bg_pulse_red so the soft red halo bleeds beyond the card
              edges; ObjectAnimator alpha pulse driven from StatusFragment. -->
@@ -64,7 +58,7 @@
             android:padding="4dp">
 
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
@@ -158,7 +152,7 @@
 
         <!-- Alerts card -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -216,7 +210,7 @@
 
         <!-- Health card: battery / mesh / storage -->
         <LinearLayout
-            style="@style/TmCard"
+            style="@style/TmPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"

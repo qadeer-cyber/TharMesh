@@ -6,6 +6,8 @@
 package com.tharmesh.data
 
 import android.content.Context
+import android.content.SharedPreferences
+import com.tharmesh.account.CloudSessionStore
 import com.tharmesh.crypto.CryptoBox
 import com.tharmesh.identity.CryptoIdentity
 import com.tharmesh.ui.theme.ThemeManager
@@ -28,6 +30,7 @@ object UserPrefs {
     private const val KEY_AVATAR = "avatar_url"
     private const val KEY_PROVIDER = "auth_provider"
     private const val KEY_AUTHENTICATED = "authenticated"
+    private const val KEY_CANONICAL_MESH_ACCOUNT = "canonical_mesh_account"
     private const val KEY_PRIVATE_KEY = "identity_private_key_b64"
     private const val KEY_PUBLIC_KEY = "identity_public_key_b64"
     private const val KEY_FINGERPRINT = "identity_fingerprint"
@@ -40,6 +43,7 @@ object UserPrefs {
      * light mode.
      */
     private const val KEY_THEME_MODE = "theme_mode"
+    private const val KEY_PALETTE = "appearance_palette"
 
     /**
      * Stage 6.3 — manual Disaster Mode toggle. When true:
@@ -112,6 +116,39 @@ object UserPrefs {
 
     const val PROVIDER_ANONYMOUS = "anonymous"
     const val PROVIDER_GOOGLE = "google"
+    const val PROVIDER_EMAIL = "email"
+
+    /** When true, [ensureIdentity] must not mint a mesh key. */
+    private const val KEY_IDENTITY_HOLD = "account_identity_hold"
+
+    /**
+     * Keys that survive [signOut]. Cloud access tokens are not in this set.
+     * They live in [CloudSessionStore] and are cleared separately.
+     */
+    private val RETAINED_ON_SIGN_OUT = setOf(
+        KEY_USER_ID,
+        KEY_USERNAME,
+        KEY_EMAIL,
+        KEY_AVATAR,
+        KEY_PROVIDER,
+        KEY_AUTHENTICATED,
+        KEY_CANONICAL_MESH_ACCOUNT,
+        KEY_PRIVATE_KEY,
+        KEY_PUBLIC_KEY,
+        KEY_FINGERPRINT,
+        KEY_THEME_MODE,
+        KEY_PALETTE,
+        KEY_DISASTER_MODE,
+        KEY_STATUS,
+        KEY_AVATAR_LOCAL,
+        KEY_NOTIF_SOUND,
+        KEY_NOTIF_VIBRATE,
+        KEY_ONBOARDED,
+        KEY_LEGAL_TERMS_VERSION,
+        KEY_LEGAL_TERMS_ACCEPTED_AT,
+        KEY_IDENTITY_HOLD,
+        "legal_blocked_user_ids"
+    )
 
     @JvmStatic
     fun hasProfile(context: Context): Boolean {
@@ -210,10 +247,79 @@ object UserPrefs {
         return true
     }
 
+    /**
+     * Ends the cloud session. The mesh private key, user id, block list, and
+     * terms acceptance stay. Room is not touched. A cloud access token stored
+     * in this file under any other name is dropped because it is not in
+     * [RETAINED_ON_SIGN_OUT].
+     */
     @JvmStatic
     fun signOut(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().clear().apply()
+        val keep = retainedOnSignOut(prefs.all ?: emptyMap<String, Any?>())
+        val editor = prefs.edit().clear()
+        for ((key, value) in keep) {
+            putRetained(editor, key, value)
+        }
+        editor.apply()
+        CloudSessionStore.clearTokens(context)
+    }
+
+    /** Policy used by [signOut]. Unit-tested without Android. */
+    @JvmStatic
+    fun retainedOnSignOut(snapshot: Map<String, *>): Map<String, Any?> {
+        val out = LinkedHashMap<String, Any?>()
+        for ((key, value) in snapshot) {
+            if (RETAINED_ON_SIGN_OUT.contains(key)) out[key] = value
+        }
+        return out
+    }
+
+    private fun putRetained(editor: SharedPreferences.Editor, key: String, value: Any?) {
+        when (value) {
+            is String -> editor.putString(key, value)
+            is Boolean -> editor.putBoolean(key, value)
+            is Int -> editor.putInt(key, value)
+            is Long -> editor.putLong(key, value)
+            is Float -> editor.putFloat(key, value)
+            is Set<*> -> editor.putStringSet(key, value.map { it.toString() }.toSet())
+        }
+    }
+
+    @JvmStatic
+    fun isIdentityHeld(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_IDENTITY_HOLD, false)
+    }
+
+    @JvmStatic
+    fun setIdentityHeld(context: Context, held: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_IDENTITY_HOLD, held).apply()
+    }
+
+    /**
+     * Persist [identity] only when no mesh key exists, or the public key matches,
+     * or [allowReplace] is true. Login must pass false. Explicit reset passes true
+     * after the user has confirmed the key-change warning.
+     */
+    @JvmStatic
+    @Synchronized
+    fun writeIdentity(context: Context, identity: CryptoIdentity, allowReplace: Boolean): Boolean {
+        val existing = readIdentity(context)
+        if (existing != null && existing.publicKeyBase64 != identity.publicKeyBase64 && !allowReplace) {
+            return false
+        }
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_CANONICAL_MESH_ACCOUNT)) {
+            return existing?.publicKeyBase64 == identity.publicKeyBase64
+        }
+        prefs.edit()
+            .putString(KEY_PRIVATE_KEY, identity.privateKeyBase64)
+            .putString(KEY_PUBLIC_KEY, identity.publicKeyBase64)
+            .putString(KEY_FINGERPRINT, identity.fingerprint)
+            .apply()
+        return true
     }
 
     // ---------------------------------------------------------------- //
@@ -282,6 +388,9 @@ object UserPrefs {
     @Synchronized
     fun ensureIdentity(context: Context): CryptoIdentity {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_CANONICAL_MESH_ACCOUNT)) {
+            return checkNotNull(readIdentity(context)) { "Canonical identity requires recovery" }
+        }
         val priv = prefs.getString(KEY_PRIVATE_KEY, null)
         val pub = prefs.getString(KEY_PUBLIC_KEY, null)
         if (!priv.isNullOrBlank() && !pub.isNullOrBlank()) {
@@ -293,6 +402,11 @@ object UserPrefs {
             // their state is cleared. Acceptable for the rare corruption case.
             println("UserPrefs.ensureIdentity: stored keypair failed to decode, regenerating")
         }
+        if (isIdentityHeld(context)) {
+            // A cloud login on a phone with no mesh key must not invent one.
+            println("UserPrefs.ensureIdentity: generation held; not minting a key")
+            throw IllegalStateException("identity generation held")
+        }
         val identity = CryptoIdentity.generate()
         prefs.edit()
             .putString(KEY_PRIVATE_KEY, identity.privateKeyBase64)
@@ -302,9 +416,34 @@ object UserPrefs {
         return identity
     }
 
+    fun canonicalMeshAccount(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_CANONICAL_MESH_ACCOUNT, null)
+
+    @Synchronized
+    fun activateCanonicalIdentity(context: Context, accountId: String, userId: String, publicKey: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val active = prefs.getString(KEY_CANONICAL_MESH_ACCOUNT, null)
+        if (active == accountId) return readIdentity(context)?.publicKeyBase64 == publicKey
+        if (active != null || prefs.contains(KEY_PRIVATE_KEY) || readProfile(context) != null) return false
+        val identity = com.tharmesh.account.AndroidAccountKeyBox.readMeshIdentity(context, accountId)
+        if (identity?.publicKeyBase64 != publicKey) return false
+        return prefs.edit()
+            .putString(KEY_CANONICAL_MESH_ACCOUNT, accountId)
+            .putString(KEY_USER_ID, userId)
+            .putString(KEY_USERNAME, "TharMesh user")
+            .putString(KEY_PROVIDER, PROVIDER_EMAIL)
+            .putBoolean(KEY_AUTHENTICATED, true)
+            .putBoolean(KEY_IDENTITY_HOLD, false)
+            .putBoolean(KEY_ONBOARDED, true)
+            .commit()
+    }
+
     /** Read-only — returns null if no identity has been generated yet. */
     fun readIdentity(context: Context): CryptoIdentity? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val canonical = prefs.getString(KEY_CANONICAL_MESH_ACCOUNT, null)
+        if (canonical != null) return com.tharmesh.account.AndroidAccountKeyBox.readMeshIdentity(context, canonical)
         val priv = prefs.getString(KEY_PRIVATE_KEY, null) ?: return null
         val pub = prefs.getString(KEY_PUBLIC_KEY, null) ?: return null
         return CryptoIdentity.fromBase64(priv, pub)
@@ -326,6 +465,20 @@ object UserPrefs {
     fun setThemeMode(context: Context, mode: ThemeManager.Mode) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    @JvmStatic
+    fun getPalette(context: Context): com.tharmesh.ui.theme.Appearance.Palette {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_PALETTE, null) ?: return com.tharmesh.ui.theme.Appearance.Palette.OCEAN
+        return runCatching { com.tharmesh.ui.theme.Appearance.Palette.valueOf(raw) }
+            .getOrDefault(com.tharmesh.ui.theme.Appearance.Palette.OCEAN)
+    }
+
+    @JvmStatic
+    fun setPalette(context: Context, palette: com.tharmesh.ui.theme.Appearance.Palette) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_PALETTE, palette.name).apply()
     }
 
     @JvmStatic
