@@ -7,6 +7,8 @@
     <string name="chat_status_msg_read">پڙهيو ويو</string>
     <string name="chat_status_msg_failed">ناڪام — ٻيهر ڪوشش لاءِ ٽيپ ڪريو</string>
     <string name="chat_status_msg_awaiting_key">تصديق ٿيل رابطي جو انتظار — نياپو نه موڪليو ويو</string>
+    <string name="chat_status_msg_waiting_peer">ويجهي پيئر جو انتظار…</string>
+    <string name="chat_status_msg_retrying">ٻيهر ڪوشش…</string>
     <string name="mesh_service_notification">ٿارميش ويجها ڊوائيس ٻڌي رهيو آهي</string>
     <string name="login_create_account">اي ميل سان اڳتي</string>
     <string name="login_sign_in">سائن ان</string>

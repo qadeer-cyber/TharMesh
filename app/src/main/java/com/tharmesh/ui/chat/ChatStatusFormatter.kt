@@ -79,6 +79,8 @@ internal object ChatStatusFormatter {
         val msgRead: String,            // "Read"
         val msgFailed: String,          // "Failed — tap to retry"
         val msgAwaitingKey: String = "Waiting for a verified contact — message not sent",
+        val msgWaitingForPeer: String,  // "Waiting for a nearby peer…"
+        val msgRetrying: String,        // "Retrying…"
         val separator: String = " · "
     )
 
@@ -112,7 +114,8 @@ internal object ChatStatusFormatter {
     fun format(
         mesh: MeshState,
         lastOutgoingStatus: String?,
-        strings: Strings
+        strings: Strings,
+        outboundRetryAttempts: Int = 0
     ): String {
         // Rule 1 — FAILED dominates regardless of mesh state.
         if (lastOutgoingStatus == MessageStatus.FAILED) return strings.msgFailed
@@ -121,8 +124,19 @@ internal object ChatStatusFormatter {
         // Rule 2 — QUEUED / SENDING contradicts mesh state, so it must
         // dominate too. SENDING uses a slightly more "in motion" wording
         // because by definition the transport has accepted the bundle.
-        if (lastOutgoingStatus == MessageStatus.QUEUED) return strings.msgQueued
-        if (lastOutgoingStatus == MessageStatus.SENDING) return strings.msgSending
+        if (lastOutgoingStatus == MessageStatus.QUEUED ||
+            lastOutgoingStatus == MessageStatus.SENDING
+        ) {
+            if (outboundRetryAttempts > 0) return strings.msgRetrying
+            return when (mesh) {
+                is MeshState.Online -> when (lastOutgoingStatus) {
+                    MessageStatus.SENDING -> strings.msgSending
+                    else -> strings.msgQueued
+                }
+                MeshState.Searching,
+                MeshState.Offline -> strings.msgWaitingForPeer
+            }
+        }
 
         // Rule 3 — render mesh state, optionally suffixed with a per-tick.
         val meshText = when (mesh) {

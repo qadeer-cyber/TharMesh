@@ -37,7 +37,9 @@ class ChatStatusFormatterTest {
         msgSent = "Sent",
         msgDelivered = "Delivered",
         msgRead = "Read",
-        msgFailed = "Failed — tap to retry"
+        msgFailed = "Failed — tap to retry",
+        msgWaitingForPeer = "Waiting for a nearby peer…",
+        msgRetrying = "Retrying…"
     )
 
     @Test
@@ -193,5 +195,26 @@ class ChatStatusFormatterTest {
             strings = s
         )
         assertEquals("Searching for nearby devices…", out)
+    }
+
+    @Test
+    fun queuedWhileSearching_showsWaitingForPeer() {
+        val out = ChatStatusFormatter.format(
+            mesh = MeshState.Searching,
+            lastOutgoingStatus = MessageStatus.QUEUED,
+            strings = s
+        )
+        assertEquals("Waiting for a nearby peer…", out)
+    }
+
+    @Test
+    fun queuedWithRetryAttempts_showsRetrying_notDelivered() {
+        val out = ChatStatusFormatter.format(
+            mesh = MeshState.Online(nearbyOnline = 2),
+            lastOutgoingStatus = MessageStatus.QUEUED,
+            strings = s,
+            outboundRetryAttempts = 2
+        )
+        assertEquals("Retrying…", out)
     }
 }

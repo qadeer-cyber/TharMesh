@@ -125,6 +125,8 @@
     <string name="chat_status_msg_read">Read</string>
     <string name="chat_status_msg_failed">Failed — tap to retry</string>
     <string name="chat_status_msg_awaiting_key">Waiting for a verified contact — message not sent</string>
+    <string name="chat_status_msg_waiting_peer">Waiting for a nearby peer…</string>
+    <string name="chat_status_msg_retrying">Retrying…</string>
     <string name="mesh_service_channel">Mesh connection</string>
     <string name="mesh_service_notification">TharMesh is listening for nearby devices</string>
     <string name="mesh_power_doze_explanation">When Android enters Doze or battery saver, the system may pause background radio work even while TharMesh’s foreground mesh service is running. TharMesh does not hold a wake lock; it retries on a bounded schedule when the app is active again. Delivery is not guaranteed while the device is deeply idle.</string>

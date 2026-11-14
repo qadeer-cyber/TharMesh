@@ -7,6 +7,8 @@
     <string name="chat_status_msg_read">پڑھ لیا گیا</string>
     <string name="chat_status_msg_failed">ناکام — دوبارہ کوشش کے لیے ٹیپ کریں</string>
     <string name="chat_status_msg_awaiting_key">تصدیق شدہ رابطے کا انتظار — پیغام نہیں بھیجا گیا</string>
+    <string name="chat_status_msg_waiting_peer">قریبی پیئر کا انتظار…</string>
+    <string name="chat_status_msg_retrying">دوبارہ کوشش…</string>
     <string name="mesh_service_notification">تھارمیش قریبی آلات سن رہا ہے</string>
     <string name="login_create_account">ای میل سے جاری رکھیں</string>
     <string name="login_sign_in">سائن ان</string>

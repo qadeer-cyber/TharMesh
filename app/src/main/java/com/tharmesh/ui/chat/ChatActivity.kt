@@ -80,6 +80,7 @@ class ChatActivity : AppCompatActivity() {
      * subtitle, so we cache the last computed value here.
      */
     private var lastOutgoingStatus: String? = null
+    private var lastOutgoingBundleId: String? = null
     private lateinit var statusStrings: ChatStatusFormatter.Strings
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -200,7 +201,9 @@ class ChatActivity : AppCompatActivity() {
             msgDelivered = getString(R.string.chat_status_msg_delivered),
             msgRead = getString(R.string.chat_status_msg_read),
             msgFailed = getString(R.string.chat_status_msg_failed),
-            msgAwaitingKey = getString(R.string.chat_status_msg_awaiting_key)
+            msgAwaitingKey = getString(R.string.chat_status_msg_awaiting_key),
+            msgWaitingForPeer = getString(R.string.chat_status_msg_waiting_peer),
+            msgRetrying = getString(R.string.chat_status_msg_retrying)
         )
     }
 
@@ -259,7 +262,9 @@ class ChatActivity : AppCompatActivity() {
             repository.observeConversation(toUserId).collectLatest { msgs ->
                 adapter.submitList(msgs)
                 if (adapter.itemCount > 0) recycler.scrollToPosition(adapter.itemCount - 1)
-                lastOutgoingStatus = msgs.lastOrNull { it.fromUserId == myUserId }?.status
+                val lastOut = msgs.lastOrNull { it.fromUserId == myUserId }
+                lastOutgoingStatus = lastOut?.status
+                lastOutgoingBundleId = lastOut?.bundleId
                 renderTopStatus()
             }
         }
@@ -283,7 +288,10 @@ class ChatActivity : AppCompatActivity() {
      */
     private fun renderTopStatus() {
         val mesh = currentMeshState()
-        topStatus.text = ChatStatusFormatter.format(mesh, lastOutgoingStatus, statusStrings)
+        val retryAttempts = repository.outboundRetryAttempts(lastOutgoingBundleId)
+        topStatus.text = ChatStatusFormatter.format(
+            mesh, lastOutgoingStatus, statusStrings, retryAttempts
+        )
     }
 
     private fun currentMeshState(): ChatStatusFormatter.MeshState {

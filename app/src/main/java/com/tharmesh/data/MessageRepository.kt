@@ -1202,6 +1202,12 @@ class MessageRepository(
         churnDebouncer.reset()
     }
 
+    /** Stage 0.8 — UI retry indicator for chat header (bounded policy attempt count). */
+    fun outboundRetryAttempts(bundleId: String?): Int {
+        if (bundleId.isNullOrBlank()) return 0
+        return retryPolicy.currentState(bundleId)?.attemptCount ?: 0
+    }
+
     /**
      * Advance the status of the message with [bundleId] to [target] atomically. The SQL
      * UPDATE only fires when [target]'s rank is strictly higher than the current rank
