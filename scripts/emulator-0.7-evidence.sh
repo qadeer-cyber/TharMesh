@@ -17,6 +17,11 @@ FAILED=0
 REBOOT_UI_MAX_ATTEMPTS="${REBOOT_UI_MAX_ATTEMPTS:-6}"
 REBOOT_BOOT_MAX_SEC="${REBOOT_BOOT_MAX_SEC:-240}"
 BOOT_SETTLE_MAX_SEC="${BOOT_SETTLE_MAX_SEC:-180}"
+EVIDENCE_STAGE_DEADLINE_SEC="${EVIDENCE_STAGE_DEADLINE_SEC:-180}"
+ADB_SHELL_TIMEOUT_SEC="${ADB_SHELL_TIMEOUT_SEC:-90}"
+ADB_START_WAIT_TIMEOUT_SEC="${ADB_START_WAIT_TIMEOUT_SEC:-120}"
+ADB_START_NO_WAIT_TIMEOUT_SEC="${ADB_START_NO_WAIT_TIMEOUT_SEC:-45}"
+RUN_AS_TIMEOUT_SEC="${RUN_AS_TIMEOUT_SEC:-20}"
 
 log() { echo "$@" | tee -a "$LOG"; }
 
@@ -101,8 +106,8 @@ else
 fi
 
 ui_dump_pull() {
-  "$ADB" shell uiautomator dump /sdcard/ui-evidence.xml >>"$LOG" 2>&1
-  "$ADB" pull /sdcard/ui-evidence.xml "$UI_DUMP" >>"$LOG" 2>&1
+  timeout 45 "$ADB" shell uiautomator dump /sdcard/ui-evidence.xml >>"$LOG" 2>&1 || true
+  timeout 25 "$ADB" pull /sdcard/ui-evidence.xml "$UI_DUMP" >>"$LOG" 2>&1 || true
 }
 
 dismiss_system_anr() {
@@ -137,6 +142,123 @@ emit_adb_diagnostics() {
   "$ADB" shell getprop dev.bootcomplete 2>&1 | tee -a "$LOG" || true
   "$ADB" logcat -d -t 120 -s AndroidRuntime:E 2>&1 | tee -a "$LOG" || true
   "$ADB" shell dumpsys activity activities 2>/dev/null | head -50 | tee -a "$LOG" || true
+}
+
+stage_fail_diagnostics() {
+  local stage="$1"
+  log "STAGE_FAIL_DIAGNOSTICS stage=$stage"
+  timeout 30 "$ADB" logcat -d -t 400 2>&1 | tee -a "$LOG" | tail -100 || true
+  timeout 20 "$ADB" shell dumpsys activity activities 2>/dev/null | head -80 | tee -a "$LOG" || true
+  timeout 15 "$ADB" shell "ps -A | grep -E '$PKG|tharmesh'" 2>&1 | tee -a "$LOG" || true
+  if [ -f "$UI_DUMP" ]; then
+    log "last uiautomator dump ($(wc -c <"$UI_DUMP") bytes):"
+    tail -25 "$UI_DUMP" | tee -a "$LOG" || true
+    cp -f "$UI_DUMP" "$ART/stage-fail-${stage}-ui.xml" 2>/dev/null || true
+  else
+    log "last uiautomator dump: (none)"
+  fi
+}
+
+adb_shell_timeout() {
+  local limit="$1"
+  shift
+  timeout "$limit" "$ADB" shell "$@" >>"$LOG" 2>&1
+}
+
+adb_am_force_stop() {
+  adb_shell_timeout "$ADB_SHELL_TIMEOUT_SEC" am force-stop "$PKG" || {
+    fail "adb force-stop timeout"
+    return 1
+  }
+}
+
+# am start -W can hang forever when a debug smoke Activity calls finish() in onCreate (no launch-complete).
+adb_am_start_wait() {
+  local component="$1"
+  shift
+  local extra="$*"
+  local limit="$ADB_START_WAIT_TIMEOUT_SEC"
+  if timeout "$limit" "$ADB" shell am start -W -n "$component" $extra >>"$LOG" 2>&1; then
+    return 0
+  fi
+  local rc=$?
+  if [ "$rc" -eq 124 ]; then
+    fail "adb am start -W TIMEOUT component=$component limit=${limit}s (root_cause=launch_wait_no_complete)"
+    log "hint: self-finishing smoke activities must use adb_am_start_fire_and_forget"
+    return 1
+  fi
+  fail "adb am start -W failed rc=$rc component=$component"
+  return 1
+}
+
+adb_am_start_fire_and_forget() {
+  local component="$1"
+  shift
+  local extra="$*"
+  if timeout "$ADB_START_NO_WAIT_TIMEOUT_SEC" "$ADB" shell am start -n "$component" $extra >>"$LOG" 2>&1; then
+    return 0
+  fi
+  local rc=$?
+  if [ "$rc" -eq 124 ]; then
+    fail "adb am start TIMEOUT component=$component"
+    return 1
+  fi
+  fail "adb am start failed rc=$rc component=$component"
+  return 1
+}
+
+run_as_prefs_ls() {
+  timeout "$RUN_AS_TIMEOUT_SEC" "$ADB" shell "run-as $PKG ls shared_prefs" 2>/dev/null | tr -d '\r' || true
+}
+
+wait_for_recovery_stage_prefs() {
+  local limit="${1:-45}"
+  local i prefs
+  for i in $(seq 1 "$limit"); do
+    prefs=$(run_as_prefs_ls | grep tharmesh_recovery_rotation_stage || true)
+    if [ -n "$prefs" ]; then
+      log "staged prefs: $prefs (${i}s)"
+      return 0
+    fi
+    sleep 1
+  done
+  fail "recovery stage prefs missing after ${limit}s"
+  return 1
+}
+
+invoke_evidence_stage() {
+  local name="$1"
+  local fn="$2"
+  log "STAGE_BEGIN $name deadline=${EVIDENCE_STAGE_DEADLINE_SEC}s"
+  local runner
+  runner=$(mktemp)
+  {
+    echo '#!/usr/bin/env bash'
+    echo 'set -uo pipefail'
+    printf 'ROOT=%q\nSDK=%q\nADB=%q\nEMU=%q\nART=%q\nPKG=%q\nLOG=%q\nUI_DUMP=%q\nFAILED=%q\n' \
+      "$ROOT" "$SDK" "$ADB" "$EMU" "$ART" "$PKG" "$LOG" "$UI_DUMP" "$FAILED"
+    printf 'REBOOT_UI_MAX_ATTEMPTS=%q\nREBOOT_BOOT_MAX_SEC=%q\nBOOT_SETTLE_MAX_SEC=%q\nTHARMESH_STRICT_BOOT=%q\nAPI_LEVEL=%q\n' \
+      "$REBOOT_UI_MAX_ATTEMPTS" "$REBOOT_BOOT_MAX_SEC" "$BOOT_SETTLE_MAX_SEC" "${THARMESH_STRICT_BOOT:-0}" "$API_LEVEL"
+    printf 'EVIDENCE_STAGE_DEADLINE_SEC=%q\nADB_SHELL_TIMEOUT_SEC=%q\nADB_START_WAIT_TIMEOUT_SEC=%q\nADB_START_NO_WAIT_TIMEOUT_SEC=%q\nRUN_AS_TIMEOUT_SEC=%q\n' \
+      "$EVIDENCE_STAGE_DEADLINE_SEC" "$ADB_SHELL_TIMEOUT_SEC" "$ADB_START_WAIT_TIMEOUT_SEC" "$ADB_START_NO_WAIT_TIMEOUT_SEC" "$RUN_AS_TIMEOUT_SEC"
+    declare -f
+    echo "if $fn; then exit 0; fi"
+    echo 'exit 1'
+  } >"$runner"
+  if timeout --preserve-status --kill-after=15 "$EVIDENCE_STAGE_DEADLINE_SEC" bash "$runner" >>"$LOG" 2>&1; then
+    rm -f "$runner"
+    log "STAGE_END $name ok"
+    return 0
+  fi
+  local rc=$?
+  rm -f "$runner"
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    fail "STAGE_TIMEOUT $name (${EVIDENCE_STAGE_DEADLINE_SEC}s)"
+  else
+    fail "STAGE_FAIL $name exit=$rc"
+  fi
+  stage_fail_diagnostics "$name"
+  return 1
 }
 
 wait_for_boot_settled() {
@@ -312,8 +434,9 @@ compare_snapshots() {
 step_offline_persistence() {
   log "=== offline room seed + persistence ==="
   "$ADB" logcat -c >>"$LOG" 2>&1 || true
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.OfflineRoomPersistenceSmokeActivity" >>"$LOG" 2>&1
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.OfflineRoomPersistenceSmokeActivity" || return 1
+  sleep 3
   local dir="/tmp/tharmesh-pre"
   db_pull_dir "$dir"
   local MSG CONTACTS VERIFIED
@@ -329,8 +452,8 @@ step_offline_persistence() {
   [ "$CONTACTS" = "2" ] || { fail "expected 2 contacts"; return 1; }
   [ "$VERIFIED" = "2" ] || { fail "expected 2 verified peers"; return 1; }
   db_snap pre_kill
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
+  adb_am_force_stop || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || true
   sleep 5
   for _ in 1 2 3; do dismiss_system_anr; done
   shot_after_ui "04-chats-after-seed.png" "Evidence Peer A" "chats_seed" 90 || return 1
@@ -339,8 +462,8 @@ step_offline_persistence() {
 
   "$ADB" shell svc wifi disable >>"$LOG" 2>&1 || true
   "$ADB" shell svc data disable >>"$LOG" 2>&1 || true
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1
+  adb_am_force_stop || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || return 1
   db_snap post_relaunch
   compare_snapshots pre_kill post_relaunch || return 1
   wait_for_ui "Evidence Peer A" "chats_a" 60 || return 1
@@ -377,8 +500,8 @@ step_reboot_durability() {
   "$ADB" shell input keyevent KEYCODE_BACK >>"$LOG" 2>&1 || true
   "$ADB" shell svc wifi disable >>"$LOG" 2>&1 || true
   "$ADB" shell svc data disable >>"$LOG" 2>&1 || true
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1
+  adb_am_force_stop || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || return 1
   db_snap post_reboot
   compare_snapshots pre_kill post_reboot || return 1
   log "reboot durability TSV match: PASS"
@@ -387,8 +510,8 @@ step_reboot_durability() {
   for attempt in $(seq 1 "$REBOOT_UI_MAX_ATTEMPTS"); do
     log "post-reboot UI attempt $attempt/$REBOOT_UI_MAX_ATTEMPTS"
     for _ in 1 2 3 4; do dismiss_system_anr; sleep 1; done
-    "$ADB" shell am force-stop "$PKG"
-    "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.main.MainActivity" >>"$LOG" 2>&1 || true
+    adb_am_force_stop || true
+    adb_am_start_wait "$PKG/com.tharmesh.ui.main.MainActivity" || true
     sleep 6
     reboot_needle="Evidence Peer A"
     if wait_for_ui "$reboot_needle" "chats_post_reboot" 50; then
@@ -412,44 +535,45 @@ step_reboot_durability() {
 
 step_fake_provision() {
   log "=== fake provisioning ==="
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.FakeProvisionSmokeActivity" >>"$LOG" 2>&1
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.FakeProvisionSmokeActivity" || return 1
+  sleep 2
   shot_after_ui "01-fake-provision.png" "Account security" "provision" 60
 }
 
 step_provision_relaunch() {
   log "=== provision relaunch ==="
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.ProvisionRelaunchSmokeActivity" >>"$LOG" 2>&1
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.ProvisionRelaunchSmokeActivity" || return 1
+  sleep 2
   shot_after_ui "02-provision-relaunch.png" "Account security" "relaunch" 60
 }
 
 step_recovery() {
   log "=== recovery stage death ==="
-  "$ADB" shell am force-stop "$PKG"
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.RecoveryStageDeathSmokeActivity" >>"$LOG" 2>&1
-  local STAGE
-  STAGE=$("$ADB" shell run-as "$PKG" ls shared_prefs 2>/dev/null | grep tharmesh_recovery_rotation_stage || true)
-  log "staged prefs: $STAGE"
-  [ -n "$STAGE" ] || { fail "missing recovery stage prefs"; return 1; }
-  "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" --es screen rotate_recovery >>"$LOG" 2>&1
+  log "recovery_harness: avoid am start -W on instant-finish smoke (launch-complete wait can hang indefinitely)"
+  adb_am_force_stop || return 1
+  adb_am_start_fire_and_forget "$PKG/com.tharmesh.ui.debug.RecoveryStageDeathSmokeActivity" || return 1
+  sleep 2
+  wait_for_recovery_stage_prefs 60 || return 1
+  adb_am_start_wait "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" --es screen rotate_recovery || return 1
   shot_after_ui "03-recovery-rotate.png" "Rotate recovery key" "recovery" 45
 }
 
-step_offline_persistence || FAILED=1
-step_reboot_durability || FAILED=1
-step_fake_provision || FAILED=1
-step_provision_relaunch || FAILED=1
-step_recovery || FAILED=1
+invoke_evidence_stage offline_persistence step_offline_persistence || FAILED=1
+invoke_evidence_stage reboot_durability step_reboot_durability || FAILED=1
+invoke_evidence_stage fake_provision step_fake_provision || FAILED=1
+invoke_evidence_stage provision_relaunch step_provision_relaunch || FAILED=1
+invoke_evidence_stage recovery_stage_death step_recovery || FAILED=1
 
 step_layout_l10n() {
   log "=== layout l10n light/dark (debug preview) ==="
   for spec in "account:false:layout-account-light.png" "account:true:layout-account-dark.png" \
     "rotate_recovery:false:layout-rotate-light.png" "rotate_recovery:true:layout-rotate-dark.png"; do
     IFS=: read -r screen night out <<<"$spec"
-    "$ADB" shell am force-stop "$PKG"
-    "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
-      --es screen "$screen" --ez night "$night" >>"$LOG" 2>&1
+    adb_am_force_stop || return 1
+    adb_am_start_wait "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
+      --es screen "$screen" --ez night "$night" || return 1
     local needle="Rotate recovery key"
     if [ "$screen" = "account" ]; then
       needle="Create account"
@@ -459,9 +583,9 @@ step_layout_l10n() {
   local l10n_ok=0
   for pair in "ur:layout-account-ur.png:اکاؤنٹ بنائیں" "sd:layout-account-sd.png:اڪائونٽ ٺاهيو"; do
     IFS=: read -r locale out needle <<<"$pair"
-    "$ADB" shell am force-stop "$PKG"
-    "$ADB" shell am start -W -n "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
-      --es screen account --ez night false --es locale "$locale" >>"$LOG" 2>&1 || continue
+    adb_am_force_stop || continue
+    adb_am_start_wait "$PKG/com.tharmesh.ui.debug.LayoutPreviewActivity" \
+      --es screen account --ez night false --es locale "$locale" || continue
     if shot_after_ui "$out" "$needle" "$locale" 45; then
       l10n_ok=$((l10n_ok + 1))
     fi
@@ -473,7 +597,7 @@ step_layout_l10n() {
   log "ur/sd emulator layouts: PASS (2/2)"
 }
 
-step_layout_l10n || FAILED=1
+invoke_evidence_stage layout_l10n step_layout_l10n || FAILED=1
 
 if [ "$FAILED" -ne 0 ]; then
   log "RESULT=FAIL"

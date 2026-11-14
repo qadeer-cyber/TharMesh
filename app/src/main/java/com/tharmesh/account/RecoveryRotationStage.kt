@@ -43,7 +43,7 @@ object RecoveryRotationStage {
             .putLong("at", System.currentTimeMillis())
             .putInt("gen", expectedGeneration)
             .putString("req", requestId)
-            .apply()
+            .commit()
     }
 
     fun read(context: Context): Staged? {
