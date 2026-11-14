@@ -49,11 +49,10 @@
 
         <Button
             android:id="@+id/btn_paste_fallback"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/scan_qr_paste_fallback"
-            android:textColor="@android:color/white" />
+            style="@style/TmButton.Ghost"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="@string/scan_qr_paste_fallback" />
     </LinearLayout>
 
     <!-- Permission rationale shown when CAMERA is denied; the BarcodeView is
@@ -87,16 +86,17 @@
 
         <Button
             android:id="@+id/btn_grant_camera"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            style="@style/TmButton.Primary"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
             android:layout_marginTop="20dp"
             android:text="@string/scan_qr_grant_camera" />
 
         <Button
             android:id="@+id/btn_paste_instead"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            style="@style/TmButton.Ghost"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
             android:layout_marginTop="8dp"
             android:text="@string/scan_qr_paste_fallback" />
     </LinearLayout>

@@ -21,7 +21,7 @@
         <!-- Top bar: back arrow + QR + search -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="64dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="4dp"
@@ -29,8 +29,8 @@
 
             <ImageView
                 android:id="@+id/profile_back"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/profile_back"
                 android:padding="10dp"
@@ -46,8 +46,8 @@
 
             <ImageView
                 android:id="@+id/profile_qr"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/profile_show_qr"
                 android:padding="9dp"
@@ -57,8 +57,8 @@
 
             <ImageView
                 android:id="@+id/profile_search"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/profile_search"
                 android:padding="9dp"

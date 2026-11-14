@@ -4,6 +4,7 @@
 // distribution, or use is strictly prohibited. See LICENSE for details.
 package com.tharmesh.ui.settings
 
+import com.tharmesh.ui.theme.Appearance
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -22,7 +23,6 @@ import com.tharmesh.TharMeshApp
 import com.tharmesh.auth.GoogleAuthService
 import com.tharmesh.data.UserPrefs
 import com.tharmesh.disaster.DisasterModeController
-import com.tharmesh.ui.auth.LoginActivity
 import com.tharmesh.ui.theme.ThemeManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +53,7 @@ class SettingsSectionActivity : AppCompatActivity() {
     private lateinit var content: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         ThemeManager.applyFromPrefs(this)
         setContentView(R.layout.activity_settings_section)
@@ -128,6 +129,50 @@ class SettingsSectionActivity : AppCompatActivity() {
             (profile?.authProvider ?: UserPrefs.PROVIDER_ANONYMOUS).replaceFirstChar { it.uppercase() }
         )
         addClickRow(
+            R.drawable.ic_lock,
+            getString(R.string.settings_account_security),
+            getString(R.string.settings_account_security_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.SECURITY
+                )
+            )
+        }
+        addClickRow(
+            R.drawable.ic_storage,
+            getString(R.string.settings_account_backup),
+            getString(R.string.settings_account_backup_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.ROTATE_RECOVERY
+                )
+            )
+        }
+        addClickRow(
+            R.drawable.ic_devices,
+            getString(R.string.settings_account_devices),
+            getString(R.string.settings_account_devices_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.DEVICES
+                )
+            )
+        }
+        addClickRow(
+            R.drawable.ic_wifi,
+            getString(R.string.settings_account_offline),
+            getString(R.string.settings_account_offline_sub)
+        ) {
+            startActivity(
+                com.tharmesh.ui.account.AccountFlowActivity.intent(
+                    this, com.tharmesh.ui.account.AccountFlowActivity.Screen.OFFLINE
+                )
+            )
+        }
+        addClickRow(
             R.drawable.ic_alert,
             getString(R.string.settings_account_sign_out),
             getString(R.string.settings_account_sign_out_sub)
@@ -137,18 +182,11 @@ class SettingsSectionActivity : AppCompatActivity() {
                 .setMessage(R.string.settings_account_sign_out_confirm)
                 .setPositiveButton(R.string.settings_account_sign_out) { _, _ ->
                     GoogleAuthService(this).signOut()
-                    TharMeshApp.get().stopMesh()
+                    // Cloud sign-out keeps the mesh key, the Room database,
+                    // and the block list. The mesh keeps running.
                     UserPrefs.signOut(this)
-                    // Stage 8.4 \u2014 sign-out wipes the prefs file (which
-                    // includes the persisted block list) but the
-                    // BlockedContacts singleton would otherwise carry the
-                    // previous account's in-memory cache into the next
-                    // sign-in. Invalidate it so the new account starts clean.
-                    com.tharmesh.data.BlockedContacts.onSignOut()
-                    val intent = Intent(this, LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(intent)
-                    finish()
+                    Toast.makeText(this, R.string.settings_account_sign_out_kept, Toast.LENGTH_LONG).show()
+                    renderSection(SettingsSections.Key.ACCOUNT)
                 }
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show()
@@ -244,6 +282,11 @@ class SettingsSectionActivity : AppCompatActivity() {
             getString(R.string.settings_chats_theme),
             getString(modeLabel(mode))
         ) { showThemePicker() }
+        addClickRow(
+            R.drawable.ic_moon,
+            getString(R.string.settings_appearance),
+            getString(paletteLabel(UserPrefs.getPalette(this)))
+        ) { showPalettePicker() }
         addInfoRow(
             R.drawable.ic_message,
             getString(R.string.settings_chats_wallpaper),
@@ -485,6 +528,33 @@ class SettingsSectionActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
+    }
+
+    private fun showPalettePicker() {
+        val labels = arrayOf(
+            getString(R.string.settings_appearance_ocean),
+            getString(R.string.settings_appearance_rose)
+        )
+        val current = if (UserPrefs.getPalette(this) == com.tharmesh.ui.theme.Appearance.Palette.ROSE) 1 else 0
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_appearance)
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                val palette = if (which == 1) {
+                    com.tharmesh.ui.theme.Appearance.Palette.ROSE
+                } else {
+                    com.tharmesh.ui.theme.Appearance.Palette.OCEAN
+                }
+                UserPrefs.setPalette(this, palette)
+                dialog.dismiss()
+                recreate()
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun paletteLabel(palette: com.tharmesh.ui.theme.Appearance.Palette): Int = when (palette) {
+        com.tharmesh.ui.theme.Appearance.Palette.OCEAN -> R.string.settings_appearance_ocean
+        com.tharmesh.ui.theme.Appearance.Palette.ROSE -> R.string.settings_appearance_rose
     }
 
     private fun modeLabel(mode: ThemeManager.Mode): Int = when (mode) {

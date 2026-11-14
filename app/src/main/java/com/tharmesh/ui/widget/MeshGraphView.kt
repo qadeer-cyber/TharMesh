@@ -24,21 +24,18 @@ class MeshGraphView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private val cyan = Color.parseColor("#00E5FF")
-    private val green = Color.parseColor("#00E676")
-    private val cyanDim = Color.parseColor("#5500E5FF")
-    private val lineColor = Color.parseColor("#402D6FFF")
-    private val stroke = Color.parseColor("#1E2A45")
+    private var primary = Color.parseColor("#2563EB")
+    private var glowColor = Color.parseColor("#332563EB")
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2f
-        color = lineColor
+        color = Color.parseColor("#665E6B87")
     }
     private val lineHotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2f
-        color = cyanDim
+        color = primary
     }
     private val nodeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -47,24 +44,36 @@ class MeshGraphView @JvmOverloads constructor(
     private val nodeStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2f
-        color = cyan
+        color = primary
     }
     private val nodeStrokeGreen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2f
-        color = green
+        color = primary
     }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 1f
-        color = stroke
+        color = Color.parseColor("#335E6B87")
     }
     // Class-level to avoid allocating a Paint on every onDraw frame under the infinite
     // ValueAnimator (onDraw fires >100 Hz, GC pressure otherwise).
     private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = green
+        color = primary
+    }
+
+    init {
+        val tv = android.util.TypedValue()
+        if (context.theme.resolveAttribute(tharmesh.app.R.attr.tmNeonGreen, tv, true) && tv.data != 0) {
+            primary = tv.data
+        }
+        glowColor = (primary and 0x00FFFFFF) or 0x33000000
+        nodeStroke.color = primary
+        nodeStrokeGreen.color = primary
+        lineHotPaint.color = primary
+        corePaint.color = primary
     }
 
     private var phase = 0f
@@ -162,7 +171,7 @@ class MeshGraphView @JvmOverloads constructor(
         val glowR = maxR * 0.55f
         glowPaint.shader = RadialGradient(
             cx, cy, glowR,
-            Color.parseColor("#6600E5FF"),
+            glowColor,
             Color.TRANSPARENT,
             Shader.TileMode.CLAMP
         )

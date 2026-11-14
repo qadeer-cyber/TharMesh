@@ -128,6 +128,12 @@ class TharMeshApp : Application() {
     fun ensureMeshReady() {
         if (meshReady) return
         val profile = UserPrefs.readProfile(this) ?: return
+        // New-phone cloud login sets this hold until the user restores a recovery
+        // blob or explicitly resets. Generating a key here would present a new
+        // mesh identity as if login had created it.
+        if (UserPrefs.isIdentityHeld(this) && UserPrefs.readIdentity(this) == null) {
+            return
+        }
         val t: Transport = NearbyConnectionsTransport(this)
         // Stage 4.6: long-term signing identity. ensureIdentity is synchronized and
         // idempotent — call it the first time we construct the mesh graph for a

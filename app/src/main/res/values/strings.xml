@@ -150,6 +150,13 @@
     <!-- Reply action in message bottom sheet. -->
     <string name="action_reply">Reply</string>
     <string name="action_copy">Copy</string>
+    <string name="action_copied">Message copied</string>
+    <string name="chat_day_today">Today</string>
+    <string name="chat_day_yesterday">Yesterday</string>
+    <string name="groups_unavailable_title">Groups</string>
+    <string name="groups_unavailable_body">Groups are not available in this build. Nothing was created.</string>
+    <string name="status_unavailable_title">Status</string>
+    <string name="status_unavailable_body">Status stories are not available. Mesh and disaster status are on the Alerts tab.</string>
     <string name="action_delete">Delete</string>
 
     <!-- Login screen. -->
@@ -164,6 +171,153 @@
     <string name="login_ready">Tap Continue with Google to create your profile.</string>
     <string name="login_missing_oauth">Google sign-in not configured in this build — use Continue without an account.</string>
     <string name="login_failed_fmt">Sign-in failed: %1$s</string>
+    <string name="login_create_account">Continue with email</string>
+    <string name="login_sign_in">Sign in</string>
+    <string name="login_offline_note">Mesh messaging does not use the cloud. Register once, then this phone works offline.</string>
+    <string name="login_registration_required">A TharMesh account is required on a new install. This build will not create a stand-in account.</string>
+    <string name="new_chat_action_search_username">Search by username</string>
+    <string name="new_chat_scan_hint">Scan their TharMesh QR and compare the fingerprint before you trust the key.</string>
+    <string name="new_chat_nearby_hint">Phones on this mesh right now. This is range, not an account lookup.</string>
+    <string name="new_chat_username_hint_row">Looks up a registered name. A match is not a nearby phone.</string>
+    <string name="new_chat_userid_hint">Open a chat with a permanent TharMesh ID you already have.</string>
+    <string name="chat_row_pinned">Pinned</string>
+    <string name="chat_row_muted">Muted</string>
+    <string name="new_chat_username_hint">Username</string>
+    <string name="new_chat_directory_unavailable">The account directory is not set up on this build. No user was invented. Nearby people and saved contacts still work.</string>
+    <string name="new_chat_directory_not_nearby">A registered account is not the same as a phone that is nearby. Mesh delivery still needs a verified contact in range.</string>
+    <string name="new_chat_directory_empty">No registered username matched. Nothing was added.</string>
+    <string name="chat_action_pin">Pin chat</string>
+    <string name="chat_action_unpin">Unpin chat</string>
+    <string name="chat_action_archive">Archive chat</string>
+    <string name="chat_action_unarchive">Unarchive chat</string>
+    <string name="chat_action_mute">Mute notifications</string>
+    <string name="chat_action_unmute">Unmute notifications</string>
+    <string name="chat_action_delete">Delete chat</string>
+    <string name="chat_action_delete_confirm">Delete this chat on this phone? The contact and their verified key stay. Messages on this phone are removed.</string>
+    <string name="profile_permanent_id_fmt">TharMesh ID %1$s</string>
+
+    <string name="account_create_title">Create account</string>
+    <string name="account_create_body">Email and a password of at least 8 characters. Phone number is not used. The handle is unique and cannot be changed later.</string>
+    <string name="account_signin_title">Sign in</string>
+    <string name="account_signin_body">Signing in does not replace the mesh key already on this phone, and it does not create one.</string>
+    <string name="account_verify_title">Email verification</string>
+    <string name="account_verify_body">Open the confirmation link on this phone, then sign in with your password. This install does not join the mesh until that sign-in succeeds.</string>
+    <string name="account_recover_title">Recover account</string>
+    <string name="account_recover_body">Enter the recovery key from the phone that created it. A wrong key changes nothing. Login alone does not restore a key.</string>
+    <string name="account_secure_title">Secure your identity</string>
+    <string name="account_secure_body">The mesh key on this phone stays the key contacts already trust. The account key is separate and certifies this device. If you have no key yet, creating one is explicit and is not done by signing in.</string>
+    <string name="account_save_title">Save recovery key</string>
+    <string name="account_save_body">Write this key down. It is not stored on the server and it will not be shown again. Anyone with it can restore your mesh identity.</string>
+    <string name="account_devices_title">Device management</string>
+    <string name="account_devices_body">Adding a phone requires a QR from the new phone and an explicit approval on this one. The certificate names both public keys and a nonce. A substituted key is rejected. Revoking a device here does not delete messages or keys already on another phone.</string>
+    <string name="account_devices_current">This phone: %1$s</string>
+    <string name="account_offline_title">Offline mode</string>
+    <string name="account_offline_body">This install stays authorized with no network. An expired cloud token is not a sign-out. A server cannot revoke a device that never connects again.</string>
+    <string name="account_security_title">Account security</string>
+    <string name="account_security_body">Cloud session and mesh identity are separate. Signing out of the cloud keeps messages, contacts, and the mesh key on this phone.</string>
+    <string name="account_field_email">Email</string>
+    <string name="account_field_password">Password</string>
+    <string name="account_field_handle">Public handle</string>
+    <string name="account_field_name">Display name</string>
+    <string name="account_field_avatar">Avatar URL (https, optional)</string>
+    <string name="account_field_recovery">Recovery key</string>
+    <string name="account_field_ciphertext">Recovery ciphertext, if it is not already on this phone</string>
+    <string name="account_field_enroll">Enrollment code</string>
+    <string name="account_action_create">Create account</string>
+    <string name="account_action_sign_in">Sign in</string>
+    <string name="account_action_resend">Resend verification email</string>
+    <string name="account_action_checked">I opened the email link</string>
+    <string name="account_action_finish_signin">Sign in to finish</string>
+    <string name="account_verify_sent">Verification email sent. Open the link on this phone, then sign in.</string>
+    <string name="account_resend_wait">Resend in %1$d s</string>
+    <string name="account_error_email_rate_limited">Supabase is limiting email sends. Wait %1$d seconds. No extra email was sent.</string>
+    <string name="account_error_callback">That link is not a TharMesh confirmation. No account was activated.</string>
+    <string name="account_error_with_code">%1$s\nCode: %2$s</string>
+    <string name="account_error_email_unverified">This email is not confirmed yet. Open the latest link, then sign in with your password. No session was created.</string>
+    <string name="account_error_invalid_credentials">The email or password was not accepted. No session was created.</string>
+    <string name="account_error_otp_expired">This confirmation link is expired or invalid. Send a new email, then sign in with your password.</string>
+    <string name="account_error_account_exists">This email already has an account. Sign in. If it was never confirmed, use Resend. No new account was created.</string>
+    <string name="account_error_already_confirmed">This email is already confirmed. Sign in with your password. No new email was sent.</string>
+    <string name="account_error_weak_password">Use a password of at least 8 characters. No account was created.</string>
+    <string name="account_error_validation">The server rejected those details. Check the email and password.</string>
+    <string name="account_error_pkce">This phone does not have the signup challenge for that link. Sign in with your password. If the email is not confirmed yet, send a new one from this phone.</string>
+    <string name="account_error_email_invalid">That email address was rejected. No account was created.</string>
+    <string name="account_error_signup_disabled">New signups are turned off on this project. No account was created.</string>
+    <string name="account_error_unauthorized">The cloud session was rejected. Sign in again. The mesh key on this phone was not changed.</string>
+    <string name="account_error_unrecognized">The server rejected the request. Send the code below. No account was activated.</string>
+    <string name="account_action_continue_offline">Continue offline</string>
+    <string name="account_action_restore">Restore with recovery key</string>
+    <string name="account_action_protect">Protect the key already on this phone</string>
+    <string name="account_action_create_identity">Create a mesh identity on this phone</string>
+    <string name="account_action_reset">Reset identity</string>
+    <string name="account_action_saved">I saved the recovery key</string>
+    <string name="account_action_show_qr">Show this phone\'s enrollment QR</string>
+    <string name="account_action_approve">Approve enrollment</string>
+    <string name="account_action_accept">Accept certificate on this phone</string>
+    <string name="account_confirm_enroll">I approve this device enrollment. Both phones must agree.</string>
+    <string name="account_enroll_accepted">This phone accepted the certificate. The mesh key was not replaced.</string>
+    <string name="account_error_enroll_replay">This approval was already used. Ask the other phone for a new QR.</string>
+    <string name="account_legacy_reconcile_title">Account on this phone</string>
+    <string name="account_legacy_reconcile_keep_local">This cloud account is linked. Your mesh key on this phone stays as-is because the server has not admitted a canonical identity yet.</string>
+    <string name="account_legacy_reconcile_conflict">The server identity does not match this phone. Sign out, restore from your recovery key, or add this phone through device approval.</string>
+    <string name="account_legacy_reconcile_reset">This phone previously chose a new mesh key. The old key is not restored automatically.</string>
+    <string name="account_rotate_recovery_title">Rotate recovery key</string>
+    <string name="account_rotate_recovery_body">You will get a new recovery phrase. The app uploads a new sealed backup. Anyone who saved an old copy of the backup can still open it with the old phrase. Contacts may need to re-verify you if you rotate the mesh identity itself.</string>
+    <string name="account_rotate_recovery_action">Generate new recovery key</string>
+    <string name="account_rotate_recovery_done">New recovery key created. Write it down. Older backups still open with the old phrase.</string>
+    <string name="settings_account_backup">Backup &amp; recovery</string>
+    <string name="settings_account_backup_sub">Rotate recovery key</string>
+    <string name="account_field_revoke_device">Device ID to revoke</string>
+    <string name="account_action_revoke">Revoke device</string>
+    <string name="account_devices_list_empty">No enrolled devices are listed in the cloud yet.</string>
+    <string name="account_devices_list_offline">Cloud device list is unavailable while offline or unsigned in.</string>
+    <string name="account_devices_status_active">active</string>
+    <string name="account_devices_status_linked">linked (server confirmed)</string>
+    <string name="account_devices_status_revoked">revoked</string>
+    <string name="account_devices_list_loading">Loading device list from the server…</string>
+    <string name="account_devices_list_unconfirmed">Device list could not be confirmed. Check connection and try again.</string>
+    <string name="account_devices_label_current">(this phone)</string>
+    <string name="account_devices_lost_hint">If you lost a phone, revoke it here and use your recovery key on a new install. Revoking does not delete messages or keys already on that phone.</string>
+    <string name="account_devices_revoked">Device marked revoked in the cloud. Data may still exist on that phone.</string>
+    <string name="account_error_revoke_device">Device was not revoked. Check the ID and connection.</string>
+    <string name="account_reauth_required">Sign in again before rotating your recovery key.</string>
+    <string name="account_reauth_required_upload">Sign in again before uploading your recovery backup.</string>
+    <string name="account_reauth_required_revoke">Sign in again before revoking a device.</string>
+    <string name="account_rotation_auth_title">Recent sign-in required</string>
+    <string name="account_rotation_auth_body">Rotation and revocation need a recent sign-in (about 15 minutes). Sign in again, then retry.</string>
+    <string name="account_rotate_upload_conflict">The server recovery backup changed. Discard the staged key or try upload again.</string>
+    <string name="account_rotate_resume_body">A recovery key rotation was started but not uploaded. You can finish the upload or discard it.</string>
+    <string name="account_rotate_resume_upload">Finish upload</string>
+    <string name="account_rotate_discard_stage">Discard staged key</string>
+    <string name="account_rotate_upload_pending">New key is saved locally. Upload it when you are online.</string>
+    <string name="account_confirm_new_key">I understand this is a new key, not my previous one, and contacts must verify it again.</string>
+    <string name="account_confirm_first_key">This phone has no earlier TharMesh key to restore.</string>
+    <string name="account_error_not_configured">This copy of the app was built without SUPABASE_URL and SUPABASE_ANON_KEY. No account was created. Install the CI debug APK, or set both in local.properties and rebuild. A blank value is not a configured project.</string>
+    <string name="account_error_rate_limited">Too many attempts. Wait and try again.</string>
+    <string name="account_error_invalid">Check the email, password (8 or more characters), and handle.</string>
+    <string name="account_error_handle">That handle is already used, or it is not 3–20 letters, digits, or underscores.</string>
+    <string name="account_error_network">The account server did not answer. Nothing on this phone was changed. The mesh does not need the server.</string>
+    <string name="account_error_wrong_recovery">That recovery key did not open the backup. The keys on this phone were not changed.</string>
+    <string name="account_error_conflict">This phone already has a different mesh key. It was not replaced.</string>
+    <string name="account_error_approve">Enrollment was not approved. Both phones must agree, and the keys must match.</string>
+    <string name="account_error_keystore">The account key could not be sealed in Android Keystore. It was not written in the clear. The recovery key is the copy to keep.</string>
+    <string name="account_error_held">This phone is waiting for a recovery key or an explicit reset. A mesh key was not created automatically.</string>
+    <string name="account_status_offline_authorized">Offline mode. This install is authorized locally.</string>
+    <string name="account_status_token_expired">Cloud token expired. You are not signed out. Mesh identity stays on this phone.</string>
+    <string name="account_status_unreachable">Account server unreachable. Mesh identity stays on this phone.</string>
+    <string name="account_status_signed_out">Signed out of the cloud. Mesh key and messages are still on this phone.</string>
+    <string name="account_status_online">Cloud session active. Mesh traffic still does not go through the server.</string>
+    <string name="account_status_needs_sign_in">No local mesh identity on this install yet.</string>
+    <string name="account_reset_warning">This is a new mesh key. It is not your previous key. Contacts must scan it again.</string>
+    <string name="account_saved_local_only">Recovery ciphertext is on this phone only. It was not uploaded because cloud sign-in is not configured or the email is not verified.</string>
+    <string name="account_uploaded">Recovery ciphertext uploaded. The server does not have the recovery key or the private key.</string>
+    <string name="settings_account_security">Account security</string>
+    <string name="settings_account_security_sub">Cloud session, recovery, identity</string>
+    <string name="settings_account_devices">Devices</string>
+    <string name="settings_account_devices_sub">Approve another phone with a QR</string>
+    <string name="settings_account_offline">Offline mode</string>
+    <string name="settings_account_offline_sub">This phone stays authorized without internet</string>
+    <string name="settings_account_sign_out_kept">Cloud session ended. The mesh key on this phone was kept.</string>
 
     <!-- Contacts. -->
     <string name="contacts_title">Contacts</string>
@@ -171,6 +325,8 @@
     <string name="contacts_scan_qr">Scan QR</string>
     <string name="contacts_add_by_invite">Add by invite code</string>
     <string name="contacts_empty">No contacts yet</string>
+    <string name="contacts_empty_hint">Scan a QR code or enter an invite. A saved contact is not the same as a phone that is nearby.</string>
+    <string name="contacts_screen_hint">Your saved people. Nearby phones are on the Devices tab.</string>
     <string name="contacts_empty_title">No contacts yet</string>
     <string name="contacts_empty_subtitle">Add a contact by QR or nearby mesh discovery</string>
     <string name="contacts_search_hint">Search by name or userId</string>
@@ -266,6 +422,7 @@
     <string name="dash_signal_good">Good · -62 dBm</string>
     <string name="dash_signal_weak">Weak · -84 dBm</string>
     <string name="dash_signal_unknown">—</string>
+    <string name="dash_signal_empty">No peers in range. Signal bars stay hidden until a device is nearby.</string>
     <string name="dash_network_title">Network</string>
     <string name="dash_network_live">LIVE</string>
     <string name="dash_nearby_title">Nearby Devices</string>
@@ -443,9 +600,9 @@
     <string name="settings_account_fingerprint">Identity fingerprint</string>
     <string name="settings_account_fingerprint_missing">No identity generated yet</string>
     <string name="settings_account_provider">Sign-in provider</string>
-    <string name="settings_account_sign_out">Sign out</string>
-    <string name="settings_account_sign_out_sub">Clear local profile and return to login</string>
-    <string name="settings_account_sign_out_confirm">Sign out and clear your local profile?</string>
+    <string name="settings_account_sign_out">Sign out of cloud</string>
+    <string name="settings_account_sign_out_sub">Ends the cloud session. The mesh key stays on this phone.</string>
+    <string name="settings_account_sign_out_confirm">Sign out of the cloud account? Messages, contacts, and the mesh key on this phone stay.</string>
 
     <!-- Privacy section content -->
     <string name="settings_privacy_blocked">Blocked contacts</string>
@@ -453,7 +610,11 @@
     <string name="settings_privacy_disappearing">Disappearing messages</string>
 
     <!-- Chats section content -->
-    <string name="settings_chats_theme">Theme</string>
+    <string name="settings_chats_theme">Light or dark</string>
+    <string name="settings_appearance">Color</string>
+    <string name="settings_appearance_ocean">Ocean blue</string>
+    <string name="settings_appearance_rose">Rose pink</string>
+    <string name="identity_invalid_toast">Could not identify this device. Scan the QR or try again. Nothing was added.</string>
     <string name="settings_chats_wallpaper">Wallpaper</string>
     <string name="settings_chats_history">Chat history</string>
 
@@ -519,7 +680,7 @@
     <string name="settings_legal_terms">Terms of Use</string>
     <string name="settings_legal_terms_sub">Lawful use and your responsibilities</string>
     <string name="settings_legal_privacy">Privacy Policy</string>
-    <string name="settings_legal_privacy_sub">No central server. Messages stay on your device.</string>
+    <string name="settings_legal_privacy_sub">Account data, nearby messaging and recovery</string>
     <string name="settings_legal_disclaimer">Disclaimer</string>
     <string name="settings_legal_disclaimer_sub">Not a telecom service. Not for emergencies.</string>
 
@@ -539,7 +700,7 @@
     <!-- ============================================================ -->
     <!-- PRIVACY POLICY — informational                               -->
     <!-- ============================================================ -->
-    <string name="legal_doc_privacy_body">TharMesh is built so that your data stays on your own device.\n\n1. No central server\nTharMesh does not connect to any backend operated by the developer. There is no account, no cloud sync, and no internet relay. Messages, contacts, and settings live on your device only.\n\n2. No central data collection\nThe developer does not receive your messages, your contact list, your usage analytics, your IP address, your device identifiers, or any other personal data. Nothing about your use of the app is sent off your device by the developer.\n\n3. No tracking\nTharMesh does not include third-party analytics, advertising, or tracking SDKs.\n\n4. Peer-to-peer communication only\nThe app communicates over your device\'s Bluetooth and Wi-Fi radios to other nearby devices that are also running TharMesh. It does not use mobile data or a home Wi-Fi router to reach the internet.\n\n5. On-device storage\nMessages, your contact list, your block list, and your settings are stored on your device. Uninstalling the app removes all of your TharMesh data. There is no cloud copy.\n\n6. Diagnostics\nThe app records technical counters (for example, number of messages sent, number of retry attempts, transport errors) so you can troubleshoot connectivity. These counters are stored on your device and shown only to you. They never include the body of any message and are not sent off the device.\n\n7. Permissions\nBluetooth permission is required to communicate with nearby devices. Location permission is required by Android in order to scan for Bluetooth devices — TharMesh does not read your GPS coordinates and does not store your location.\n\n8. Encryption\nMessages exchanged with a contact whose key you have verified (by scanning their QR code) are end-to-end encrypted with a per-peer key derived from each side\'s long-term identity. The developer does not have access to your keys and cannot decrypt your messages.\n\n9. Identity visibility\nThe name you choose during onboarding is visible to peers you connect with. TharMesh is not marketed as anonymous.</string>
+    <string name="legal_doc_privacy_body">TharMesh uses nearby radios for messaging and internet services for optional cloud functions and account activation in account-enabled builds.\n\n1. Accounts\nSupabase processes email or Google sign-in information, verification requests, account identifiers and session data. Account services may store profile fields, device records and public keys. Authentication providers may process IP addresses and security logs.\n\n2. Nearby messages\nMessages and contacts are stored on your device. Nearby phones may carry or temporarily relay mesh data over Bluetooth and Wi-Fi. Supabase is not used as a message relay. Delivery depends on device availability, radio range and permissions.\n\n3. Recovery\nIf enabled, encrypted recovery data may be uploaded. Keep your recovery key private. Losing the device and recovery material can make the original identity unrecoverable.\n\n4. Your choices\nRemoving local app data does not remove cloud account records, provider logs or copies held by recipients. For privacy inquiries, use the contact information in the public policy.\n\nhttps://qadeer-cyber.github.io/TharMesh/privacy.html</string>
 
     <!-- ============================================================ -->
     <!-- DISCLAIMER — informational only, NOT part of acceptance gate -->
@@ -589,4 +750,27 @@
     <string name="about_link_url_whatsapp" translatable="false">https://whatsapp.com/channel/0029Vb7JXorLikg9Msl6qB2B</string>
     <string name="about_link_no_handler">No app to open this link</string>
     <string name="about_avatar_cd">Founder portrait</string>
+    <string name="account_error_email_delivery">The authentication service could not send your email. Try again later or contact TharMesh support.</string>
+    <string name="account_error_redirect_configuration">The authentication service rejected the app callback. Contact TharMesh support.</string>
+    <string name="account_error_server">The authentication service is temporarily unavailable. Try again in a moment.</string>
+    <string name="account_google_body">Verify your Google account with TharMesh to continue.</string>
+    <string name="account_google_failed">Google verification could not be completed. Try again.</string>
+    <string name="account_otp_title">Continue with email</string>
+    <string name="account_otp_request_body">Enter your email to receive a six-digit code.</string>
+    <string name="account_otp_verify_body">Enter or paste the six-digit code from your email.</string>
+    <string name="account_otp_send">Send code</string>
+    <string name="account_otp_code">Six-digit code</string>
+    <string name="account_otp_verify">Verify code</string>
+    <string name="account_otp_change">Use a different email</string>
+    <string name="account_otp_resend">Send a new code</string>
+    <string name="account_otp_sending">Requesting code…</string>
+    <string name="account_otp_checking">Verifying…</string>
+    <string name="account_otp_invalid">Enter the six-digit code from your email.</string>
+    <string name="account_otp_expired">This code is expired or invalid. Request a new code and try again.</string>
+    <string name="account_recovery_later">Set up recovery later</string>
+    <string name="account_recovery_defer_warning">If you lose this phone before saving your recovery key and encrypted backup, your original messaging identity may be impossible to recover.</string>
+    <string name="account_recovery_continue">Continue to TharMesh</string>
+    <string name="account_provisioning">Setting up your secure account…</string>
+    <string name="account_provisioning_retry">Secure setup is temporarily unavailable. Try again when connected.</string>
+    <string name="account_action_provisioning_retry">Retry secure setup</string>
 </resources>

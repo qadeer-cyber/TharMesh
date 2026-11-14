@@ -4,6 +4,7 @@
 // distribution, or use is strictly prohibited. See LICENSE for details.
 package com.tharmesh.ui.profile
 
+import com.tharmesh.ui.theme.Appearance
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
@@ -66,6 +67,7 @@ class ProfileActivity : AppCompatActivity() {
     private lateinit var statusBubble: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Appearance.applyTheme(this)
         super.onCreate(savedInstanceState)
         ThemeManager.applyFromPrefs(this)
         setContentView(R.layout.activity_profile)
@@ -112,7 +114,10 @@ class ProfileActivity : AppCompatActivity() {
         val profile: UserProfile? = UserPrefs.readProfile(this)
         val name = profile?.username?.takeIf { it.isNotBlank() } ?: getString(R.string.profile_anonymous)
         displayName.text = name
-        userIdView.text = profile?.userId ?: "—"
+        userIdView.text = getString(
+            R.string.profile_permanent_id_fmt,
+            profile?.userId ?: "—"
+        )
         avatarLetter.text = name.take(1).uppercase()
 
         val status = UserPrefs.getStatus(this)
