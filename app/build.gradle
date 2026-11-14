@@ -35,6 +35,12 @@ def supabaseProductionProjectRef = firstNonBlank("THARMESH_PRODUCTION_PROJECT_RE
 if (!supabaseProductionProjectRef) {
     supabaseProductionProjectRef = firstNonBlank("SUPABASE_PRODUCTION_PROJECT_REF")
 }
+def supabaseDebugProjectRef = firstNonBlank("THARMESH_DEBUG_PROJECT_REF")
+if (!supabaseDebugProjectRef) {
+    supabaseDebugProjectRef = firstNonBlank("SUPABASE_DEBUG_PROJECT_REF")
+}
+// Unit tests + local debug only; release/qa buildTypes override to empty (fail-closed).
+def supabaseDebugProjectRefForDebug = supabaseDebugProjectRef ?: "example"
 def escapeBuildConfig = { String value ->
     value.replace("\\", "\\\\").replace("\"", "\\\"")
 }
@@ -83,6 +89,7 @@ android {
         buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"unset\""
         buildConfigField "String", "SUPABASE_STAGING_PROJECT_REF", "\"${escapeBuildConfig(supabaseStagingProjectRef)}\""
         buildConfigField "String", "SUPABASE_PRODUCTION_PROJECT_REF", "\"${escapeBuildConfig(supabaseProductionProjectRef)}\""
+        buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"${escapeBuildConfig(supabaseDebugProjectRefForDebug)}\""
     }
 
     signingConfigs {
@@ -108,16 +115,19 @@ android {
         debug {
             signingConfig signingConfigs.debug
             buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"unset\""
+            buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"${escapeBuildConfig(supabaseDebugProjectRefForDebug)}\""
         }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"release\""
+            buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"\""
         }
         qa {
             initWith release
             signingConfig signingConfigs.qa
             buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"staging\""
+            buildConfigField "String", "SUPABASE_DEBUG_PROJECT_REF", "\"\""
         }
     }
 

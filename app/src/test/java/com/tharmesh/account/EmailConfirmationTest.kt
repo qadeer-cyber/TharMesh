@@ -147,9 +147,32 @@ class EmailConfirmationTest {
 
     @Test
     fun configured_trimsUrlAndAcceptsPublishableKey() {
-        assertTrue(AuthBackend.configured(" https://example.supabase.co/ ", " sb_publishable_test_key "))
-        assertFalse(AuthBackend.configured("", "sb_publishable_test_key"))
-        assertFalse(AuthBackend.configured("http://example.supabase.co", "sb_publishable_test_key"))
-        assertFalse(AuthBackend.configured("https://example.supabase.co", "   "))
+        assertTrue(
+            SupabaseEnvironmentGuard.cloudBackendPermitted(
+                " https://example.supabase.co/ ",
+                " sb_publishable_test_key ",
+                SupabaseEnvironmentGuard.BACKEND_UNSET,
+                stagingProjectRef = "",
+                productionProjectRef = "",
+                debugProjectRef = "example"
+            )
+        )
+        assertFalse(
+            SupabaseEnvironmentGuard.cloudBackendPermitted(
+                "", "sb_publishable_test_key ", SupabaseEnvironmentGuard.BACKEND_UNSET, "", "", "example"
+            )
+        )
+        assertFalse(
+            SupabaseEnvironmentGuard.cloudBackendPermitted(
+                "http://example.supabase.co", "sb_publishable_test_key ",
+                SupabaseEnvironmentGuard.BACKEND_UNSET, "", "", "example"
+            )
+        )
+        assertFalse(
+            SupabaseEnvironmentGuard.cloudBackendPermitted(
+                "https://example.supabase.co", "   ",
+                SupabaseEnvironmentGuard.BACKEND_UNSET, "", "", "example"
+            )
+        )
     }
 }

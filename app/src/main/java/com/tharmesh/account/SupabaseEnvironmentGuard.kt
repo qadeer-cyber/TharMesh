@@ -15,7 +15,7 @@ object SupabaseEnvironmentGuard {
 
     /**
      * Extract `<ref>` from `https://<ref>.supabase.co`. Returns null for lookalikes
-     * (wrong TLD, nested hosts, blank ref).
+     * (wrong TLD, nested hosts, blank ref, non-https).
      */
     fun extractProjectRef(baseUrl: String): String? {
         val trimmed = baseUrl.trim().trimEnd('/').lowercase()
@@ -32,15 +32,18 @@ object SupabaseEnvironmentGuard {
     }
 
     /**
-     * When [backendEnv] is staging/qa, [baseUrl] must match [stagingProjectRef] exactly.
-     * Release builds must never target staging; unset debug builds must not point at staging.
+     * Staging/qa: exact staging ref only.
+     * Release: exact production ref only (fail closed when production ref blank).
+     * Debug/unset: exact debug ref, or staging ref when debug ref blank but staging set;
+     * never production; fail closed when all configured refs blank.
      */
     fun cloudBackendPermitted(
         baseUrl: String,
         anonKey: String,
         backendEnv: String,
         stagingProjectRef: String,
-        productionProjectRef: String
+        productionProjectRef: String,
+        debugProjectRef: String = ""
     ): Boolean {
         val key = anonKey.trim()
         if (key.isEmpty()) return false
@@ -51,28 +54,22 @@ object SupabaseEnvironmentGuard {
         val ref = extractProjectRef(url) ?: return false
         val staging = stagingProjectRef.trim().lowercase()
         val production = productionProjectRef.trim().lowercase()
+        val debug = debugProjectRef.trim().lowercase()
         return when (backendEnv.trim().lowercase()) {
-            BACKEND_STAGING, BACKEND_QA -> staging.isNotEmpty() && ref == staging
+            BACKEND_STAGING, BACKEND_QA ->
+                staging.isNotEmpty() && ref == staging
             BACKEND_RELEASE -> {
                 if (staging.isNotEmpty() && ref == staging) return false
-                when {
-                    production.isNotEmpty() -> ref == production
-                    staging.isNotEmpty() -> ref != staging
-                    else -> true
-                }
+                production.isNotEmpty() && ref == production
             }
             else -> {
-                if (staging.isNotEmpty() && ref == staging) return false
-                true
+                if (production.isNotEmpty() && ref == production) return false
+                when {
+                    debug.isNotEmpty() -> ref == debug
+                    staging.isNotEmpty() -> ref == staging
+                    else -> false
+                }
             }
         }
-    }
-
-    @Deprecated(
-        "Substring marker guard — use cloudBackendPermitted",
-        ReplaceWith("cloudBackendPermitted(baseUrl, \"\", backendEnv, stagingMarker, \"\")")
-    )
-    fun stagingUrlAllowed(baseUrl: String, backendEnv: String, stagingMarker: String): Boolean {
-        return cloudBackendPermitted(baseUrl, "eyJhbGciOiJIUzI1NiJ9.e30.placeholder", backendEnv, stagingMarker, "")
     }
 }

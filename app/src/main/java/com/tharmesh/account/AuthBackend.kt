@@ -264,7 +264,8 @@ object AuthBackend {
             anonKey,
             SupabaseBuildConfig.backendEnv(),
             SupabaseBuildConfig.stagingProjectRef(),
-            SupabaseBuildConfig.productionProjectRef()
+            SupabaseBuildConfig.productionProjectRef(),
+            SupabaseBuildConfig.debugProjectRef()
         )
 
     private fun call(
