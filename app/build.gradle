@@ -27,6 +27,8 @@ def googleWebClientId = firstNonBlank("GOOGLE_WEB_CLIENT_ID")
 // A blank value makes AuthBackend fail closed. Never put a service-role key here.
 def supabaseUrl = firstNonBlank("SUPABASE_URL")
 def supabaseAnonKey = firstNonBlank("SUPABASE_ANON_KEY")
+def supabaseBackendEnv = firstNonBlank("THARMESH_SUPABASE_BACKEND_ENV") ?: "unset"
+def supabaseStagingMarker = firstNonBlank("THARMESH_STAGING_URL_MARKER") ?: "tharmesh-staging"
 def escapeBuildConfig = { String value ->
     value.replace("\\", "\\\\").replace("\"", "\\\"")
 }
@@ -72,6 +74,8 @@ android {
         buildConfigField "String", "GIT_COMMIT_HASH", "\"${gitCommitHash}\""
         buildConfigField "String", "SUPABASE_URL", "\"${escapeBuildConfig(supabaseUrl)}\""
         buildConfigField "String", "SUPABASE_ANON_KEY", "\"${escapeBuildConfig(supabaseAnonKey)}\""
+        buildConfigField "String", "SUPABASE_BACKEND_ENV", "\"${escapeBuildConfig(supabaseBackendEnv)}\""
+        buildConfigField "String", "SUPABASE_STAGING_URL_MARKER", "\"${escapeBuildConfig(supabaseStagingMarker)}\""
     }
 
     signingConfigs {

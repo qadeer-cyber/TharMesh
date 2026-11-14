@@ -259,6 +259,14 @@ object AuthBackend {
     }
 
     fun configured(baseUrl: String, anonKey: String): Boolean {
+        if (!SupabaseEnvironmentGuard.stagingUrlAllowed(
+                baseUrl,
+                SupabaseBuildConfig.backendEnv(),
+                SupabaseBuildConfig.stagingUrlMarker()
+            )
+        ) {
+            return false
+        }
         val url = baseUrl.trim().trimEnd('/')
         val key = anonKey.trim()
         return key.isNotEmpty() && url.startsWith("https://") && url.length > "https://".length

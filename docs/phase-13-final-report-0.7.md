@@ -6,80 +6,82 @@
 |-------|--------|
 | Cloud run | [bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9](https://cursor.com/agents/bc-e43a1c33-85a3-5815-b17d-b4cf9a5c5aa9) |
 | `originalModelName` | **composer-2.5** |
-| Branch | `cursor/universal-account-0939` |
-| Report commit | `16f9984` (Cat 6 emulator GitHub-hosted runner — split Gate A / Gate B×3) |
-| Supervisor | Accepted honest **NOT EXECUTED** on `c7af23e`; **Engineering ready = NO** until device gates close |
+| Branch (0.7 integration) | `cursor/universal-account-0939` |
+| **Closed-gate commit** | **`9f7f50f570a4d765f28debd183817b23bbb7ad27`** |
+| **Authoritative Cat 6 run** | [**43547434502**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43547434502) — **all 5 jobs success** |
+| PR #52 | **Draft** (0.7 track; not merged) |
 
-## B — PR / CI / artifacts
+## B — Cat 6 emulator — Gate closure (supervisor verified)
 
-| Item | Status |
-|------|--------|
-| PR #52 | **Draft** |
-| PR #55 | **Unmerged** |
-| CI on `c7af23e` | [43434968872](https://github.com/qadeer-cyber/TharMesh/actions/runs/43434968872) — postgres **success**, build **success**, signed-qa **skipped** |
-| Prior accepted CI | [43426038834](https://github.com/qadeer-cyber/TharMesh/actions/runs/43426038834) (`fa3f8f1`) |
+Workflow: `.github/workflows/emulator-evidence.yml` on commit **`9f7f50f`**.
 
-### APK identity (file SHA-256)
+| Job | Conclusion | Duration (approx.) |
+|-----|------------|--------------------|
+| prepare-apks | **success** | ~3m 31s |
+| gate-a-legacy-upgrade | **success** | ~2m 44s |
+| gate-b-persistence (1) | **success** | ~6m 2s |
+| gate-b-persistence (2) | **success** | ~6m 15s |
+| gate-b-persistence (3) | **success** | ~6m 18s |
 
-| SHA-256 | Source |
-|---------|--------|
-| `e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89` | **Rebuilt Room v6** debug APK from historical **`9fedae9`** + pinned `app/debug.keystore` (`scripts/build-historical-debug-apk.sh`; artifact copy `tharmesh-app-debug-9fedae9-room6.apk`) |
-| `f27685be…` | Supervisor attachment — **not** matched to any CI re-download in inventory |
-| `ac7c1117…` | `db91149` CI APK |
-| `42f70734…` | `fa3f8f1` CI APK |
-| `a6c96343…` | `b3d2dea` / `1070ff9` |
+### Gate A
 
-**Debug signing cert (all above debug APKs that use pinned keystore):** SHA-1 `55a7a32dca87f5393e1bf83b0b6f3ba5db235add`, SHA-256 `ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec`.
+| Check | Evidence |
+|-------|----------|
+| Room **v6 → v7** in-place upgrade | `RESULT=PASS debug-keystore legacy schema upgrade` |
+| **LEGACY_V6_SEED** messages (3) | Preserved in before/after snapshots |
+| Contacts **peer-a / peer-b** | Preserved |
+| Verified **peer_identity** (2) | Preserved |
+| Snapshot diffs | **messages.tsv, contacts.tsv, peer_identity.tsv, mesh_fingerprint.txt** unchanged |
 
-## C — Category totals
+Artifact: **gate-a-legacy-upgrade** id **14095360513** (run 43547434502).
+
+### Gate B (3 independent passes)
+
+Each pass: `RESULT=PASS`, `STAGE_END recovery_stage_death ok`, per-pass **uninstall+install** clean state, head APK SHA vs prepare-apks.
+
+| Pass | Artifact ID | `RESULT` |
+|------|-------------|----------|
+| 1 | **14095301700** | `RESULT=PASS` |
+| 2 | **14094732956** | `RESULT=PASS` |
+| 3 | **14095248876** | `RESULT=PASS` |
+
+**Head debug APK (run 43547434502)**
+
+| | SHA-256 |
+|--|---------|
+| File | `3feee5d48b895e9e2afa5c34617b8bdef82712cb7e7d07cb7916dcf16d9394bc` |
+| Signing cert | `ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec` |
+
+**Pinned v6 (prepare-apks):** file `e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89` · cert `ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec` · source `9fedae9`.
+
+### Harness notes (accepted)
+
+- **API 33+** image checks: **NOT EXECUTED** (API 30 AVD only; transcript logs `API 33+ image: NOT EXECUTED`).
+- **RecoveryRotationStage.save**: **`apply()` → `commit()`** for emulator stage-death durability (accepted).
+- Recovery stage hang fix: no `am start -W` on instant-finish smoke; **180s** per-stage deadlines with diagnostics (commit `9f7f50f`).
+
+## C — Category totals (0.7 scope)
 
 | Cat | Status |
 |-----|--------|
-| 1 JVM (472) | **EXECUTED** |
-| 2 Enrollment Cat 2 | **EXECUTED** (accepted) |
-| 3 PG 001–014 / 190 assertions | **EXECUTED** |
+| 1 JVM | **EXECUTED** (regression on 0.8 branch continues) |
+| 2 Enrollment Cat 2 | **EXECUTED** |
+| 3 PG 001–014 | **EXECUTED** |
 | 4 Edge crypto | **EXECUTED** |
-| 5 Hosted staging | **NOT EXECUTED** |
-| **6 Emulator (GitHub-hosted)** | **IN PROGRESS** — workflow `.github/workflows/emulator-evidence.yml` · [43467365228](https://github.com/qadeer-cyber/TharMesh/actions/runs/43467365228) on `16f9984` (Gate A job + Gate B passes 1–3, fresh emulator each) |
-| **6b Gate A v6→v7** | **PASS** on run [43460956240](https://github.com/qadeer-cyber/TharMesh/actions/runs/43460956240) (`50bcd5b`, monolithic; superseded by split jobs on `16f9984`) |
+| 5 Hosted staging | **NOT EXECUTED** (owner credentials / approval) |
+| **6 Emulator Cat 6** | **EXECUTED** — Gates A+B **PASS** on **`9f7f50f`** |
 | 7 Two-phone | **NOT EXECUTED** |
-| Signed QA upgrade | **NOT EXECUTED** |
+| Signed QA | **NOT EXECUTED** (e.g. [43489694681](https://github.com/qadeer-cyber/TharMesh/actions/runs/43489694681) awaiting environment approval) |
 
-## D — Gate evidence (supervisor paths)
-
-### Path 1 — Legacy schema (`9fedae9`, Room 6)
-
-| Step | Result |
-|------|--------|
-| Worktree at last Room **v6** commit `9fedae9` | **DONE** |
-| Copy pinned `app/debug.keystore` + debug `signingConfig` (build.gradle only) | **DONE** |
-| `./gradlew assembleDebug` | **BUILD SUCCESS** |
-| `apksigner` SHA-1 / SHA-256 | **Matches** pinned identity |
-| Install → seed → `install -r` head → TSV/fp / `PRAGMA user_version` 6→7 | **NOT EXECUTED** — emulator/adb unavailable in this run |
-
-Transcript: `/opt/cursor/artifacts/ui/0.7-evidence/debug-keystore-upgrade/legacy-build-transcript.txt`
-
-**Label when device run succeeds:** `Cat 6 debug-keystore legacy upgrade, old APK rebuilt from historical source commit 9fedae917868340e9b2b93f46b847a6119c576bd`
-
-### Path 2 — Emulator 3-pass
-
-| Step | Result |
-|------|--------|
-| `adb kill-server` / kill qemu / cold-boot flags (`-no-snapshot-load -wipe-data`, `-gpu swiftshader_indirect`) | **ATTEMPTED** |
-| `sys.boot_completed` + bootanim stopped + `emulator-0.7-evidence-3pass.sh` | **NOT EXECUTED** — no `adb` device; transcripts not produced |
-
-## E — Owner checklist
-
-(unchanged — staging OFF, PR #52 draft, signed-qa blocked)
-
-## F — Verdicts
+## D — 0.7 engineering verdict (closed)
 
 | Question | Verdict |
 |----------|---------|
-| Engineering ready | **NO** — conditional on **6b on-device** legacy migration + **6** triple `RESULT=PASS` |
+| **Engineering Ready (0.7 emulator gates)** | **YES** on **`9f7f50f`** / run **43547434502** |
 | Staging validated | **NO** |
 | Device validated | **NO** |
-| Safe to merge PR #52 | **NO** |
+| Safe to merge PR #52 | **NO** (owner policy; draft) |
 | Safe to enable production admission | **NO** |
+| Production | **NO** |
 
-**Gate labels:** Engineering complete **NO** · Staging validated **NO** · Device validated **NO** · RC accepted **NO**
+**0.8 work** branches from **`9f7f50f`** on `cursor/tharmesh-0.8-field-mesh-5aa9` (separate draft PR). PR #55 unchanged.
