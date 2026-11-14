@@ -2,6 +2,8 @@
 
 **Status: NOT EXECUTED** in Cloud Agent runs (no paired physical radios in CI).
 
+**0.8 engineering HEAD:** `4bf1241` on branch `cursor/tharmesh-0.8-field-mesh-5aa9` (draft PR #56). JVM mesh tests **PASS** at agent workspace; **fresh emulator Gate A+B 3/3 on that SHA — NOT EXECUTED** until CI completes. **Do not treat JVM simulation as field UAT.**
+
 This document is the owner-executable field acceptance package. **Simulated JVM / loopback / emulator evidence does not satisfy these categories.**
 
 ## Prerequisites
