@@ -43,8 +43,9 @@ p.write_text(text.replace(old, new, 1))
 PY
 fi
 
-log "building assembleDebug at $COMMIT"
-(cd "$WT" && ./gradlew assembleDebug -q)
+export GRADLE_USER_HOME="${HISTORICAL_GRADLE_USER_HOME:-$WT/.gradle-user-home}"
+log "building assembleDebug at $COMMIT (gradle_user_home=$GRADLE_USER_HOME)"
+(cd "$WT" && ./gradlew --no-daemon clean assembleDebug -q)
 log "apk=$OUT"
 sha256sum "$OUT"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
