@@ -35,7 +35,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class NearbyConnectionsTransport(
     context: Context,
-    private val serviceId: String = DEFAULT_SERVICE_ID
+    private val serviceId: String = DEFAULT_SERVICE_ID,
+    private val connectPolicy: NearbyMeshConnectPolicy = NearbyMeshConnectPolicy()
 ) : Transport {
 
     private val client: ConnectionsClient = Nearby.getConnectionsClient(context.applicationContext)
@@ -88,6 +89,7 @@ class NearbyConnectionsTransport(
      */
     private var callbackThread: HandlerThread? = null
     private var callbackHandler: Handler? = null
+    private val pendingTimeoutRunnables: MutableMap<String, Runnable> = ConcurrentHashMap()
 
     override fun setListener(listener: (TransportEvent) -> Unit) {
         this.listener = listener
@@ -114,6 +116,10 @@ class NearbyConnectionsTransport(
         // Drain in-flight callbacks then quit. quitSafely lets queued events
         // fire (so the engine sees a clean PeerDisconnected sequence on
         // teardown) before the looper exits.
+        for ((_, r) in pendingTimeoutRunnables) {
+            callbackHandler?.removeCallbacks(r)
+        }
+        pendingTimeoutRunnables.clear()
         callbackThread?.quitSafely()
         callbackThread = null
         callbackHandler = null
@@ -145,6 +151,29 @@ class NearbyConnectionsTransport(
      * (e.g. an uncaught NPE in a future feature) doesn't kill the dispatch
      * thread and silently freeze the entire transport.
      */
+    private fun scheduleConnectTimeout(peerId: String) {
+        val handler = callbackHandler ?: return
+        cancelConnectTimeout(peerId)
+        val runnable = Runnable {
+            if (connectPolicy.pendingTimedOut(peerId)) {
+                connectPolicy.clearPending(peerId)
+                dispatch(
+                    TransportEvent.Error(peerId, 0L, "connection timed out after ${NearbyMeshConnectPolicy.CONNECT_TIMEOUT_MS}ms")
+                )
+            }
+        }
+        pendingTimeoutRunnables[peerId] = runnable
+        handler.postDelayed(runnable, NearbyMeshConnectPolicy.CONNECT_TIMEOUT_MS)
+    }
+
+    private fun cancelConnectTimeout(peerId: String) {
+        val handler = callbackHandler
+        val r = pendingTimeoutRunnables.remove(peerId)
+        if (handler != null && r != null) {
+            handler.removeCallbacks(r)
+        }
+    }
+
     private fun dispatch(event: TransportEvent) {
         val handler = callbackHandler
         if (handler == null) {
@@ -184,10 +213,18 @@ class NearbyConnectionsTransport(
             if (peerFoundDispatched.add(remoteUserId)) {
                 dispatch(TransportEvent.PeerFound(remoteUserId, remoteUserId))
             }
-            // Auto-request connection.
+            if (!connectPolicy.allowConnectionRequest(remoteUserId)) {
+                return
+            }
+            scheduleConnectTimeout(remoteUserId)
             client.requestConnection(localPeerId, endpointId, connectionLifecycleCallback)
                 .addOnFailureListener { e ->
+                    connectPolicy.clearPending(remoteUserId)
+                    cancelConnectTimeout(remoteUserId)
                     Log.w(TAG, "requestConnection failed for $endpointId", e)
+                    dispatch(
+                        TransportEvent.Error(remoteUserId, 0L, "requestConnection: ${e.message}")
+                    )
                 }
         }
 
@@ -217,16 +254,21 @@ class NearbyConnectionsTransport(
         }
 
         override fun onConnectionResult(endpointId: String, resolution: ConnectionResolution) {
+            val userId = endpointToUserId[endpointId]
+            if (userId != null) {
+                cancelConnectTimeout(userId)
+                connectPolicy.markConnected(userId)
+            }
             if (resolution.status.isSuccess) {
-                val userId = endpointToUserId[endpointId] ?: return
+                if (userId == null) return
                 dispatch(TransportEvent.PeerConnected(userId))
             } else {
-                val userId = endpointToUserId.remove(endpointId)
-                if (userId != null) {
-                    userIdToEndpoint.remove(userId, endpointId)
+                val removed = endpointToUserId.remove(endpointId)
+                if (removed != null) {
+                    userIdToEndpoint.remove(removed, endpointId)
                 }
                 dispatch(
-                    TransportEvent.Error(userId, 0L, "connection failed: ${resolution.status.statusMessage}")
+                    TransportEvent.Error(removed, 0L, "connection failed: ${resolution.status.statusMessage}")
                 )
             }
         }
@@ -236,6 +278,8 @@ class NearbyConnectionsTransport(
             if (userId != null) {
                 userIdToEndpoint.remove(userId, endpointId)
                 peerFoundDispatched.remove(userId)
+                connectPolicy.markDisconnected(userId)
+                cancelConnectTimeout(userId)
                 dispatch(TransportEvent.PeerDisconnected(userId))
             }
         }

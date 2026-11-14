@@ -41,7 +41,13 @@ object NearbyPermissions {
     }
 
     val required: Array<String>
-        get() = if (Build.VERSION.SDK_INT >= SDK_S) {
+        get() = requiredForSdk(Build.VERSION.SDK_INT)
+
+    /**
+     * JVM-testable matrix for Android 12+ vs legacy Bluetooth permission sets.
+     */
+    fun requiredForSdk(sdkInt: Int): Array<String> =
+        if (sdkInt >= SDK_S) {
             arrayOf(
                 BLUETOOTH_ADVERTISE,
                 BLUETOOTH_CONNECT,
