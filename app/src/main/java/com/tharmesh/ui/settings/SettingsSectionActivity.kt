@@ -324,6 +324,11 @@ class SettingsSectionActivity : AppCompatActivity() {
             if (disasterOn) getString(R.string.settings_disaster_sub_on)
             else getString(R.string.settings_disaster_sub_off)
         ) { showDisasterDialog() }
+        addInfoRow(
+            R.drawable.ic_bell,
+            getString(R.string.settings_battery),
+            getString(R.string.mesh_power_doze_explanation)
+        )
     }
 
     private fun renderStorage() {
