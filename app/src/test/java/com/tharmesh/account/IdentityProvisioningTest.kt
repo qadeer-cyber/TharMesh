@@ -55,7 +55,7 @@ class IdentityProvisioningTest {
     }
 
     private fun client(transport: HttpTransport) = IdentityProvisioning(
-        transport, "https://supabase.invalid", "public-key", AuthTokens(account, "user-token", 60, true)
+        transport, "https://unittest.supabase.co", "public-key", AuthTokens(account, "user-token", 60, true)
     )
 
     private fun state(name: String, key: String? = null): HttpTransport.Response {

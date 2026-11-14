@@ -53,7 +53,7 @@ class RecoveryRestoreIntegrationTest {
     @Test fun staleGeneration_uploadConflict() {
         val http = FakeHttp(409, """{"error":"stale"}""")
         val sealed = IdentityRecovery.seal("key", IdentityRecovery.generatePhrase(), SecureRandom())
-        val result = TrustedRecoveryRotate.upload(http, "https://x", "anon", "tok", sealed, 3, "grant", "req-1")
+        val result = TrustedRecoveryRotate.upload(http, "https://unittest.supabase.co", "anon", "tok", sealed, 3, "grant", "req-1")
         assertTrue(result is AuthCall.Failed)
         assertEquals("generation_conflict", (result as AuthCall.Failed).reason)
     }
@@ -73,7 +73,7 @@ class RecoveryRestoreIntegrationTest {
     @Test fun expiredAuthorization_freshAuthRequired() {
         val http = FakeHttp(403, "{}")
         val sealed = IdentityRecovery.seal("k", IdentityRecovery.generatePhrase(), SecureRandom())
-        val result = TrustedRecoveryRotate.upload(http, "https://x", "anon", "tok", sealed, 0, "g", "req-2")
+        val result = TrustedRecoveryRotate.upload(http, "https://unittest.supabase.co", "anon", "tok", sealed, 0, "g", "req-2")
         assertEquals("fresh_auth_required", (result as AuthCall.Failed).reason)
     }
 
@@ -98,8 +98,8 @@ class RecoveryRestoreIntegrationTest {
         val http = FakeHttp(200, """{"ok":true,"generation":2}""")
         val sealed = IdentityRecovery.seal("k", IdentityRecovery.generatePhrase(), SecureRandom())
         val req = "req-idempotent-77"
-        val first = TrustedRecoveryRotate.upload(http, "https://x", "anon", "tok", sealed, 1, "g", req)
-        val second = TrustedRecoveryRotate.upload(http, "https://x", "anon", "tok", sealed, 1, "g", req)
+        val first = TrustedRecoveryRotate.upload(http, "https://unittest.supabase.co", "anon", "tok", sealed, 1, "g", req)
+        val second = TrustedRecoveryRotate.upload(http, "https://unittest.supabase.co", "anon", "tok", sealed, 1, "g", req)
         assertTrue(first is AuthCall.RecoveryUploaded)
         assertTrue(second is AuthCall.RecoveryUploaded)
         assertEquals(2, http.posts)

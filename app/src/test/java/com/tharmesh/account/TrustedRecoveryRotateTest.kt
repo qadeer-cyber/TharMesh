@@ -49,7 +49,7 @@ class TrustedRecoveryRotateTest {
         http.code = 409
         val sealed = IdentityRecovery.seal("key", IdentityRecovery.generatePhrase(), java.security.SecureRandom())
         val result = TrustedRecoveryRotate.upload(
-            http, "https://x", "anon", "tok", sealed, 3, "g", "req-2"
+            http, "https://unittest.supabase.co", "anon", "tok", sealed, 3, "g", "req-2"
         )
         assertTrue(result is AuthCall.Failed)
         assertEquals("generation_conflict", (result as AuthCall.Failed).reason)
