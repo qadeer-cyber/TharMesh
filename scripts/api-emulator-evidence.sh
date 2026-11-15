@@ -19,8 +19,7 @@ test -f "$APK"
   echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "commit=${GITHUB_SHA:-local}"
 } | tee "$EVIDENCE/run-metadata.txt"
-THERMESH_VERIFY_CERT_ONLY=1 THERMESH_EXPECT_V6_FILE_SHA256= \
-  bash scripts/verify-pinned-apk.sh "$APK" | tee -a "$EVIDENCE/run-metadata.txt"
+bash scripts/verify-pinned-apk.sh "$APK" cert-only | tee -a "$EVIDENCE/run-metadata.txt"
 "$AAPT" dump permissions "$APK" | tee "$EVIDENCE/aapt-permissions.txt"
 grep -E 'POST_NOTIFICATIONS|NEARBY_WIFI|FOREGROUND_SERVICE_CONNECTED_DEVICE' "$EVIDENCE/aapt-permissions.txt" | tee "$EVIDENCE/permission-spotcheck.txt"
 "$ADB" wait-for-device
