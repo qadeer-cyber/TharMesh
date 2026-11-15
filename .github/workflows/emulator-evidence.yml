@@ -3,17 +3,8 @@ name: Emulator evidence (Cat 6)
 # Gate A (v6→v7 in-place) and Gate B (persistence/UI) as separate jobs; B = 3 fresh emulators.
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - cursor/tharmesh-0.8-field-mesh-5aa9
-    paths:
-      - "app/**"
-      - "scripts/emulator-*"
-      - "scripts/debug-keystore-upgrade-*"
-      - "scripts/build-historical-debug-apk.sh"
-      - "scripts/verify-pinned-apk.sh"
-      - ".github/workflows/emulator-evidence.yml"
-      - ".github/scripts/run-gate-*.sh"
+  # Push-only for feature branches — avoids duplicate concurrent runs with pull_request
+  # (race on shared emulators; see gate-b pass 3 adb connection refused on 08875ba).
   push:
     branches:
       - cursor/universal-account-0939
