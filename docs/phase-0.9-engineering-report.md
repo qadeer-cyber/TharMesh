@@ -3,7 +3,7 @@
 **Branch:** `cursor/tharmesh-0.9-engineering-5aa9`  
 **Base (stacked):** `cursor/tharmesh-0.8-field-mesh-5aa9` @ `4ec45fe`  
 **Draft PR:** [#57](https://github.com/qadeer-cyber/TharMesh/pull/57) (stacked on 0.8, not `main`)  
-**Engineering HEAD:** `5c77a2de95d5401b3cc4d528ece6cce9fa323070`  
+**Engineering HEAD:** `5ff631c86d5bfd593e263a80e03edf4d24992b49`  
 **Report date:** 2026-11-15  
 
 > **0.9 is in progress — not release-ready.** Physical UAT, hosted staging OTP/Edge, signed-QA upgrade, and measured battery remain **NOT EXECUTED** unless linked GitHub evidence exists below.
@@ -15,7 +15,7 @@
 | **1** Transport reliability | **PASS** (JVM **simulation**) | Exponential reconnect backoff (`NearbyMeshConnectPolicy`), PayloadSent on transfer **SUCCESS** (`NearbyOutboundSendTracker`), tests `NearbyMeshConnectPolicyBackoffTest`, `NearbyOutboundSendTrackerTest`, existing correlation tests |
 | **2** Multi-hop / relay | **PASS** (JVM **simulation**) | Existing relay suite + `MeshEnginePhase3RelayDuplicationTest` (injection counter asserted) |
 | **3** E2EE security | **PASS** (JVM **simulation**) | `MeshEngineSecurityTest`, `MeshEnginePhase3NegativeTest`, relay duplication test |
-| **4** Android 13/14/15 | **FAIL** (CI) / **PASS** (JVM) | JVM `NearbyPermissionsSdkMatrixTest`; emulator workflow run [**43726635289**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635289) **FAIL** (verify script used v6 file pin — fixed in follow-up commit) |
+| **4** Android 13/14/15 | **PASS** (emulator evidence) / **PASS** (JVM) | JVM `NearbyPermissionsSdkMatrixTest`; emulator run [**43730581656**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43730581656) **PASS** API **33/34/35** (cert-only head verify via `verify-pinned-apk.sh … cert-only`) |
 | **5** Messaging UX | **PASS** (JVM) | `MessageStatus.RELAYING`, `ChatStatusFormatter` Connecting/Relaying + ur/sd strings |
 | **6** Battery / background | **PARTIAL** | `MeshForegroundServiceGuardTest`, `scripts/battery-measurement-60m.sh`; **measured battery: NOT EXECUTED** |
 | **7** Hosted staging | **BLOCKED** | No owner staging creds in CI — see checklist below |
@@ -28,7 +28,7 @@
 |----------|---------|----------|--------|
 | Android CI | [**43726635286**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635286) | `5c77a2d` (PR merge ref) | **PASS** — postgres + build + unit tests |
 | Emulator Cat 6 (API 30) | [**43726635293**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635293) | `5c77a2d` | **queued** at report time |
-| Android API 33–35 matrix | [**43726635289**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635289) | `5c77a2d` | **FAIL** (head APK cert-only verify; fix pushed post-run) |
+| Android API 33–35 matrix | [**43730581656**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43730581656) | `5ff631c` | **PASS** — api-emulator-evidence **33/34/35** success |
 
 ### CI-built head APK (run `43726635286`)
 
