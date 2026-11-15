@@ -27,8 +27,7 @@ if [ -f "${GITHUB_WORKSPACE}/apk-artifacts/SHA256SUMS.txt" ]; then
   echo "head_apk_file_sha256=$ACTUAL_HEAD expected_from_prepare=$EXPECT_HEAD" | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
   [ -z "$EXPECT_HEAD" ] || [ "$ACTUAL_HEAD" = "$EXPECT_HEAD" ] || { echo "FAIL head apk sha mismatch"; exit 1; }
 fi
-export THARMESH_VERIFY_CERT_ONLY=1
-bash scripts/verify-pinned-apk.sh "$HEAD_APK" | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
+bash scripts/verify-pinned-apk.sh "$HEAD_APK" cert-only | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
 export TM_APK="$HEAD_APK"
 export HEAD_DEBUG_APK="$HEAD_APK"
 export CAT6_RESET_ADB="$ADB"
