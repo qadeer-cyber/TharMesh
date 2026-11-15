@@ -7,9 +7,9 @@ name: Android CI
 
 on:
   push:
-    branches: [main, cursor/universal-account-0939, cursor/tharmesh-0.8-field-mesh-5aa9]
+    branches: [main, cursor/universal-account-0939, cursor/tharmesh-0.8-field-mesh-5aa9, cursor/tharmesh-0.9-engineering-5aa9]
   pull_request:
-    branches: [main]
+    branches: [main, cursor/tharmesh-0.8-field-mesh-5aa9]
 
 permissions:
   contents: read
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   postgres:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/universal-account-0939' || github.ref == 'refs/heads/cursor/tharmesh-0.8-field-mesh-5aa9'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/universal-account-0939' || github.ref == 'refs/heads/cursor/tharmesh-0.8-field-mesh-5aa9' || github.ref == 'refs/heads/cursor/tharmesh-0.9-engineering-5aa9'
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     services:
@@ -52,7 +52,7 @@ jobs:
         run: bash .github/scripts/ci-postgres-tests.sh
 
   build:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/universal-account-0939' || github.ref == 'refs/heads/cursor/tharmesh-0.8-field-mesh-5aa9' || vars.THARMESH_QA_SIGNING_ENABLED == 'true'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/universal-account-0939' || github.ref == 'refs/heads/cursor/tharmesh-0.8-field-mesh-5aa9' || github.ref == 'refs/heads/cursor/tharmesh-0.9-engineering-5aa9' || vars.THARMESH_QA_SIGNING_ENABLED == 'true'
     runs-on: ubuntu-22.04
 
     env:

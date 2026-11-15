@@ -401,6 +401,12 @@ class TharMeshApp : Application() {
      */
     fun isMeshStarted(): Boolean = started
 
+    /** Count of in-flight Nearby connection attempts (0 when mesh is down). */
+    fun meshPendingConnectionCount(): Int {
+        val nearby = transport as? NearbyConnectionsTransport ?: return 0
+        return nearby.pendingConnectionCount()
+    }
+
     companion object {
         @Volatile
         private var instance: TharMeshApp? = null

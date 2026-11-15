@@ -34,4 +34,20 @@ class NearbyPermissionsSdkMatrixTest {
     val modern = NearbyPermissions.requiredForSdk(33).toSet()
     assertFalse(legacy == modern)
   }
+
+  @Test
+  fun api33_includesNearbyWifiDevices() {
+    val perms = NearbyPermissions.requiredForSdk(33).toSet()
+    assertTrue(perms.contains("android.permission.NEARBY_WIFI_DEVICES"))
+  }
+
+  @Test
+  fun api34_api35_matchApi33NearbyWifiDevices() {
+    val p33 = NearbyPermissions.requiredForSdk(33).toSet()
+    assertArrayEquals(
+      NearbyPermissions.requiredForSdk(34).sorted().toTypedArray(),
+      NearbyPermissions.requiredForSdk(35).sorted().toTypedArray()
+    )
+    assertTrue(NearbyPermissions.requiredForSdk(34).toSet().containsAll(p33))
+  }
 }

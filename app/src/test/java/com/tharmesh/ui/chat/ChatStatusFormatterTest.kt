@@ -39,7 +39,9 @@ class ChatStatusFormatterTest {
         msgRead = "Read",
         msgFailed = "Failed — tap to retry",
         msgWaitingForPeer = "Waiting for a nearby peer…",
-        msgRetrying = "Retrying…"
+        msgRetrying = "Retrying…",
+        msgRelaying = "Relaying via nearby peer…",
+        meshConnecting = "Connecting to nearby devices…"
     )
 
     @Test
@@ -216,5 +218,25 @@ class ChatStatusFormatterTest {
             outboundRetryAttempts = 2
         )
         assertEquals("Retrying…", out)
+    }
+
+    @Test
+    fun relayingStatus_showsRelaying_withoutDeliveredTick() {
+        val out = ChatStatusFormatter.format(
+            mesh = MeshState.Online(nearbyOnline = 2),
+            lastOutgoingStatus = MessageStatus.RELAYING,
+            strings = s
+        )
+        assertEquals("Relaying via nearby peer…", out)
+    }
+
+    @Test
+    fun connectingMeshState_showsConnectingSubtitle() {
+        val out = ChatStatusFormatter.format(
+            mesh = MeshState.Connecting,
+            lastOutgoingStatus = null,
+            strings = s
+        )
+        assertEquals("Connecting to nearby devices…", out)
     }
 }

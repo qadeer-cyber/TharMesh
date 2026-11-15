@@ -18,6 +18,12 @@ object MessageStatus {
      * like QUEUED (no tick yet) to keep the layout unchanged.
      */
     const val SENDING = "SENDING"
+    /**
+     * Bytes left the radio toward a relay peer; final recipient is not directly connected.
+     * Awaiting signed end-to-end delivery confirmation — same UX tier as in-flight, not
+     * [DELIVERED] until [BundleAcked].
+     */
+    const val RELAYING = "RELAYING"
     const val SENT = "SENT"
     const val DELIVERED = "DELIVERED"
     const val READ = "READ"
@@ -27,9 +33,10 @@ object MessageStatus {
         AWAITING_KEY -> 0
         QUEUED -> 1
         SENDING -> 2
-        SENT -> 3
-        DELIVERED -> 4
-        READ -> 5
+        RELAYING -> 3
+        SENT -> 4
+        DELIVERED -> 5
+        READ -> 6
         FAILED -> -1
         else -> -1
     }

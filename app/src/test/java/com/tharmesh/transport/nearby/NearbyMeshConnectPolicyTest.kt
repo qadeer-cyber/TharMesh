@@ -9,7 +9,7 @@ class NearbyMeshConnectPolicyTest {
     @Test
     fun rapidReconnectRequests_debounced_noDuplicatePending() {
         var clock = 0L
-        val p = NearbyMeshConnectPolicy(debounceMs = 2_000L, connectTimeoutMs = 30_000L) { clock }
+        val p = NearbyMeshConnectPolicy(debounceMs = 2_000L, connectTimeoutMs = 30_000L, nowMs = { clock })
         assertTrue(p.allowConnectionRequest("p1"))
         assertFalse("second request inside debounce window must be suppressed", p.allowConnectionRequest("p1"))
         clock = 2_000L
@@ -21,7 +21,7 @@ class NearbyMeshConnectPolicyTest {
     @Test
     fun pendingTimesOut_afterConnectTimeoutMs() {
         var clock = 0L
-        val p = NearbyMeshConnectPolicy(debounceMs = 0L, connectTimeoutMs = 1_000L) { clock }
+        val p = NearbyMeshConnectPolicy(debounceMs = 0L, connectTimeoutMs = 1_000L, nowMs = { clock })
         assertTrue(p.allowConnectionRequest("peer"))
         assertFalse(p.pendingTimedOut("peer"))
         clock = 999L

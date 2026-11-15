@@ -7,6 +7,7 @@ on:
     branches:
       - cursor/universal-account-0939
       - cursor/tharmesh-0.8-field-mesh-5aa9
+      - cursor/tharmesh-0.9-engineering-5aa9
     paths:
       - "app/**"
       - "scripts/emulator-*"

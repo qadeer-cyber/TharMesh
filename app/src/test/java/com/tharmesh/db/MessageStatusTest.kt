@@ -8,7 +8,9 @@ class MessageStatusTest {
     @Test
     fun advance_climbsMonotonically() {
         assertEquals(MessageStatus.SENDING, MessageStatus.advance(MessageStatus.QUEUED, MessageStatus.SENDING))
+        assertEquals(MessageStatus.RELAYING, MessageStatus.advance(MessageStatus.SENDING, MessageStatus.RELAYING))
         assertEquals(MessageStatus.SENT, MessageStatus.advance(MessageStatus.SENDING, MessageStatus.SENT))
+        assertEquals(MessageStatus.SENT, MessageStatus.advance(MessageStatus.RELAYING, MessageStatus.SENT))
         assertEquals(MessageStatus.SENT, MessageStatus.advance(MessageStatus.QUEUED, MessageStatus.SENT))
         assertEquals(MessageStatus.DELIVERED, MessageStatus.advance(MessageStatus.SENT, MessageStatus.DELIVERED))
         assertEquals(MessageStatus.READ, MessageStatus.advance(MessageStatus.DELIVERED, MessageStatus.READ))

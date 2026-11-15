@@ -26,6 +26,7 @@ object NearbyPermissions {
     private const val SDK_S: Int = 31
     private const val SDK_TIRAMISU: Int = 33
     private const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
+    private const val NEARBY_WIFI_DEVICES = "android.permission.NEARBY_WIFI_DEVICES"
 
     /**
      * Permissions to show in the system prompt. Includes POST_NOTIFICATIONS
@@ -48,14 +49,15 @@ object NearbyPermissions {
      */
     fun requiredForSdk(sdkInt: Int): Array<String> =
         if (sdkInt >= SDK_S) {
-            arrayOf(
-                BLUETOOTH_ADVERTISE,
-                BLUETOOTH_CONNECT,
-                BLUETOOTH_SCAN,
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_WIFI_STATE,
-                Manifest.permission.CHANGE_WIFI_STATE
-            )
+            buildList {
+                add(BLUETOOTH_ADVERTISE)
+                add(BLUETOOTH_CONNECT)
+                add(BLUETOOTH_SCAN)
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+                add(Manifest.permission.ACCESS_WIFI_STATE)
+                add(Manifest.permission.CHANGE_WIFI_STATE)
+                if (sdkInt >= SDK_TIRAMISU) add(NEARBY_WIFI_DEVICES)
+            }.toTypedArray()
         } else {
             arrayOf(
                 Manifest.permission.BLUETOOTH,

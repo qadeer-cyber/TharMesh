@@ -737,6 +737,10 @@ class MeshEngine(
     private fun snapshotConnectedPeers(): List<String> =
         synchronized(peersLock) { connectedPeers.toList() }
 
+    /** True when [peerId] currently has an established transport link. */
+    fun isPeerConnected(peerId: String): Boolean =
+        synchronized(peersLock) { connectedPeers.contains(peerId) }
+
     private fun onTransportEvent(event: TransportEvent) {
         when (event) {
             is TransportEvent.PayloadReceived -> {
