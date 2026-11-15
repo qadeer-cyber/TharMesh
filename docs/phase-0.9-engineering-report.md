@@ -2,7 +2,8 @@
 
 **Branch:** `cursor/tharmesh-0.9-engineering-5aa9`  
 **Base (stacked):** `cursor/tharmesh-0.8-field-mesh-5aa9` @ `4ec45fe`  
-**Draft PR:** _(set after push — stacked on 0.8, not `main`)_  
+**Draft PR:** [#57](https://github.com/qadeer-cyber/TharMesh/pull/57) (stacked on 0.8, not `main`)  
+**Engineering HEAD:** `5c77a2de95d5401b3cc4d528ece6cce9fa323070`  
 **Report date:** 2026-11-15  
 
 > **0.9 is in progress — not release-ready.** Physical UAT, hosted staging OTP/Edge, signed-QA upgrade, and measured battery remain **NOT EXECUTED** unless linked GitHub evidence exists below.
@@ -14,29 +15,29 @@
 | **1** Transport reliability | **PASS** (JVM **simulation**) | Exponential reconnect backoff (`NearbyMeshConnectPolicy`), PayloadSent on transfer **SUCCESS** (`NearbyOutboundSendTracker`), tests `NearbyMeshConnectPolicyBackoffTest`, `NearbyOutboundSendTrackerTest`, existing correlation tests |
 | **2** Multi-hop / relay | **PASS** (JVM **simulation**) | Existing relay suite + `MeshEnginePhase3RelayDuplicationTest` (injection counter asserted) |
 | **3** E2EE security | **PASS** (JVM **simulation**) | `MeshEngineSecurityTest`, `MeshEnginePhase3NegativeTest`, relay duplication test |
-| **4** Android 13/14/15 | **PARTIAL** | JVM matrix `NearbyPermissionsSdkMatrixTest` (API 33–35); workflow `android-api-matrix.yml` — **CI run URLs pending first green push** |
+| **4** Android 13/14/15 | **FAIL** (CI) / **PASS** (JVM) | JVM `NearbyPermissionsSdkMatrixTest`; emulator workflow run [**43726635289**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635289) **FAIL** (verify script used v6 file pin — fixed in follow-up commit) |
 | **5** Messaging UX | **PASS** (JVM) | `MessageStatus.RELAYING`, `ChatStatusFormatter` Connecting/Relaying + ur/sd strings |
 | **6** Battery / background | **PARTIAL** | `MeshForegroundServiceGuardTest`, `scripts/battery-measurement-60m.sh`; **measured battery: NOT EXECUTED** |
 | **7** Hosted staging | **BLOCKED** | No owner staging creds in CI — see checklist below |
 | **8** Signed QA + upgrade | **NOT EXECUTED** | `signed-qa` job not authorized on this branch |
-| **9** CI | **PARTIAL** | Push triggers on `cursor/tharmesh-0.9-engineering-5aa9`; API 30 Gate A+B preserved via `emulator-evidence.yml` |
+| **9** CI | **PARTIAL** | Android CI **PASS**; Cat 6 **queued** (concurrency); API matrix **FAIL** until cert-only verify fix lands |
 
 ## CI evidence matrix
 
 | Workflow | Run URL | Head SHA | Result |
 |----------|---------|----------|--------|
-| Android CI | _pending push_ | — | — |
-| Emulator Cat 6 (API 30) | _pending push_ | — | — |
-| Android API 33–35 matrix | _pending push_ | — | — |
+| Android CI | [**43726635286**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635286) | `5c77a2d` (PR merge ref) | **PASS** — postgres + build + unit tests |
+| Emulator Cat 6 (API 30) | [**43726635293**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635293) | `5c77a2d` | **queued** at report time |
+| Android API 33–35 matrix | [**43726635289**](https://github.com/qadeer-cyber/TharMesh/actions/runs/43726635289) | `5c77a2d` | **FAIL** (head APK cert-only verify; fix pushed post-run) |
 
-### APK (pending CI artifact)
+### CI-built head APK (run `43726635286`)
 
 | Field | Value |
 |-------|--------|
 | Artifact name | `tharmesh-app-debug` |
-| Artifact ID | — |
-| File SHA-256 | — |
-| Cert SHA-256 | `ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec` (expected debug cert) |
+| Artifact ID | **14166637606** |
+| File SHA-256 | `e0d78a55e1d4c600b2444eea5e3c6a896104a894bf13edd1397f9395deb6dca8` |
+| Cert SHA-256 | `ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec` |
 
 ## Phase 7 — Owner staging checklist (BLOCKED)
 
