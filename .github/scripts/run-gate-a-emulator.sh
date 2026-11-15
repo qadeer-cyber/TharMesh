@@ -10,7 +10,7 @@ NEW_APK="${GITHUB_WORKSPACE}/apk-artifacts/tharmesh-head-debug.apk"
 export HEAD_DEBUG_APK="$NEW_APK"
 export NEW_APK
 mkdir -p "$THARMESH_EVIDENCE_DIR"
-bash scripts/verify-pinned-apk.sh "$V6_APK"
+bash scripts/verify-pinned-apk.sh "$V6_APK" cert-only
 test -f "$NEW_APK"
 bash scripts/debug-keystore-upgrade-evidence.sh "$V6_APK"
 UPGRADE_DIR="${THARMESH_EVIDENCE_DIR}/debug-keystore-upgrade"

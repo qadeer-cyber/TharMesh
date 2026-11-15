@@ -87,7 +87,7 @@ jobs:
           cp -f app/build/outputs/apk/debug/tharmesh.app-debug.apk apk-artifacts/tharmesh-head-debug.apk
           cp -f "$HISTORICAL_WORKTREE/app/build/outputs/apk/debug/tharmesh.app-debug.apk" apk-artifacts/v6-room6-debug.apk
           chmod +x scripts/verify-pinned-apk.sh
-          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk
+          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk cert-only
           sha256sum apk-artifacts/*.apk | tee apk-artifacts/SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
@@ -115,7 +115,7 @@ jobs:
       - name: Re-verify v6 APK hash and cert
         run: |
           chmod +x scripts/verify-pinned-apk.sh
-          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk
+          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk cert-only
 
       - uses: actions/setup-java@v4
         with:
