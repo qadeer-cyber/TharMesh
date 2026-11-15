@@ -41,7 +41,7 @@ env:
   ANDROID_COMPILE_SDK: "30"
   ANDROID_BUILD_TOOLS: "30.0.3"
   LEGACY_SOURCE_COMMIT: 9fedae917868340e9b2b93f46b847a6119c576bd
-  HISTORICAL_WORKTREE: /tmp/wt-room-v6
+  HISTORICAL_WORKTREE: ${{ github.workspace }}/ci-wt-room-v6
   THARMESH_EXPECT_V6_FILE_SHA256: e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89
   THARMESH_EXPECT_DEBUG_CERT_SHA256: ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec
 
@@ -71,9 +71,13 @@ jobs:
           java-version: 11
 
       - name: Build historical Room v6 debug APK (9fedae9) before head assemble
-        run: bash scripts/build-historical-debug-apk.sh "$LEGACY_SOURCE_COMMIT"
+        run: |
+          rm -rf "$HISTORICAL_WORKTREE"
+          bash scripts/build-historical-debug-apk.sh "$LEGACY_SOURCE_COMMIT"
 
       - name: Assemble head debug APK
+        env:
+          GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-head-user-home
         run: ./gradlew --no-daemon assembleDebug
 
       - name: Package and verify APK artifacts

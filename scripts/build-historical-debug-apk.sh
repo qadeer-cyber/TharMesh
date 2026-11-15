@@ -8,11 +8,11 @@ OUT="${2:-$WT/app/build/outputs/apk/debug/tharmesh.app-debug.apk}"
 
 log() { echo "$@"; }
 
-if [ ! -d "$WT/.git" ]; then
-  git -C "$ROOT" worktree add "$WT" "$COMMIT"
-else
-  git -C "$WT" checkout -f "$COMMIT"
+if [ -d "$WT" ]; then
+  git -C "$ROOT" worktree remove -f "$WT" 2>/dev/null || true
+  rm -rf "$WT"
 fi
+git -C "$ROOT" worktree add --detach "$WT" "$COMMIT"
 
 cp -f "$ROOT/app/debug.keystore" "$WT/app/debug.keystore"
 if ! grep -q 'storeFile file("debug.keystore")' "$WT/app/build.gradle" 2>/dev/null; then
@@ -44,6 +44,7 @@ PY
 fi
 
 export GRADLE_USER_HOME="${HISTORICAL_GRADLE_USER_HOME:-$WT/.gradle-user-home}"
+rm -rf "$WT/app/build" "$WT/.gradle" "$GRADLE_USER_HOME"
 log "building assembleDebug at $COMMIT (gradle_user_home=$GRADLE_USER_HOME)"
 (cd "$WT" && ./gradlew --no-daemon clean assembleDebug -q)
 log "apk=$OUT"
