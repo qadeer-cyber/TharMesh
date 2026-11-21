@@ -59,6 +59,8 @@ internal object ChatStatusFormatter {
         data class Online(val nearbyOnline: Int) : MeshState()
         /** Bluetooth or Location is off, or runtime perms denied — mesh cannot deliver. */
         object Offline : MeshState()
+        /** Nearby connection negotiation in progress (peers discovered, link not up). */
+        object Connecting : MeshState()
     }
 
     /**
@@ -81,6 +83,8 @@ internal object ChatStatusFormatter {
         val msgAwaitingKey: String = "Waiting for a verified contact — message not sent",
         val msgWaitingForPeer: String,  // "Waiting for a nearby peer…"
         val msgRetrying: String,        // "Retrying…"
+        val msgRelaying: String,        // "Relaying via nearby peer…"
+        val meshConnecting: String,     // "Connecting to nearby devices…"
         val separator: String = " · "
     )
 
@@ -124,6 +128,9 @@ internal object ChatStatusFormatter {
         // Rule 2 — QUEUED / SENDING contradicts mesh state, so it must
         // dominate too. SENDING uses a slightly more "in motion" wording
         // because by definition the transport has accepted the bundle.
+        if (lastOutgoingStatus == MessageStatus.RELAYING) {
+            return strings.msgRelaying
+        }
         if (lastOutgoingStatus == MessageStatus.QUEUED ||
             lastOutgoingStatus == MessageStatus.SENDING
         ) {
@@ -134,13 +141,15 @@ internal object ChatStatusFormatter {
                     else -> strings.msgQueued
                 }
                 MeshState.Searching,
-                MeshState.Offline -> strings.msgWaitingForPeer
+                MeshState.Offline,
+                MeshState.Connecting -> strings.msgWaitingForPeer
             }
         }
 
         // Rule 3 — render mesh state, optionally suffixed with a per-tick.
         val meshText = when (mesh) {
             is MeshState.Searching -> strings.searching
+            MeshState.Connecting -> strings.meshConnecting
             is MeshState.Offline -> strings.offline
             is MeshState.Online -> when {
                 // Defensive: a count of 0 (or anything negative) is

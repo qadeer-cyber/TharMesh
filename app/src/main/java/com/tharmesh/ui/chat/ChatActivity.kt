@@ -203,7 +203,9 @@ class ChatActivity : AppCompatActivity() {
             msgFailed = getString(R.string.chat_status_msg_failed),
             msgAwaitingKey = getString(R.string.chat_status_msg_awaiting_key),
             msgWaitingForPeer = getString(R.string.chat_status_msg_waiting_peer),
-            msgRetrying = getString(R.string.chat_status_msg_retrying)
+            msgRetrying = getString(R.string.chat_status_msg_retrying),
+            msgRelaying = getString(R.string.chat_status_msg_relaying),
+            meshConnecting = getString(R.string.chat_status_mesh_connecting)
         )
     }
 
@@ -298,11 +300,13 @@ class ChatActivity : AppCompatActivity() {
         val perm = PermissionMonitor.snapshot(this)
         if (perm !is PermissionStatus.Ready) return ChatStatusFormatter.MeshState.Offline
         val online = TharMeshApp.get().directory.nodes.value.count { it.online }
-        return if (online > 0) {
-            ChatStatusFormatter.MeshState.Online(online)
-        } else {
-            ChatStatusFormatter.MeshState.Searching
+        if (online > 0) {
+            return ChatStatusFormatter.MeshState.Online(online)
         }
+        if (TharMeshApp.get().meshPendingConnectionCount() > 0) {
+            return ChatStatusFormatter.MeshState.Connecting
+        }
+        return ChatStatusFormatter.MeshState.Searching
     }
 
     private fun onSendClicked() {
@@ -474,7 +478,8 @@ class ChatActivity : AppCompatActivity() {
         private fun statusGlyph(status: String): String = when (status) {
             MessageStatus.AWAITING_KEY -> "🔒"
             MessageStatus.QUEUED,
-            MessageStatus.SENDING -> "⏳"
+            MessageStatus.SENDING,
+            MessageStatus.RELAYING -> "⏳"
             MessageStatus.SENT -> "✓"
             MessageStatus.DELIVERED -> "✓✓"
             MessageStatus.READ -> "✓✓"

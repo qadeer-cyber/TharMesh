@@ -36,7 +36,8 @@ import java.util.concurrent.ConcurrentHashMap
 class NearbyConnectionsTransport(
     context: Context,
     private val serviceId: String = DEFAULT_SERVICE_ID,
-    private val connectPolicy: NearbyMeshConnectPolicy = NearbyMeshConnectPolicy()
+    private val connectPolicy: NearbyMeshConnectPolicy = NearbyMeshConnectPolicy(),
+    private val outboundTracker: NearbyOutboundSendTracker = NearbyOutboundSendTracker()
 ) : Transport {
 
     private val client: ConnectionsClient = Nearby.getConnectionsClient(context.applicationContext)
@@ -135,15 +136,18 @@ class NearbyConnectionsTransport(
             dispatch(TransportEvent.Error(peerId, sendId, "No Nearby endpoint for userId"))
             return false
         }
-        client.sendPayload(endpointId, Payload.fromBytes(payload))
-            .addOnSuccessListener {
-                dispatch(TransportEvent.PayloadSent(peerId, sendId, payload.size))
-            }
+        val nearbyPayload = Payload.fromBytes(payload)
+        outboundTracker.register(nearbyPayload.id, peerId, sendId, payload.size)
+        client.sendPayload(endpointId, nearbyPayload)
             .addOnFailureListener { e ->
+                outboundTracker.remove(nearbyPayload.id)
                 dispatch(TransportEvent.Error(peerId, sendId, "sendPayload failed: ${e.message}"))
             }
         return true
     }
+
+    /** Pending Nearby connection attempts (for diagnostics / UX). */
+    fun pendingConnectionCount(): Int = connectPolicy.pendingConnectionCount()
 
     /**
      * Hand [event] to the registered listener on the background
@@ -156,7 +160,7 @@ class NearbyConnectionsTransport(
         cancelConnectTimeout(peerId)
         val runnable = Runnable {
             if (connectPolicy.pendingTimedOut(peerId)) {
-                connectPolicy.clearPending(peerId)
+                connectPolicy.recordConnectFailure(peerId)
                 dispatch(
                     TransportEvent.Error(peerId, 0L, "connection timed out after ${NearbyMeshConnectPolicy.CONNECT_TIMEOUT_MS}ms")
                 )
@@ -219,7 +223,7 @@ class NearbyConnectionsTransport(
             scheduleConnectTimeout(remoteUserId)
             client.requestConnection(localPeerId, endpointId, connectionLifecycleCallback)
                 .addOnFailureListener { e ->
-                    connectPolicy.clearPending(remoteUserId)
+                    connectPolicy.recordConnectFailure(remoteUserId)
                     cancelConnectTimeout(remoteUserId)
                     Log.w(TAG, "requestConnection failed for $endpointId", e)
                     dispatch(
@@ -267,6 +271,9 @@ class NearbyConnectionsTransport(
                 if (removed != null) {
                     userIdToEndpoint.remove(removed, endpointId)
                 }
+                if (removed != null) {
+                    connectPolicy.recordConnectFailure(removed)
+                }
                 dispatch(
                     TransportEvent.Error(removed, 0L, "connection failed: ${resolution.status.statusMessage}")
                 )
@@ -278,7 +285,7 @@ class NearbyConnectionsTransport(
             if (userId != null) {
                 userIdToEndpoint.remove(userId, endpointId)
                 peerFoundDispatched.remove(userId)
-                connectPolicy.markDisconnected(userId)
+                connectPolicy.recordConnectFailure(userId)
                 cancelConnectTimeout(userId)
                 dispatch(TransportEvent.PeerDisconnected(userId))
             }
@@ -293,7 +300,26 @@ class NearbyConnectionsTransport(
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Bytes payloads don't need chunked progress; ignore.
+            // Status-free tracker calls: the branch itself carries the meaning, so a
+            // wrong numeric mirror cannot silently swallow every delivery receipt
+            // (PayloadTransferUpdate.Status.SUCCESS is 1, IN_PROGRESS is 3).
+            when (update.status) {
+                PayloadTransferUpdate.Status.SUCCESS -> {
+                    outboundTracker.onTransferSuccess(
+                        update.payloadId,
+                        update.bytesTransferred.toLong(),
+                        update.totalBytes.toLong()
+                    )?.let { dispatch(it) }
+                }
+                PayloadTransferUpdate.Status.FAILURE,
+                PayloadTransferUpdate.Status.CANCELED -> {
+                    outboundTracker.onTransferFailure(
+                        update.payloadId,
+                        "payload transfer did not complete status=${update.status}"
+                    )?.let { dispatch(it) }
+                }
+                else -> Unit
+            }
         }
     }
 

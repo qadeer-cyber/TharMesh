@@ -1,0 +1,21 @@
+# Pinned trusted v6 (Room schema 6) debug APK digest.
+#
+# Provenance: rebuild of source commit 9fedae917868340e9b2b93f46b847a6119c576bd
+# signed with the repo's public debug keystore (app/debug.keystore), produced by
+# scripts/build-historical-debug-apk.sh in a worktree at /tmp/wt-room-v6.
+#
+# Verified green in GitHub Actions:
+#   - 0.8 branch: docs/phase-0.8-engineering-report.md (head 1550380)
+#   - 0.9 branch: run 43731539047 (head 7b354ac) prepare-apks, strict file-hash verify
+#   - preserved:  ci-evidence-preserved/run-43456317171/PRESERVED.md
+#
+# Independently reproduced on 2026-11-21 outside GitHub Actions (Ubuntu 24.04,
+# OpenJDK 11.0.33, SDK platform 30, build-tools 30.0.3) at /tmp/wt-room-v6 —
+# byte-identical, so this digest is toolchain-robust, not a snapshot of one
+# runner image. NOTE: the build output is path-dependent; it reproduces at
+# /tmp/wt-room-v6 (see docs/phase-0.9-engineering-report.md section 3.2).
+#
+# Do NOT edit this value to make CI green. A mismatch means the v6 rebuild is no
+# longer reproducible (see docs/phase-0.9-engineering-report.md "v6 reproducibility")
+# and must be root-caused; re-pinning requires owner sign-off recorded in that doc.
+e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89

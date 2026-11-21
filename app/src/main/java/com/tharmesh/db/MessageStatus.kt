@@ -18,6 +18,12 @@ object MessageStatus {
      * like QUEUED (no tick yet) to keep the layout unchanged.
      */
     const val SENDING = "SENDING"
+    /**
+     * Bytes left the radio toward a relay peer; final recipient is not directly connected.
+     * Awaiting signed end-to-end delivery confirmation — same UX tier as in-flight, not
+     * [DELIVERED] until [BundleAcked].
+     */
+    const val RELAYING = "RELAYING"
     const val SENT = "SENT"
     const val DELIVERED = "DELIVERED"
     const val READ = "READ"
@@ -27,12 +33,26 @@ object MessageStatus {
         AWAITING_KEY -> 0
         QUEUED -> 1
         SENDING -> 2
-        SENT -> 3
-        DELIVERED -> 4
-        READ -> 5
+        RELAYING -> 3
+        SENT -> 4
+        DELIVERED -> 5
+        READ -> 6
         FAILED -> -1
         else -> -1
     }
+
+    /**
+     * True for statuses whose bytes are moving but which carry no signed
+     * end-to-end receipt yet. Every status glyph renderer must treat these
+     * alike, so adding a status (e.g. [RELAYING]) cannot silently drop a
+     * message's tick. Guarded by `MessageStatusGlyphCoverageTest`.
+     */
+    fun isInFlight(status: String): Boolean =
+        status == QUEUED || status == SENDING || status == RELAYING
+
+    /** Every status this object declares, lowest rank first. */
+    fun allStatuses(): List<String> =
+        listOf(FAILED, AWAITING_KEY, QUEUED, SENDING, RELAYING, SENT, DELIVERED, READ)
 
     /**
      * Never regress a status e.g. don't flip READ back to SENT on a stale ack. FAILED

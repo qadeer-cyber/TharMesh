@@ -21,14 +21,17 @@ chmod +x scripts/verify-pinned-apk.sh scripts/cat6-reset-clean-app.sh
   echo "isolation=uninstall+install per pass (independent clean state)"
 } | tee "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
 test -f "$HEAD_APK"
-if [ -f "${GITHUB_WORKSPACE}/apk-artifacts/SHA256SUMS.txt" ]; then
-  EXPECT_HEAD=$(awk '/tharmesh-head-debug\.apk$/ {print $1}' "${GITHUB_WORKSPACE}/apk-artifacts/SHA256SUMS.txt" | head -1)
-  ACTUAL_HEAD=$(sha256sum "$HEAD_APK" | awk '{print $1}')
-  echo "head_apk_file_sha256=$ACTUAL_HEAD expected_from_prepare=$EXPECT_HEAD" | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
-  [ -z "$EXPECT_HEAD" ] || [ "$ACTUAL_HEAD" = "$EXPECT_HEAD" ] || { echo "FAIL head apk sha mismatch"; exit 1; }
-fi
-export THARMESH_VERIFY_CERT_ONLY=1
-bash scripts/verify-pinned-apk.sh "$HEAD_APK" | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
+# Chain of custody is mandatory: no SHA256SUMS.txt, no run. (Previously this
+# whole block was conditional and the digest check was skipped when the manifest
+# or its head line was missing — fail-open.)
+SUMS="${GITHUB_WORKSPACE}/apk-artifacts/SHA256SUMS.txt"
+test -f "$SUMS" || { echo "FAIL missing $SUMS (head APK provenance unverifiable)"; exit 1; }
+EXPECT_HEAD=$(awk '/tharmesh-head-debug\.apk$/ {print $1}' "$SUMS" | head -1)
+[ -n "$EXPECT_HEAD" ] || { echo "FAIL no head APK digest in SHA256SUMS.txt"; exit 1; }
+ACTUAL_HEAD=$(sha256sum "$HEAD_APK" | awk '{print $1}')
+echo "head_apk_file_sha256=$ACTUAL_HEAD expected_from_prepare=$EXPECT_HEAD" | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
+[ "$ACTUAL_HEAD" = "$EXPECT_HEAD" ] || { echo "FAIL head apk sha mismatch"; exit 1; }
+bash scripts/verify-pinned-apk.sh "$HEAD_APK" "expected:$EXPECT_HEAD" | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
 export TM_APK="$HEAD_APK"
 export HEAD_DEBUG_APK="$HEAD_APK"
 export CAT6_RESET_ADB="$ADB"

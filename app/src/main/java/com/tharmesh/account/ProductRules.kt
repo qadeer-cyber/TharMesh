@@ -81,7 +81,9 @@ object ContactDiscovery {
 
 /**
  * Checkmarks are evidence. Double checks are only for signed delivery and
- * signed read. Queued, sending, and awaiting-verification get none.
+ * signed read. Queued, sending, relaying, and awaiting-verification get none:
+ * a relayed bundle has left the radio but carries no signed receipt, so it must
+ * not borrow SENT's single tick.
  */
 object DeliveryGlyph {
     fun prefix(status: String): String = when (status) {

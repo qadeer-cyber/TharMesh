@@ -910,7 +910,11 @@ class MessageRepository(
                 if (countedSent.add(event.bundleId)) {
                     messagesSent++
                 }
-                advanceByBundleId(event.bundleId, MessageStatus.SENT)
+                val row = db.messageDao().getByBundleId(event.bundleId)
+                val destReachable = row != null && mesh.isPeerConnected(row.toUserId)
+                val targetStatus =
+                    if (destReachable) MessageStatus.SENT else MessageStatus.RELAYING
+                advanceByBundleId(event.bundleId, targetStatus)
                 // Stage 7.4 — if this bundle was queued while no peers
                 // were connected, we just proved the store-and-forward
                 // queue flushed after a reconnect. Remove-and-test so

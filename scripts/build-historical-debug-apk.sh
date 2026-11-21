@@ -8,11 +8,24 @@ OUT="${2:-$WT/app/build/outputs/apk/debug/tharmesh.app-debug.apk}"
 
 log() { echo "$@"; }
 
-if [ ! -d "$WT/.git" ]; then
-  git -C "$ROOT" worktree add "$WT" "$COMMIT"
-else
-  git -C "$WT" checkout -f "$COMMIT"
+# Always start from a clean, freshly registered worktree. The `[ -d "$WT" ]` guard
+# this replaces was wrong whenever the directory had been deleted from under git
+# (emulator-evidence.yml does exactly that with `rm -rf "$HISTORICAL_WORKTREE"`):
+# the stale registration survived and `worktree add` then died with
+# "missing but already registered worktree". Reproduced locally on 2026-11-21.
+git -C "$ROOT" worktree remove -f "$WT" 2>/dev/null || true
+rm -rf "$WT"
+git -C "$ROOT" worktree prune
+git -C "$ROOT" worktree add --detach "$WT" "$COMMIT"
+
+# Provenance: the tree we are about to build must be exactly the pinned commit.
+ACTUAL_COMMIT="$(git -C "$WT" rev-parse HEAD)"
+EXPECT_COMMIT="$(git -C "$ROOT" rev-parse "$COMMIT")"
+if [ "$ACTUAL_COMMIT" != "$EXPECT_COMMIT" ]; then
+  echo "FAIL historical worktree is $ACTUAL_COMMIT, expected $EXPECT_COMMIT" >&2
+  exit 1
 fi
+log "worktree=$WT commit=$ACTUAL_COMMIT"
 
 cp -f "$ROOT/app/debug.keystore" "$WT/app/debug.keystore"
 if ! grep -q 'storeFile file("debug.keystore")' "$WT/app/build.gradle" 2>/dev/null; then
@@ -44,9 +57,11 @@ PY
 fi
 
 export GRADLE_USER_HOME="${HISTORICAL_GRADLE_USER_HOME:-$WT/.gradle-user-home}"
+rm -rf "$WT/app/build" "$WT/.gradle" "$GRADLE_USER_HOME"
 log "building assembleDebug at $COMMIT (gradle_user_home=$GRADLE_USER_HOME)"
 (cd "$WT" && ./gradlew --no-daemon clean assembleDebug -q)
 log "apk=$OUT"
+log "build_inputs worktree=$WT commit=$ACTUAL_COMMIT java=$(java -version 2>&1 | head -1)"
 sha256sum "$OUT"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/ubuntu/android-sdk}}"
 "$(ls -d "$SDK/build-tools/"*/apksigner 2>/dev/null | sort -V | tail -1)" verify --print-certs "$OUT" | grep -E 'SHA-1|SHA-256'

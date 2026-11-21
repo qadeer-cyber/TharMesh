@@ -14,6 +14,7 @@ class FaultInjectionTransport(
     var dropOutboundCount: Int = 0
     var duplicateOutbound: Boolean = false
     var outboundDropped: Int = 0
+    var outboundSendAttempts: Int = 0
     var dropOutboundMatching: ((ByteArray) -> Boolean)? = null
 
     override fun setListener(listener: (TransportEvent) -> Unit) {
@@ -35,8 +36,10 @@ class FaultInjectionTransport(
             inner.emit(TransportEvent.Error(peerId, sendId, "fault:drop"))
             return false
         }
+        outboundSendAttempts++
         val ok = inner.send(peerId, payload, sendId)
         if (ok && duplicateOutbound) {
+            outboundSendAttempts++
             inner.send(peerId, payload, sendId)
         }
         return ok
