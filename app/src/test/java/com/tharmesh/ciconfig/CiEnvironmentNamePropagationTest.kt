@@ -135,6 +135,80 @@ class CiEnvironmentNamePropagationTest {
         }
     }
 
+    /** Job blocks of android.yml, keyed by job id, split on 2-space-indented keys. */
+    private fun androidJobBlocks(): Map<String, String> {
+        val text = File(repoRoot, ".github/workflows/android.yml").readText()
+        val header = Regex("""(?m)^  ([a-z][a-z0-9-]*):$""")
+        val hits = header.findAll(text).toList()
+        return hits.mapIndexed { i, m ->
+            val end = if (i + 1 < hits.size) hits[i + 1].range.first else text.length
+            m.groupValues[1] to text.substring(m.range.first, end)
+        }.toMap()
+    }
+
+    /** Jobs that actually run Gradle, directly or through a CI script. */
+    private fun gradleInvokingJobs(): Map<String, String> {
+        val scriptRunsGradle = File(repoRoot, ".github/scripts").listFiles()
+            ?.filter { it.isFile && it.readText().contains("gradlew") }
+            ?.map { it.name }
+            ?: emptyList()
+        return androidJobBlocks().filter { (_, body) ->
+            body.contains("gradlew") || scriptRunsGradle.any { body.contains(it) }
+        }
+    }
+
+    @Test
+    fun everyGradleJobForwardsTheSupabaseEnvironmentGradleReads() {
+        // A repository variable is invisible to Gradle unless the job exports it:
+        // app/build.gradle resolves these through System.getenv. Setting
+        // THARMESH_STAGING_PROJECT_REF in repository settings alone left
+        // SUPABASE_STAGING_PROJECT_REF compiled as "", so staging and qa builds
+        // failed closed regardless of the setting.
+        val required = listOf(
+            "SUPABASE_URL",
+            "SUPABASE_ANON_KEY",
+            "THARMESH_STAGING_PROJECT_REF"
+        )
+        val jobs = gradleInvokingJobs()
+        assertTrue("no Gradle-invoking job found in android.yml", jobs.isNotEmpty())
+        val missing = jobs.flatMap { (job, body) ->
+            required.filterNot { Regex("""(?m)^\s{2,}$it:\s""").containsMatchIn(body) }
+                .map { "job '$job' does not forward $it to Gradle" }
+        }.sorted()
+        assertEquals(
+            "a repository variable that no job exports never reaches Gradle:\n" +
+                missing.joinToString("\n"),
+            emptyList<String>(),
+            missing
+        )
+    }
+
+    @Test
+    fun theSignedQaJobForwardsTheStagingRefBecauseAssembleQaTargetsStaging() {
+        val qa = androidJobBlocks()["signed-qa"]
+            ?: throw AssertionError("signed-qa job not found in android.yml")
+        assertTrue(
+            "assembleQa compiles SUPABASE_BACKEND_ENV=staging, so without the staging " +
+                "ref the signed QA artifact can never reach the staging backend",
+            Regex("""(?m)^\s{2,}THARMESH_STAGING_PROJECT_REF:\s""").containsMatchIn(qa)
+        )
+    }
+
+    @Test
+    fun productionRefIsNotForwardedSoReleaseStaysFailClosed() {
+        // Owner decision: production ref stays unset. Forwarding it would be the
+        // first step toward a release build that can reach production, so this
+        // asserts the deliberate omission rather than leaving it to drift.
+        val offenders = androidJobBlocks().filter { (_, body) ->
+            Regex("""(?m)^\s{2,}THARMESH_PRODUCTION_PROJECT_REF:\s""").containsMatchIn(body)
+        }.keys.sorted()
+        assertEquals(
+            "production project ref must not be forwarded to any build job yet: $offenders",
+            emptyList<String>(),
+            offenders
+        )
+    }
+
     @Test
     fun noWorkflowPutsAProjectRefInAPlaceGradleCannotSee() {
         // The debug ref must be exported as a job/workflow `env:` entry, not only as a

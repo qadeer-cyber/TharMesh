@@ -66,6 +66,14 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
+      # Setting the repository variable is not enough on its own: app/build.gradle
+      # resolves this through System.getenv, so the workflow has to forward it into
+      # every job that invokes Gradle. Without this line SUPABASE_STAGING_PROJECT_REF
+      # compiles to "" and SupabaseEnvironmentGuard fails closed for the staging and
+      # qa backends no matter what the repository variable says.
+      THARMESH_STAGING_PROJECT_REF: ${{ vars.THARMESH_STAGING_PROJECT_REF || secrets.THARMESH_STAGING_PROJECT_REF }}
+      # THARMESH_PRODUCTION_PROJECT_REF is deliberately NOT forwarded: production
+      # stays unset so release builds remain fail-closed (owner decision).
       # Read by app/build.gradle as THARMESH_DEBUG_PROJECT_REF. The name was
       # misspelled THERMESH_ until this commit, so Gradle never saw it and fell
       # back to the hardcoded "example" in app/build.gradle. Audited: the value
@@ -215,6 +223,10 @@ jobs:
       SUPABASE_URL: ${{ vars.SUPABASE_URL || secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
       GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID || secrets.GOOGLE_WEB_CLIENT_ID }}
+      # assembleQa compiles SUPABASE_BACKEND_ENV="staging", and the guard then
+      # requires the URL's project ref to equal the staging ref exactly. Without
+      # this the signed QA artifact can never reach the staging backend.
+      THARMESH_STAGING_PROJECT_REF: ${{ vars.THARMESH_STAGING_PROJECT_REF || secrets.THARMESH_STAGING_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v4
         with:
