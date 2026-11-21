@@ -498,3 +498,184 @@ Applying the migration files a second time *without* a tracking table fails at 0
 `create table`. Re-run safety comes from the tracking table, which both the harness and
 `db push` consult. This is pre-existing repository behaviour, unchanged here, and is
 only a hazard if someone applies the files by hand.
+
+---
+
+## 11. Items 1-3 — the official migration endpoints: REJECTED for this deployment
+
+From the authoritative Management API OpenAPI document (`https://api.supabase.com/api/v1-json`):
+
+| Operation | Path | Request body |
+|---|---|---|
+| `v1-apply-a-migration` | `POST /v1/projects/{ref}/database/migrations` | `V1CreateMigrationBody` = `{ query (required), name, rollback }` |
+| `v1-upsert-a-migration` | `PUT /v1/projects/{ref}/database/migrations` | `V1UpsertMigrationBody` = `{ query (required), name, rollback }` |
+| `v1-list-migration-history` | `GET /v1/projects/{ref}/database/migrations` | — returns `[{ version (required), name }]` |
+| `v1-patch-a-migration` | `PATCH /v1/projects/{ref}/database/migrations/{version}` | `{ name, rollback }` |
+
+**Neither POST nor PUT accepts a `version`.** This is the published request contract, not
+an inference: a caller cannot specify `202611120000`. The history records *have* a
+version (the GET response requires one), so the server assigns it — in practice an
+apply-time timestamp.
+
+**Consequence for CLI compatibility:** `supabase db push` decides what to apply by
+comparing the filenames in `supabase/migrations/` against the versions in
+`supabase_migrations.schema_migrations`. If the 15 migrations were applied through
+`POST /database/migrations`, the history would hold 15 server-assigned versions and
+none of `202611120000`-`202611120014`. A later `db push` would therefore consider all
+15 files unapplied and try to run them again — against a database that already has the
+objects. That is a broken, non-recoverable history.
+
+**Verdict: REJECTED**, exactly as item 3 requires. Not because of a hunch, but because
+the endpoint cannot express the repository's versions.
+
+### What to use instead, and why it is not faking history
+
+`POST /v1/projects/{ref}/database/query` executes arbitrary SQL over HTTPS. The Supabase
+CLI binary itself contains the exact statements it uses to maintain history:
+
+```
+CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (version text NOT NULL PRIMARY KEY)
+ALTER TABLE supabase_migrations.schema_migrations ADD COLUMN IF NOT EXISTS name text
+ALTER TABLE supabase_migrations.schema_migrations ADD COLUMN IF NOT EXISTS statements text[]
+INSERT INTO supabase_migrations.schema_migrations(version, name, statements) VALUES($1, $2, $3)
+```
+
+Running a migration's real SQL and then recording its real version, name and statements
+with the CLI's own INSERT produces **the same rows `db push` would have written**. That
+is reproducing the history, not fabricating it: every recorded migration is one that
+actually ran, under its true repository version. A later `db push` sees all 15 as
+applied and does nothing. The line we will not cross is recording a migration that did
+not execute, or inventing a version.
+
+### Why the CLI cannot simply be used from here
+
+| Attempt | Result |
+|---|---|
+| `supabase migration list --remote=<staging>` | pooler `getaddrinfo ENOTFOUND`, 8 retries, timeout |
+| same, after allow-listing `aws-0-ap-northeast-1.pooler.supabase.com` | still `ENOTFOUND` — the proxy only pre-resolves hosts it proxies over HTTPS |
+| same, with `--dns-resolver https` | `DbConfigIpv6Error: IPv6 is not supported on your current network` |
+
+The CLI mints a temporary login role (`POST /v1/projects/{ref}/cli/login-role`, no
+password needed) and then opens a **direct PostgreSQL connection**. This container's
+egress is an HTTPS forward proxy, which cannot carry PostgreSQL on 5432/6543 under any
+allowlist. Correction to an earlier note in this document: the blocker is not simply
+that `db.<ref>` is AAAA-only — the CLI prefers the IPv4 pooler — it is that no raw TCP
+leaves this container at all.
+
+---
+
+## 12. Item 5 — PostgreSQL 17 compatibility, and the defect it exposed
+
+The local verification cluster is PostgreSQL 16.15; staging is 17.11. Checking against
+staging rather than trusting the local green run found a real defect.
+
+**`202611120010` called `public.digest(..., 'sha256')`.** That function is
+`security definer` with `set search_path = ''`, so every reference must be
+schema-qualified and nothing resolves implicitly. On Supabase pgcrypto is installed into
+`extensions`, so `public.digest` does not exist — verified read-only against staging:
+
+```sql
+select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where p.proname = 'digest' and n.nspname = 'public';   -- 0
+```
+
+Locally, `create extension if not exists pgcrypto` defaults to the `public` schema, so
+the call resolved and all 51 tests passed. The failure mode is quiet: plpgsql bodies are
+not resolved at CREATE, so the migration would have applied cleanly and CI would have
+stayed green; the break would surface only when a user uploaded a recovery blob, as
+`function public.digest(bytea, unknown) does not exist`, through
+`tharmesh_recovery_rotate_commit_svc` and the `recovery-rotate` Edge Function.
+
+Fixed in PR #59 with `pg_catalog.sha256(bytea)` — core since PostgreSQL 11, present on
+both 17.11 and 16.15, no extension needed, resolves under an empty `search_path`.
+Equivalence verified over six inputs including empty, multibyte and 10 000-character
+strings. A new guard test fails on any `public.<pgcrypto function>` reference.
+
+### Remaining PostgreSQL 17 verification, and its limit
+
+Every other dependency the migrations use was confirmed present on staging:
+`clock_timestamp`, `convert_to`, `current_setting`, `decode`, `encode`,
+`jsonb_build_object`, `pg_advisory_xact_lock`, `set_config` in `pg_catalog`;
+`gen_random_uuid` in both `pg_catalog` and `extensions`; roles `anon`, `authenticated`,
+`service_role`, `postgres` all exist; `pgcrypto` already installed.
+
+**This is dependency-level verification, not an execution test.** Full confidence needs
+the statements parsed by PostgreSQL 17 itself. A no-write way to do that exists — submit
+each migration through `/database/query` with `"read_only": true`, where a syntax error
+returns `42601` while a correctly parsed DDL statement returns the read-only refusal
+`25006` — but it is a hosted call that *reads* like DDL, so it is listed below as the
+first approval-gated step rather than performed unilaterally.
+
+---
+
+## 13. Items 6-9 — backup, GitHub integration, and production safety
+
+### Item 6 — restoration procedure
+
+Staging holds **no application objects and no rows**, so there is nothing to lose and a
+logical dump would be near-empty. `db dump` is also unavailable from here (same TCP
+limit). The honest position: a *backup* is not meaningful; a *verified restoration
+procedure* is, and for a pristine project it is an exact teardown back to the captured
+pre-state.
+
+Pre-state baseline, captured read-only before any write:
+
+| Property | Value |
+|---|---|
+| `public` tables | none |
+| `public` functions | 0 |
+| `tharmesh_private` schema | absent |
+| `supabase_migrations` schema | absent |
+| Non-system schemas | `auth`, `extensions`, `graphql`, `graphql_public`, `public`, `realtime`, `storage`, `vault` |
+
+Restoration, to be run only on `uxntqgspxrepvhelhqfs` if the deployment must be undone:
+
+```sql
+drop schema if exists tharmesh_private cascade;
+drop table if exists public.recovery_blobs, public.devices, public.handles, public.profiles cascade;
+drop schema if exists supabase_migrations cascade;
+-- then re-verify the baseline table above
+```
+
+This returns the project to the captured pre-state exactly. It is destructive by
+design and must never be pointed at `owhmuxueacjbljhpmpua`. On the free plan there is no
+PITR, which is another reason the deployment target must be the empty project.
+
+### Item 7 — automatic deployment risk
+
+`GET /v1/projects/uxntqgspxrepvhelhqfs/branches` returns `[]`: no Supabase branching, so
+no branch-based automatic migration deploys. The Management API has **no GitHub or
+integration endpoints at all** (confirmed against the OpenAPI document), so the
+connection's settings cannot be read programmatically.
+
+**Owner check, still outstanding:** Dashboard → the staging project → Project Settings →
+Integrations → GitHub. If "deploy migrations on push" is enabled for a branch, merging
+PR #58 or #59 could auto-apply migrations and bypass this approval gate entirely. This
+must be confirmed **before** either PR is merged, not before the manual deployment.
+
+### Item 8 — the variable change cannot redirect production
+
+`SUPABASE_URL` / `SUPABASE_ANON_KEY` / `THARMESH_STAGING_PROJECT_REF` are **build-time**
+inputs consumed only by the `build` and `signed-qa` jobs and compiled into the Android
+app's `BuildConfig`. They configure no server, so the hosted production project is
+untouched by changing them, and an already-released APK keeps whatever was compiled into
+it.
+
+Verdicts from the real `SupabaseEnvironmentGuard` with the post-change values
+(URL = staging, staging ref = `uxntqgspxrepvhelhqfs`, production ref unset, debug ref
+`example`):
+
+| Build | vs STAGING | vs PRODUCTION |
+|---|---|---|
+| `debug` | DENIED (ref is `example`) | **DENIED** |
+| `qa` | **PERMITTED** — the intent | **DENIED** |
+| `release` | DENIED (production ref unset) | **DENIED** |
+
+Every path to production is denied, including from a release build. The only new
+capability is QA against staging.
+
+### Item 10 — invariants held
+
+`identity_admission.enabled` is never set by any migration to anything but its default
+and is not touched by this plan; the debug ref stays `example`; the production ref stays
+unset and unforwarded, with a test asserting the omission.
