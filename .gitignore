@@ -40,3 +40,7 @@ google-services.json
 # any `supabase` invocation and must never be committed; the tracked source of
 # truth is supabase/migrations, supabase/functions and schema.sql.
 supabase/.temp/
+
+# Python bytecode
+__pycache__/
+*.pyc

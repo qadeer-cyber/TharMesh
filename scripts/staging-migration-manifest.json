@@ -1,0 +1,96 @@
+{
+  "pinned_commit": "bebd510928ff196b3d594ee6b2c0bfedeeb6e785",
+  "note": "SHA-256 of each migration at the pinned commit. The executor refuses to run if the working tree does not match this manifest exactly.",
+  "migrations": [
+    {
+      "file": "202611120000_base_schema.sql",
+      "version": "202611120000",
+      "name": "base_schema",
+      "sha256": "2e49d77824e564bf85bee49e516ef10a3a50e1ebb547e61a8baacec8fcc8fcf0"
+    },
+    {
+      "file": "202611120001_identity_provisioning.sql",
+      "version": "202611120001",
+      "name": "identity_provisioning",
+      "sha256": "a3807ef8cc583f310b09c01f14e8af13a231aea9ff1c646c7d1ac28005f9b6fa"
+    },
+    {
+      "file": "202611120002_identity_proof.sql",
+      "version": "202611120002",
+      "name": "identity_proof",
+      "sha256": "e004a7f109805f83c20a121b1d4d229b65585bfdc849e770bd7ff6f3ffb2b59c"
+    },
+    {
+      "file": "202611120003_identity_device_guard.sql",
+      "version": "202611120003",
+      "name": "identity_device_guard",
+      "sha256": "ab169afd8a22ba383c5b0e1bc2ebcf028c044d5e306fc38d929160f68d7fcddc"
+    },
+    {
+      "file": "202611120004_trusted_device_enrollment.sql",
+      "version": "202611120004",
+      "name": "trusted_device_enrollment",
+      "sha256": "907d1ff5eda9c6cd2039fb209ba39454af9bffd22cc46c9e82c76e2e1b43d0d9"
+    },
+    {
+      "file": "202611120005_device_current_explicit_reset.sql",
+      "version": "202611120005",
+      "name": "device_current_explicit_reset",
+      "sha256": "ad47bbd6c73d482e3820dbe2e6d5f3da482a51119e4816a18e9aee175055b7c1"
+    },
+    {
+      "file": "202611120006_enrollment_fail_closed_edge.sql",
+      "version": "202611120006",
+      "name": "enrollment_fail_closed_edge",
+      "sha256": "caf86e7b0f71ef8de416483f28c0b60c2bb5c6c9a6c34c9bc0f4e3e6572f9151"
+    },
+    {
+      "file": "202611120007_bootstrap_proof_and_auth_amr.sql",
+      "version": "202611120007",
+      "name": "bootstrap_proof_and_auth_amr",
+      "sha256": "4a033174df336b96e42e352ee2dad70d9133bb1af9929086f7eac77748c09291"
+    },
+    {
+      "file": "202611120008_recovery_cas_revoke_fresh.sql",
+      "version": "202611120008",
+      "name": "recovery_cas_revoke_fresh",
+      "sha256": "09b8baebc3b27d1cab661192cd494995862afc3153a428ea4928ac3f04cf723f"
+    },
+    {
+      "file": "202611120009_recovery_lock_device_serialize.sql",
+      "version": "202611120009",
+      "name": "recovery_lock_device_serialize",
+      "sha256": "ad299d4998f589ea24ce7272d5bfffe557fd18929a92cf27360b0e42c4cea6f8"
+    },
+    {
+      "file": "202611120010_grant_session_atomic_recovery.sql",
+      "version": "202611120010",
+      "name": "grant_session_atomic_recovery",
+      "sha256": "2a8f926251a5dc4caf41f4aaed1abaa0c775a657ee93b706860c3af47ad2708e"
+    },
+    {
+      "file": "202611120011_revoke_possession_jwt_claims.sql",
+      "version": "202611120011",
+      "name": "revoke_possession_jwt_claims",
+      "sha256": "e80abf1ced5d5cd202d55efa1747d6870c7d06147de7ddb12d04a29e58dde959"
+    },
+    {
+      "file": "202611120012_revoke_challenge_possession.sql",
+      "version": "202611120012",
+      "name": "revoke_challenge_possession",
+      "sha256": "2d97f95038fbd444aff9612181380e31d7dde6ff1ced484a3fbacdc95bf740eb"
+    },
+    {
+      "file": "202611120013_revoke_svc_session_assert.sql",
+      "version": "202611120013",
+      "name": "revoke_svc_session_assert",
+      "sha256": "72eb46a8d1fc430ba344b9f49e4d63dccd74f7a8b71151dd2ac478887fdab47b"
+    },
+    {
+      "file": "202611120014_svc_execute_lockdown.sql",
+      "version": "202611120014",
+      "name": "svc_execute_lockdown",
+      "sha256": "5ac0d4fd434f297dbaf59ddb31d6bf02cd5bea7d6f044814c8f074b62c9ece66"
+    }
+  ]
+}
