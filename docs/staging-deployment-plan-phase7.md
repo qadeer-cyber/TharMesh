@@ -1,9 +1,13 @@
 # Phase 7 — staging-only deployment plan (prepared, NOT executed)
 
-**Target:** project `owhmuxueacjbljhpmpua` only. **No production action.**
-**Status:** **HALTED at the project-identity check — see section 0.** Nothing in this
-document has been applied. Awaiting an owner decision, not merely an approval.
-**Prepared:** 2026-11-21, from the verified state below.
+**Target:** STAGING = `uxntqgspxrepvhelhqfs` (**TharMesh-Staging**) — the only
+authorized target.
+**PROTECTED PRODUCTION:** `owhmuxueacjbljhpmpua` (**tharmesh**) — do not modify its
+database, functions, configuration or data.
+**Status:** awaiting the deployment approval gate. Nothing has been applied to any
+hosted project.
+**Prepared:** 2026-11-21. Project assignments confirmed by the owner after the
+identity halt recorded in section 0.
 
 Owner decisions encoded: debug ref stays `example`; staging ref is
 `owhmuxueacjbljhpmpua`; production ref stays unset; PR #57 stays DRAFT and PR #58
@@ -11,7 +15,7 @@ unmerged.
 
 ---
 
-## 0. HALT — the targeted project is not the one named staging
+## 0. RESOLVED — project identity (was a halt)
 
 Authenticated `supabase projects list` (CLI 3.2.0) returns **two** projects:
 
@@ -50,18 +54,30 @@ publishable key, so it holds no rows in the user-facing tables. That argues agai
 being a populated production database, but says nothing about which project is *intended*
 for staging, and RLS could mask rows from the anon role.
 
-`uxntqgspxrepvhelhqfs` was **not** inspected. The owner authorized work on one ref, and
-reading another project — even read-only — is outside that authorization.
+`uxntqgspxrepvhelhqfs` was not inspected at the time: the owner had authorized one ref,
+and reading another project — even read-only — was outside that authorization. It has
+since been authorized and audited (section 9).
 
-### Owner decision required
+### Owner decision (received 2026-11-21)
 
-1. State which ref is **staging** and which, if any, is **production**.
-2. If staging is `uxntqgspxrepvhelhqfs`: the repository's `SUPABASE_URL` and
-   `SUPABASE_ANON_KEY` repository values are pointed at the wrong project and must be
-   re-pointed before any migration, and `THARMESH_STAGING_PROJECT_REF` must be set to
-   that ref instead. PR #58's forwarding change is still correct; only the value differs.
-3. If staging really is `owhmuxueacjbljhpmpua`: confirm explicitly, and preferably rename
-   the projects in the dashboard so the names stop contradicting the configuration.
+| Role | Project | Ref |
+|---|---|---|
+| **STAGING** — only authorized target | TharMesh-Staging | `uxntqgspxrepvhelhqfs` |
+| **PROTECTED PRODUCTION** — do not modify | tharmesh | `owhmuxueacjbljhpmpua` |
+
+The halt was correct: the repository is pointed at **production**. Required changes,
+none of which have been applied:
+
+1. Repository variable `SUPABASE_URL` → `https://uxntqgspxrepvhelhqfs.supabase.co`.
+2. Repository variable `SUPABASE_ANON_KEY` → the publishable key **of TharMesh-Staging**.
+   Never reuse the production project's key.
+3. Repository variable `THARMESH_STAGING_PROJECT_REF` → `uxntqgspxrepvhelhqfs`.
+4. `THARMESH_DEBUG_PROJECT_REF` stays `example`; the production ref stays unset.
+
+Until (1)-(3) are done, CI builds still point at production, and the guard would permit
+a `qa` build against production if `THARMESH_STAGING_PROJECT_REF` were set to the
+production ref. The CLI's auto-created `supabase/.temp/linked-project.json`, which had
+linked this checkout to the production ref, has been deleted.
 
 ---
 
@@ -368,3 +384,117 @@ Note on backups: the dashboard's automatic daily backup depends on the project's
 and a logical `db dump` is the no-cost, verifiable alternative — but it needs the same
 direct connection, so the backup evidence this plan requires before any mutation must
 also be produced from the owner's machine.
+
+
+---
+
+## 9. Staging audit (`uxntqgspxrepvhelhqfs`), read-only over HTTPS
+
+Performed with the Management API SQL endpoint,
+`POST /v1/projects/{ref}/database/query` with `"read_only": true`, which executes as
+the `supabase_read_only_user` role.
+
+| Check | Result |
+|---|---|
+| Project | TharMesh-Staging, ap-northeast-1, ACTIVE_HEALTHY, created 2026-11-13 |
+| Postgres | **17.11** (the local verification cluster is 16.15 — see the caveat below) |
+| `public` schema tables | **none** |
+| `public` schema functions | **0** |
+| Non-system schemas | `auth`, `extensions`, `graphql`, `graphql_public`, `public`, `realtime`, `storage`, `vault` — stock Supabase; no `tharmesh_private` |
+| `supabase_migrations` schema | **does not exist** — no migration history at all |
+| `pgcrypto` | available **and installed**, 1.3 (migration 0010 needs it) |
+| `uuid-ossp` | installed, 1.1 |
+| Database branches | `[]` — no Supabase branching configured |
+
+The project is pristine: nothing of TharMesh's has ever been applied to it.
+
+**Version caveat:** staging is PostgreSQL 17, the local verification cluster is 16, and
+production is a third instance. Nothing in these migrations uses 16/17-divergent
+syntax, but the local green result is evidence *for PostgreSQL 16*. The dry-run against
+staging is what confirms 17.
+
+### Item 8 — database access without direct PostgreSQL, solved
+
+`db.<ref>.supabase.co` is AAAA-only and this container's egress is an HTTPS proxy, so
+`supabase migration list`, `db dump` and `db push` all hang (confirmed: 60 s timeout,
+exit 124). The Management API SQL endpoint is the working alternative:
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $(cat ~/.supabase/access-token)" \
+  -H "Content-Type: application/json" \
+  --data '{"query":"select 1;","read_only":true}' \
+  "https://api.supabase.com/v1/projects/uxntqgspxrepvhelhqfs/database/query"
+```
+
+`"read_only": true` runs as `supabase_read_only_user` and cannot mutate. Dropping that
+flag is what would make it a write path — which is **not** to be done without approval.
+This gives a complete read-only audit capability from this session, and, if approved, an
+HTTPS route to apply SQL without direct PostgreSQL.
+
+### Item 9 — automatic deployments
+
+`GET /v1/projects/uxntqgspxrepvhelhqfs/branches` returns `[]`, so **no Supabase
+branching and therefore no branch-based automatic migration deploys are configured**.
+The dashboard project card does show a GitHub badge reading `qadeer-cyber/TharMesh`, so
+the repository is connected to the project; the Management API exposes no endpoint for
+that connection's settings, so **one item remains for the owner to confirm in the
+dashboard**: Project Settings → Integrations → GitHub, specifically whether
+"deploy migrations on push" (and the configured supabase directory/branch) is enabled.
+If it is, merging anything into the watched branch could auto-apply migrations — which
+would bypass this approval gate entirely.
+
+---
+
+## 10. Items 6-7 — `db push` alone CANNOT bootstrap staging
+
+`supabase/schema.sql` is not a migration. Its own header says "Run in the Supabase SQL
+editor", and that is how production got its `profiles` / `handles` / `devices` /
+`recovery_blobs` tables — by hand, untracked. `supabase db push` only applies files in
+`supabase/migrations/`, so on a project that never had schema.sql pasted in, the base
+tables never appear.
+
+**Verified locally, not inferred.** A disposable PostgreSQL database was given the
+platform emulation only (roles + `auth` schema, no schema.sql), then the migrations were
+applied in order:
+
+```
+ok    202611120001_identity_provisioning.sql
+ok    202611120002_identity_proof.sql
+FAIL  202611120003_identity_device_guard.sql
+      ERROR:  relation "public.devices" does not exist
+```
+
+So a migration-only push against the empty staging project would **record 0001 and 0002
+as applied, then fail** — leaving a half-written migration history that needs exactly
+the repair this plan forbids doing automatically.
+
+### The fix: a tracked base-schema migration
+
+`supabase/migrations/202611120000_base_schema.sql` is generated from
+`supabase/schema.sql` with one transformation: each `create policy` is preceded by
+`drop policy if exists`, because `create policy` is not idempotent and the file must be
+safe both on a fresh project and on one where schema.sql was already applied by hand.
+
+Verification performed:
+
+| Check | Result |
+|---|---|
+| Migrations-only apply, no schema.sql step (simulates `db push` on empty staging) | **all 15 applied cleanly** |
+| Resulting schema vs the harness path (schema.sql + migrations) | **identical** — 59/59 objects (tables, functions with full signatures, policies), the only delta being the harness's own `tharmesh_private.schema_migrations` bookkeeping table |
+| Repository inventory guard | updated from 14 to 15 files and 0001-0014 to 0000-0014; it correctly rejected the new file until updated |
+| Drift guard | `supabase/tests/schema-bootstrap-parity.test.mjs` regenerates the migration from schema.sql and fails if they diverge; mutation-tested (editing schema.sql alone fails 1 of 3) |
+| Category 3 suite | re-run after the change |
+
+Note the two tracking tables are different and independent: the repository harness
+records applied files in `tharmesh_private.schema_migrations`, while `supabase db push`
+uses `supabase_migrations.schema_migrations`. Staging has neither, so a push would
+create the latter and record all 15.
+
+### Raw re-application is not idempotent, and that is by design
+
+Applying the migration files a second time *without* a tracking table fails at 0001
+(`relation "identity_admission" already exists`): migrations 0001-0014 use bare
+`create table`. Re-run safety comes from the tracking table, which both the harness and
+`db push` consult. This is pre-existing repository behaviour, unchanged here, and is
+only a hazard if someone applies the files by hand.
