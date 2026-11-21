@@ -229,3 +229,45 @@ Read-only and non-destructive; no account creation without separate authorizatio
    `BOOT_ERROR`.
 5. **End-to-end enrollment:** blocked until email delivery works (§3) **and** the owner
    authorizes a test account.
+
+---
+
+## 7. Signed-QA CI branch restriction (documented, NOT changed)
+
+`.github/workflows/android.yml`, job `signed-qa`:
+
+```yaml
+if: github.event_name == 'push'
+    && github.repository == 'qadeer-cyber/TharMesh'
+    && github.ref == 'refs/heads/cursor/universal-account-0939'
+    && vars.THARMESH_QA_SIGNING_ENABLED == 'true'
+```
+
+Four conditions must all hold, and the third pins the job to a **single branch**:
+
+| Condition | Effect |
+|---|---|
+| `github.event_name == 'push'` | never runs on a pull request |
+| `github.repository == 'qadeer-cyber/TharMesh'` | never runs on a fork |
+| `github.ref == 'refs/heads/cursor/universal-account-0939'` | runs **only** on PR #52's branch |
+| `vars.THARMESH_QA_SIGNING_ENABLED == 'true'` | currently unset, so the job is skipped even there |
+
+It also declares `environment: tharmesh-qa-signing`, so a GitHub Environment of that
+name gates it in addition to the four conditions.
+
+**Consequences, stated rather than worked around:**
+
+* Signed-QA evidence **cannot** be produced on `cursor/tharmesh-0.8-field-mesh-5aa9`,
+  `cursor/tharmesh-0.9-engineering-5aa9`, or this PR's branch. Every observed run of
+  this job on those branches is `skipped`, which is the correct behaviour and not a
+  failure.
+* The `THARMESH_STAGING_PROJECT_REF` forwarding added to `signed-qa` in this PR is
+  therefore correct but **dormant** on the current branches: it takes effect the first
+  time the job actually runs.
+* Phase 8 (signed-QA upgrade) consequently needs an explicit owner decision about where
+  that job may run. **No trigger change is included in this PR.** The options, for the
+  owner to choose between, are: push the QA-signing work to
+  `cursor/universal-account-0939`; add the target branch to the `github.ref` condition;
+  or convert the condition to a `workflow_dispatch` input so QA signing is run
+  deliberately rather than on every push. Each widens who can produce a signed artifact,
+  so none should be applied silently.
