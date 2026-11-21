@@ -679,3 +679,166 @@ capability is QA against staging.
 `identity_admission.enabled` is never set by any migration to anything but its default
 and is not touched by this plan; the debug ref stays `example`; the production ref stays
 unset and unforwarded, with a test asserting the omission.
+
+---
+
+## 14. Read-only preflight round (owner-authorized, no writes)
+
+All checks below were performed without writing to any hosted project.
+
+### 14.1 Item 2 — the 15 files at PR #59 HEAD `43e4109`
+
+Versions `202611120000`-`202611120014`, strictly ascending, contiguous, no duplicates,
+one file per version, filename `<version>_<name>.sql` throughout. Content digests were
+recorded per file at that commit (`sha256sum supabase/migrations/*.sql`). **PASS.**
+
+### 14.2 Item 6 — statements incompatible with transactions
+
+Scanned for `create/drop/reindex index concurrently`, `vacuum`, `create database`,
+`alter system`, `create tablespace`, `alter type ... add value`,
+`refresh materialized view concurrently`: **none present**. Every migration is
+transaction-safe. **PASS.**
+
+Separately discovered: **14 of the 15 files wrap themselves in `begin; ... commit;`**
+(all but the generated `0000`). That matters — see 14.4.
+
+### 14.3 Item 1 — read-only PostgreSQL 17 preflight against staging
+
+Each migration submitted to `/database/query` with `"read_only": true`
+(`show transaction_read_only` → `on`, verified). PostgreSQL parses the whole
+multi-statement string before executing any of it, so a syntax error anywhere returns
+`42601`; a correctly parsed DDL statement is refused with `25006`.
+
+| Result | Count |
+|---|---|
+| `25006` — parsed, refused as read-only (expected) | **14** |
+| `42601` — syntax error on PG 17 | **0** |
+| `42P01` — see below | 1 |
+
+The single `42P01` is `202611120009`: `relation "public.recovery_blobs" does not exist`.
+Its first statement is `drop policy if exists recovery_insert_own on
+public.recovery_blobs` — `IF EXISTS` guards the *policy*, not the *table*. Testing a
+migration in isolation against an empty database cannot satisfy that; in sequence,
+`0000` creates the table first. Confirmed by the rehearsal in 14.5, where `0009` applied
+cleanly and left its policy in place. **Artifact of isolation, not a defect.**
+
+As the owner required, this classification is **preliminary**: it proves the statements
+parse on PostgreSQL 17, not that every one executes successfully.
+
+### 14.4 Item 4 — atomicity, proven by experiment
+
+Four read-only probes against staging:
+
+| Probe | Result | Meaning |
+|---|---|---|
+| `begin; set local statement_timeout=12345; select current_setting(...)` | `12345ms` | later statements see the earlier `SET LOCAL` |
+| carry `transaction_timestamp()` through `set_config(..., true)` and compare | `t1 == t_now`, `same_tx = true` | **all statements in one submission share one transaction** |
+| same without an explicit `begin` | `same_tx_implicit = true` | the submission is an implicit transaction block |
+| `begin; set_config(local); commit; select current_setting(...)` | carried value `''`, `still_same_tx = false` | **an inner `COMMIT` ends the transaction early** |
+
+An earlier probe comparing `transaction_timestamp()` with `statement_timestamp()`
+suggested the opposite; it was misleading, because in a multi-statement simple-query
+string `statement_timestamp()` is set once for the whole string. The `SET LOCAL` and
+carried-timestamp probes are decisive and agree with each other.
+
+**Consequences, which define the only safe construction:**
+
+1. A submission **is** atomic, so `<migration SQL>` + `<history INSERT>` in one
+   submission commit or roll back together.
+2. The files' own `begin;`/`commit;` **must be stripped**, or the inner `COMMIT` ends the
+   transaction and the history INSERT lands in a *separate* one — a migration applied
+   with no history row.
+
+So each migration is submitted as exactly:
+
+```sql
+begin;
+<file body, with its own begin;/commit; removed>
+insert into supabase_migrations.schema_migrations(version, name, statements)
+     values ('<version>', '<name>', array[<file text>]);
+commit;
+```
+
+### 14.5 Item 5 — full rehearsal on real PostgreSQL 17
+
+PostgreSQL **17.12** installed locally from PGDG and configured to mirror Supabase:
+roles `anon` / `authenticated` / `service_role`, an `auth` schema, and crucially
+**pgcrypto installed into `extensions`, not `public`** — the configuration that exposed
+the `digest` defect.
+
+Applying all 15 with the construction above:
+
+| Check | Result |
+|---|---|
+| Migrations applied | **15/15**, in order `0000` → `0014` |
+| History rows | **15**, first `202611120000`, last `202611120014`, every row has `name` **and** `statements` |
+| History schema | `version text, name text, statements ARRAY` — matches the CLI's own `CREATE TABLE`/`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements exactly |
+| Edge Function RPCs | **16/16** present |
+| RLS policies | 13 across 4 tables |
+| `public.digest` in this layout | **does not exist** — the pre-fix code would have failed here |
+| `pg_catalog.sha256` path | works |
+
+**Failure and recovery rehearsal.** On a second PG 17 database, `0000`-`0009` were
+applied, then `0010` was submitted with an injected `select 1/0`:
+
+```
+injected-failure submission rc=1
+after failure -> history_rows|new_table|new_function = 0|0|0
+history count: 10
+```
+
+Nothing survived: no history row, no `tharmesh_private.recovery_upload_idempotency`, no
+`tharmesh_recovery_rotate_commit_svc`. The transaction rolled back completely and the
+history stayed consistent at 10. **Recovery from a mid-deployment failure requires no
+repair** — the failed migration simply never happened.
+
+### 14.6 Item 3 — backup: BLOCKED, and what exists instead
+
+`GET /v1/projects/uxntqgspxrepvhelhqfs/database/backups`:
+
+```json
+{"region":"ap-northeast-1","walg_enabled":true,"pitr_enabled":false,
+ "backups":[],"physical_backup_data":{}}
+```
+
+**There is no restorable backup of staging, and PITR is disabled** (free plan). A
+logical `db dump` is also unavailable from this container (no raw TCP egress). The owner
+is right that teardown SQL is not a backup, so this is recorded as **BLOCKED**, not
+solved.
+
+What makes the risk acceptable rather than removed:
+
+* the authoritative `GET /database/migrations` returns `[]` and the database holds **no
+  application objects and no rows**, so there is nothing whose loss could not be
+  reproduced from the repository;
+* the recoverable baseline is therefore exactly "empty project with stock Supabase
+  schemas", captured in section 9 and reproducible by the teardown in section 13;
+* every migration is individually atomic (14.5), so a failure cannot leave a partial
+  state.
+
+If the owner wants a genuine backup first, the only route is a logical dump from a
+machine with direct PostgreSQL access, or enabling PITR (paid).
+
+### 14.7 Item 7 — automatic deployment: the exact owner check
+
+The Management API has **no GitHub or integration endpoints** (confirmed against the
+full OpenAPI document), so this cannot be settled programmatically. What is settled:
+`GET /v1/projects/uxntqgspxrepvhelhqfs/branches` returns `[]`, so no Supabase branching
+and no preview-branch deploys exist.
+
+**Exact owner check, before merging PR #58 or #59:**
+
+> supabase.com/dashboard → project **TharMesh-Staging** → **Project Settings** →
+> **Integrations** → **GitHub** → confirm whether a repository connection exists and,
+> if so, whether **"Deploy migrations on push"** (sometimes shown as automatic branching
+> / supabase directory + production branch) is **disabled**.
+
+If it is enabled for a branch that PR #58 or #59 would land on, merging either PR would
+auto-apply migrations and bypass this approval gate entirely.
+
+### 14.8 Item 8 — invariants
+
+`identity_admission.enabled` is not set by any migration and is untouched by this plan.
+The debug ref stays `example`, the production ref stays unset and unforwarded. No
+production call was made in this round beyond the org-level `projects list`; every
+database query targeted `uxntqgspxrepvhelhqfs`.
