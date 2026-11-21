@@ -25,6 +25,7 @@ bash supabase/tests/postgres-apply.sh tharmesh_ci_pg
 "${NODE_TEST[@]}" supabase/tests/identity-postgres-multisession.test.mjs
 NODE_TESTS=(
   supabase/tests/schema-bootstrap-parity.test.mjs
+  supabase/tests/migration-extension-schema.test.mjs
   supabase/tests/recovery-bypass.test.mjs
   supabase/tests/schema-recovery-privileges.test.mjs
   supabase/tests/recovery-grant-atomic.test.mjs
