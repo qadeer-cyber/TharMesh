@@ -22,7 +22,8 @@ run they cited was obtained with APK hash pinning disabled).
 | APK SHA-256 pinning / reproducibility | **RESTORED** (was silently disabled) | §3 |
 | JVM unit suite | **PASS** — 536 tests / 103 classes, 0 failures, run locally | §4 |
 | Regression guards bite when functionality breaks | **PASS** — mutation-tested, 6 induced failures | §4.2 |
-| Emulator Cat 6 (API 30) Gate A + B×3 | see §5 | actual run logs |
+| Emulator Cat 6 (API 30) Gate A + B×3 | **PASS** — 5/5 jobs, strict pin enforced | run 44884492675 |
+| Android CI `build` (cloud assemble + unit tests) | **FAIL** — external: staging host does not resolve | §5.3 |
 | Android API 33/34/35 | **PASS (install + permission declaration only)** — *not* a functional mesh gate | §5 |
 | Physical 2/3-phone UAT | **NOT EXECUTED** | §6 |
 | Hosted staging OTP / Edge | **BLOCKED** (no owner credentials) | §6 |
@@ -261,7 +262,115 @@ because the `push` and `pull_request` triggers have different concurrency keys).
 `b3d1b37` push-only Cat 6 deduplication is preserved verbatim.
 
 <!-- CI-EVIDENCE-BEGIN -->
-_Pending the controlled run; populated below before this report is final._
+**Correction commit: `51c32ab698bbddfa0b2dcd4f21bfaae91ab58ea1`** (pushed 2026-11-21 08:21 UTC;
+no overlapping run was active at push time).
+
+| Workflow | Run | Event | Result |
+|----------|-----|-------|--------|
+| Emulator evidence (Cat 6), API 30 | [**44884492675**](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675) | push | **PASS — 5/5 jobs** |
+| Android API 33–35 evidence | [**44884492722**](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492722) | push | **PASS — 33 / 34 / 35** |
+| Android CI | [**44884492629**](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492629) | push | **FAIL** — `build` job, external cause (§5.3) |
+| Android CI | [**44884498171**](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884498171) | pull_request | **FAIL** — same job, same cause |
+
+### 5.1 Cat 6 — strict APK hash pinning verified green on the runner
+
+| Job | Result |
+|-----|--------|
+| [`prepare-apks`](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675/job/136786708528) | **PASS** — verifier self-test, strict v6 pin, head digest |
+| [`gate-a-legacy-upgrade`](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675/job/136787730332) | **PASS** — v6→v7 in-place upgrade; step "Re-verify v6 APK hash and cert (strict)" PASS |
+| [`gate-b-persistence (1)`](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675/job/136788256268) | **PASS** |
+| [`gate-b-persistence (2)`](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675/job/136788256259) | **PASS** |
+| [`gate-b-persistence (3)`](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675/job/136788256287) | **PASS** |
+
+Verbatim from the `prepare-apks` log, with `HISTORICAL_WORKTREE: /tmp/wt-room-v6`:
+
+```
+e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89  apk-artifacts/v6-room6-debug.apk
+verify ok mode=pinned file=e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89 cert=ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec
+verify ok mode=expected:e52541b6c93dd6e2ef2cf7987d9a237f165aefc52946183d801867bc0e455341 file=e52541b6c93dd6e2ef2cf7987d9a237f165aefc52946183d801867bc0e455341 cert=ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec
+```
+
+**This is the proof that the cert-only downgrade was never necessary.** The same pin
+that failed at `2620190` (`857dd3d5…`) matches again on GitHub's runner with nothing
+changed but the build path — and matches the independent off-runner rebuild in §3.2.
+
+### 5.2 Android API 33–35 — honest scope
+
+All three legs PASS: [33](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492722/job/136787252062),
+[34](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492722/job/136787252110),
+[35](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492722/job/136787252183).
+Each leg asserts `ro.build.version.sdk` equals the matrix level, strictly verifies the
+head APK digest and certificate, installs with `-g`, and captures `aapt dump
+permissions` plus `dumpsys package`. It proves **install and permission declaration**
+per API level. It does **not** exercise messaging, relay or reconnect on those API
+levels, and its verdict file now says so. Treating this as a functional Android 13/14/15
+mesh gate — as the previous edition of this report did — overstates it.
+
+Evidence artifacts (expire 2027-02-19): `api-33-evidence` **14699576077**,
+`api-34-evidence` **14699602012**, `api-35-evidence` **14700170341**.
+
+### 5.3 Android CI `build` — FAIL, external, root-caused
+
+`postgres` PASS in both runs. `build` **FAIL** in both, at step **"Supabase auth
+health"**, 26 seconds in:
+
+```
+curl: (6) Could not resolve host: owhmuxueacjbljhpmpua.supabase.co
+##[error]Process completed with exit code 6
+```
+
+Root cause, and what it is *not*:
+
+* **Not caused by this correction.** `.github/workflows/android.yml` is byte-identical
+  between `fea0836` and `51c32ab` (`git diff fea0836 51c32ab -- .github/workflows/android.yml`
+  is empty). The step is from `589f454`.
+* The step is gated on `if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''`.
+  Those are now populated as repository secrets/variables, so **this is the first run in
+  which the step executed at all** — which is why the earlier 0.9 runs were green.
+* The configured staging project host **does not resolve**. The project is deleted,
+  paused or the ref is wrong. That is a real Phase 7 finding, recorded as such in §6.2.
+* The step's first `curl` had no `|| true` (its second one does), so a DNS failure
+  aborted the job, **skipping `Assemble debug APK` and `Run unit tests` entirely**. An
+  availability probe of owner-owned infrastructure was able to cancel the two checks
+  this job actually certifies.
+
+**Fix applied in the follow-up commit** (`android.yml` + this document only — it matches
+no emulator-workflow path filter, so it consumes no further emulator minutes): the probe
+keeps running, reports `auth_health_http` and `curl_exit`, emits a
+`::warning title=Supabase staging unreachable` annotation, and exits 0. The acceptance
+checks were not touched or relaxed; they are simply allowed to run. Verified locally
+under GitHub's own `bash -e -o pipefail` against an unreachable host: the step reports
+`staging_reachable=false` and exits 0.
+
+Consequently the unit suite and the CI-built APK have **not** been produced by Android
+CI at this commit. The JVM suite is nevertheless verified green locally (§4) and a head
+APK of the same commit was built and digest-verified by both green workflows above.
+
+### 5.4 APK artifacts at `51c32ab`
+
+| Artifact | Run | ID | Contents |
+|----------|-----|----|----------|
+| `cat6-apk-artifacts` | [44884492675](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675) | **14698949815** | head + v6 APKs and `SHA256SUMS.txt` |
+| `api-matrix-apk` | [44884492722](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492722) | **14698529845** | head APK and `SHA256SUMS.txt` |
+| `tharmesh-app-debug` (Android CI) | — | — | **NOT PRODUCED** — `build` failed before assemble (§5.3) |
+
+| Field | Value |
+|-------|-------|
+| Head debug APK SHA-256 | `e52541b6c93dd6e2ef2cf7987d9a237f165aefc52946183d801867bc0e455341` |
+| Signing cert SHA-256 | `ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec` |
+| Pinned v6 APK SHA-256 | `e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89` |
+
+Both digests were produced and verified by `verify-pinned-apk.sh` inside the green runs
+above; neither is a local claim.
+
+### 5.5 CI consumption for this correction
+
+One commit → one Cat 6 run (5 jobs, 4 emulators) + one API-matrix run (3 emulators) +
+two Android CI runs. The API matrix previously started **two** runs of three emulators
+per commit; the push-only change halves that. The remaining Android CI duplication
+(`push` + `pull_request` on the same SHA) is untouched: it is a cheap JVM job shared
+with `main`, and narrowing it would have meant editing trigger logic shared with other
+branches inside a correction PR. **Owner decision, documented not silently changed.**
 <!-- CI-EVIDENCE-END -->
 
 ---
@@ -278,10 +387,17 @@ store-and-forward, 30-minute idle reconnect; capture `adb bugreport` plus screen
 recordings per case; attach them under `ci-evidence-preserved/uat-0.9/`.
 **Cannot be simulated. No JVM or emulator result substitutes for it.**
 
-### 6.2 Hosted staging OTP / Edge — BLOCKED
+### 6.2 Hosted staging OTP / Edge — BLOCKED (and now with a concrete failure)
 
-No owner credentials exist in this repository or environment. Required as GitHub
-repository secrets/variables (names only; values must never be committed):
+Credentials **are** now configured as repository secrets/variables, but the staging
+project host does not resolve (§5.3): `curl: (6) Could not resolve host:
+owhmuxueacjbljhpmpua.supabase.co`. So the blocker is no longer "no credentials" — it is
+**the configured staging project is unreachable**. Owner action: confirm whether that
+project ref is live, restore or recreate it, and update the repository values. Until
+`staging_reachable=true` appears in the Android CI log, Phase 7 stays BLOCKED.
+
+Required as GitHub repository secrets/variables (names only; values must never be
+committed):
 
 | Name | Purpose |
 |------|---------|
@@ -329,8 +445,9 @@ correction touches `main`, PR #52, #55 or #56.
 | APK SHA-256 + certificate pinning | **RESTORED and enforced** (§3) |
 | Verifier fails closed | **PASS** (14/14, §3.3) |
 | Regression guards fail on breakage | **PASS** (mutation-tested, §4.2) |
-| Emulator API 30 Gate A + Gate B 3/3 | §5 |
-| Android 13/14/15 install + permission declaration | §5 |
+| Emulator API 30 Gate A + Gate B 3/3 | **PASS** — run 44884492675, strict pin enforced |
+| Android 13/14/15 install + permission declaration | **PASS** — run 44884492722 |
+| Android CI `build` (assemble + unit tests in cloud) | **FAIL** at `51c32ab` — external, root-caused §5.3; probe fixed in the follow-up commit |
 | Android 13/14/15 **functional mesh** | **NOT EXECUTED** (no such gate exists) |
 | Physical mesh UAT | **NOT EXECUTED** |
 | Hosted staging | **BLOCKED** |

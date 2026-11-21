@@ -154,21 +154,52 @@ jobs:
             echo "google_web_client_configured=false"
           fi
 
-      - name: Supabase auth health
+      # Diagnostic probe of the owner's hosted staging project — NOT an acceptance
+      # gate. It must not be able to abort this job, because `Assemble debug APK`
+      # and `Run unit tests` (the checks this job actually certifies) run after it.
+      # On 51c32ab the first curl exited 6 ("could not resolve host") the first time
+      # SUPABASE_URL was present as a repository variable, and that single DNS
+      # failure skipped the APK build and the entire unit-test suite. The probe now
+      # reports its curl exit code and raises a warning annotation; an unreachable
+      # or paused staging project is recorded as Phase 7 BLOCKED in
+      # docs/phase-0.9-engineering-report.md, not laundered into a green build.
+      - name: Supabase auth health (diagnostic, non-blocking)
         if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''
         run: |
-          code=$(curl -sS -o /tmp/supabase-auth-health.json -w "%{http_code}" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            "${SUPABASE_URL%/}/auth/v1/health")
-          echo "auth_health_http=${code}"
+          # GitHub runs step scripts with `bash -e -o pipefail`, which is why the
+          # previous version died on a curl failure. Disable it for this probe only
+          # and inspect the exit codes explicitly.
+          set +e +o pipefail
+          curl -sS --max-time 20 -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -o /tmp/supabase-auth-health.json -w "%{http_code}" \
+            "${SUPABASE_URL%/}/auth/v1/health" > /tmp/health-code.txt 2> /tmp/health-err.txt
+          health_rc=$?
+          health_code="$(cat /tmp/health-code.txt 2>/dev/null)"
+          echo "auth_health_http=${health_code:-000} curl_exit=${health_rc}"
           echo "live_signup_executed=false"
-          rm -f /tmp/supabase-auth-health.json
-          settings=$(curl -sS -o /tmp/supabase-auth-settings.json -w "%{http_code}" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            "${SUPABASE_URL%/}/auth/v1/settings" || true)
-          echo "auth_settings_http=${settings}"
-          python3 .github/scripts/auth-settings-flags.py /tmp/supabase-auth-settings.json
-          rm -f /tmp/supabase-auth-settings.json
+          [ "$health_rc" -eq 0 ] || sed -n 1,3p /tmp/health-err.txt
+
+          curl -sS --max-time 20 -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -o /tmp/supabase-auth-settings.json -w "%{http_code}" \
+            "${SUPABASE_URL%/}/auth/v1/settings" > /tmp/settings-code.txt 2>/dev/null
+          settings_rc=$?
+          settings_code="$(cat /tmp/settings-code.txt 2>/dev/null)"
+          echo "auth_settings_http=${settings_code:-000} curl_exit=${settings_rc}"
+          if [ -s /tmp/supabase-auth-settings.json ]; then
+            python3 .github/scripts/auth-settings-flags.py /tmp/supabase-auth-settings.json \
+              || echo "auth_settings_parse=FAILED"
+          else
+            echo "auth_settings_parse=NO_BODY"
+          fi
+          rm -f /tmp/supabase-auth-*.json /tmp/health-code.txt /tmp/health-err.txt /tmp/settings-code.txt
+
+          if [ "$health_rc" -ne 0 ] || [ "$health_code" != "200" ]; then
+            echo "staging_reachable=false"
+            echo "::warning title=Supabase staging unreachable::auth/v1/health curl_exit=${health_rc} http=${health_code:-000} - Phase 7 hosted staging stays BLOCKED (owner action: confirm the staging project ref is live)"
+          else
+            echo "staging_reachable=true"
+          fi
+          exit 0
 
       - name: Debug certificate fingerprint
         run: keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android | grep -E 'SHA1:|SHA256:'
