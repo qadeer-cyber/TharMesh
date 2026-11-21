@@ -39,7 +39,9 @@ migration_inventory_check() {
   local count
   count=$(find "$dir" -maxdepth 1 -name '*.sql' | wc -l)
   local last="$prev"
-  local expected=14
+  # 0000 is the tracked base schema (see 202611120000_base_schema.sql); 0001-0014
+  # are the feature migrations.
+  local expected=15
   if [ "$count" -ne "$expected" ]; then
     echo "migration inventory: expected $expected files, found $count" >&2
     return 1
@@ -48,7 +50,7 @@ migration_inventory_check() {
     echo "migration inventory: expected last version 202611120014, got $last" >&2
     return 1
   fi
-  local n=1
+  local n=0
   while [ "$n" -le 14 ]; do
     local want
     want=$(printf '202611120%03d' "$n")

@@ -112,7 +112,17 @@ begin
     if p_expected_generation is null or p_expected_generation < 0 then
         raise exception 'Invalid recovery request' using errcode = '22023';
     end if;
-    digest_hex := pg_catalog.encode(public.digest(pg_catalog.convert_to(p_ciphertext_b64, 'UTF8'), 'sha256'), 'hex');
+    -- pg_catalog.sha256 (core since PG 11), NOT public.digest: this function is
+    -- `security definer` with `set search_path = ''`, so every reference must be
+    -- schema-qualified, and pgcrypto lives in `extensions` on Supabase, not in
+    -- `public`. `public.digest` resolves only on a local cluster where
+    -- `create extension pgcrypto` defaulted to the public schema; on the hosted
+    -- project it does not exist, and this line would raise
+    -- `function public.digest(bytea, unknown) does not exist` at call time --
+    -- after the migration had applied cleanly, because plpgsql bodies are not
+    -- resolved at CREATE. Verified equivalent: encode(digest(x,'sha256'),'hex')
+    -- = encode(sha256(x),'hex') for all tested inputs.
+    digest_hex := pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p_ciphertext_b64, 'UTF8')), 'hex');
     if p_ciphertext_sha256 is distinct from digest_hex then
         raise exception 'Ciphertext hash mismatch' using errcode = '22023';
     end if;

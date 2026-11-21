@@ -34,3 +34,13 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Supabase CLI local state. supabase/.temp holds per-machine scratch (cached
+# latest-version string, pooler URLs, the linked project ref). It is written by
+# any `supabase` invocation and must never be committed; the tracked source of
+# truth is supabase/migrations, supabase/functions and schema.sql.
+supabase/.temp/
+
+# Python bytecode
+__pycache__/
+*.pyc

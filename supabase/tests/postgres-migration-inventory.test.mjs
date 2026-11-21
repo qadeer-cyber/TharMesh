@@ -47,11 +47,11 @@ test('runner fresh + reapply is no-op', async () => {
   const fresh = run([join(here, 'postgres-migrate-runner.sh'), 'fresh', db]);
   assert.equal(fresh.status, 0, fresh.stderr || fresh.stdout);
   const afterFresh = await countMigrations(db);
-  assert.equal(afterFresh.length, 14);
-  assert.equal(afterFresh[0].version, '202611120001');
+  assert.equal(afterFresh.length, 15);
+  assert.equal(afterFresh[0].version, '202611120000');
   const reapply = run([join(here, 'postgres-migrate-runner.sh'), 'reapply', db]);
   assert.equal(reapply.status, 0, reapply.stderr || reapply.stdout);
-  assert.match(reapply.stdout, /skipped=14/);
+  assert.match(reapply.stdout, /skipped=15/);
   const afterReapply = await countMigrations(db);
   assert.deepEqual(afterFresh.map((r) => r.version), afterReapply.map((r) => r.version));
 });
@@ -83,5 +83,5 @@ test('gap in version sequence is rejected', () => {
     MIGRATIONS_DIR: tmp,
   });
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr + r.stdout, /missing version gap|expected 14/i);
+  assert.match(r.stderr + r.stdout, /missing version gap|expected 15/i);
 });

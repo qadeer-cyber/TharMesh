@@ -17,6 +17,10 @@ NODE_TEST=(node --import "$TSX_LOADER" --test "--test-timeout=${THARMESH_NODE_TE
 
 bash supabase/tests/postgres-ensure-test-role.sh
 
+# Deployment-executor regression tests. Pure unit tests with a mocked Management
+# API: no network, no hosted writes.
+python3 -m unittest discover -s supabase/tests -p "test_staging_deploy.py"
+
 bash supabase/tests/postgres-apply.sh tharmesh_ci_pg
 "${NODE_TEST[@]}" supabase/tests/postgres-fresh-upgrade.test.mjs
 "${NODE_TEST[@]}" supabase/tests/postgres-migration-inventory.test.mjs
@@ -24,6 +28,8 @@ bash supabase/tests/postgres-apply.sh tharmesh_ci_pg
 "${NODE_TEST[@]}" supabase/tests/postgres-migration-authenticated-rpc-surface.test.mjs
 "${NODE_TEST[@]}" supabase/tests/identity-postgres-multisession.test.mjs
 NODE_TESTS=(
+  supabase/tests/schema-bootstrap-parity.test.mjs
+  supabase/tests/migration-extension-schema.test.mjs
   supabase/tests/recovery-bypass.test.mjs
   supabase/tests/schema-recovery-privileges.test.mjs
   supabase/tests/recovery-grant-atomic.test.mjs
