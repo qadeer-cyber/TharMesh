@@ -66,7 +66,13 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID || vars.GOOGLE_WEB_CLIENT_ID }}
-      THERMESH_DEBUG_PROJECT_REF: example
+      # Read by app/build.gradle as THARMESH_DEBUG_PROJECT_REF. The name was
+      # misspelled THERMESH_ until this commit, so Gradle never saw it and fell
+      # back to the hardcoded "example" in app/build.gradle. Audited: the value
+      # is "example" both before and after this correction, so CI behaviour is
+      # unchanged today - but a real ref set here is now actually propagated
+      # instead of being silently dropped.
+      THARMESH_DEBUG_PROJECT_REF: example
 
     steps:
       - uses: actions/checkout@v4
