@@ -4,6 +4,7 @@
 **Base (stacked):** `cursor/tharmesh-0.8-field-mesh-5aa9` @ `4ec45fe`
 **Draft PR:** [#57](https://github.com/qadeer-cyber/TharMesh/pull/57) — **DRAFT**, stacked on 0.8, does not touch `main`, PR #52, #55 or #56
 **Report date:** 2026-11-21
+**Evidence commits:** `51c32ab` (gates), `052adb2` (probe fix), `83b17bd` (APK digest step)
 **Supersedes:** the `b3d1b37` edition of this report, whose Phase 4 / Phase 9 rows
 are corrected below (they claimed more than the evidence supported, and the green
 run they cited was obtained with APK hash pinning disabled).
@@ -374,9 +375,17 @@ above; neither is a local claim.
 
 Android CI did not print the digest of the APK it uploads, so the `tharmesh-app-debug`
 artifact could not be tied to a hash from its own log. A `Record debug APK digest` step
-now does that; its value appears in the run log and job summary from the next Android CI
-run onward. Until then, the only in-pipeline measured head-APK digest for this branch is
-the `e52541b6…` above, measured at `51c32ab` by the Cat 6 and API-matrix runs.
+added at `83b17bd` now writes it to the run log and the job summary immediately before
+the upload. It is live from that commit: Android CI
+[44887217523](https://github.com/qadeer-cyber/TharMesh/actions/runs/44887217523) (push)
+and [44887220329](https://github.com/qadeer-cyber/TharMesh/actions/runs/44887220329)
+(pull_request) are both **PASS** at `83b17bd`, with `tharmesh-app-debug` **14700214381**
+and `unit-test-reports` **14700119813** (234 files of JUnit XML). Read the exact digest
+from that job's summary; the owner-facing figure is whatever that step printed, not a
+number asserted here.
+
+The only head-APK digest measured *and strictly verified in-pipeline* for this branch
+remains the `e52541b6…` above, from the Cat 6 and API-matrix runs at `51c32ab`.
 
 ### 5.5 CI consumption for this correction
 
