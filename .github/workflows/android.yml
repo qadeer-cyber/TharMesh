@@ -207,6 +207,20 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
 
+      # Record the digest of the APK that is about to be uploaded, so the artifact
+      # can be identified from the run log alone. Engineering reports previously
+      # had to state this figure with no in-pipeline source.
+      - name: Record debug APK digest
+        run: |
+          set -euo pipefail
+          sha256sum app/build/outputs/apk/debug/*.apk | tee /tmp/apk-digest.txt
+          {
+            echo "### Debug APK digest"
+            echo '```'
+            cat /tmp/apk-digest.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 

@@ -23,7 +23,7 @@ run they cited was obtained with APK hash pinning disabled).
 | JVM unit suite | **PASS** — 536 tests / 103 classes, 0 failures, run locally | §4 |
 | Regression guards bite when functionality breaks | **PASS** — mutation-tested, 6 induced failures | §4.2 |
 | Emulator Cat 6 (API 30) Gate A + B×3 | **PASS** — 5/5 jobs, strict pin enforced | run 44884492675 |
-| Android CI `build` (cloud assemble + unit tests) | **FAIL** — external: staging host does not resolve | §5.3 |
+| Android CI `build` (cloud assemble + unit tests) | **PASS** at `052adb2` (FAIL at `51c32ab` — external: staging host does not resolve) | §5.3 |
 | Android API 33/34/35 | **PASS (install + permission declaration only)** — *not* a functional mesh gate | §5 |
 | Physical 2/3-phone UAT | **NOT EXECUTED** | §6 |
 | Hosted staging OTP / Edge | **BLOCKED** (no owner credentials) | §6 |
@@ -342,9 +342,17 @@ checks were not touched or relaxed; they are simply allowed to run. Verified loc
 under GitHub's own `bash -e -o pipefail` against an unreachable host: the step reports
 `staging_reachable=false` and exits 0.
 
-Consequently the unit suite and the CI-built APK have **not** been produced by Android
-CI at this commit. The JVM suite is nevertheless verified green locally (§4) and a head
-APK of the same commit was built and digest-verified by both green workflows above.
+**Outcome of that fix, at `052adb2`:** Android CI `build` is **PASS** in both runs
+([push 44886839234](https://github.com/qadeer-cyber/TharMesh/actions/runs/44886839234),
+[pull_request 44886843940](https://github.com/qadeer-cyber/TharMesh/actions/runs/44886843940)),
+so `Assemble debug APK` and `Run unit tests` ran in the cloud for the first time on this
+branch since the staging values were added. Artifacts produced:
+`tharmesh-app-debug` **14700014150** and `unit-test-reports` **14700710211** (232 KB of
+JUnit XML — the suite genuinely executed). `postgres` PASS in both. No emulator workflow
+was re-triggered by that commit, as intended.
+
+The probe still reports the staging project as unreachable; that remains a Phase 7
+BLOCKED finding (§6.2), now as a warning annotation instead of a dead build.
 
 ### 5.4 APK artifacts at `51c32ab`
 
@@ -352,7 +360,8 @@ APK of the same commit was built and digest-verified by both green workflows abo
 |----------|-----|----|----------|
 | `cat6-apk-artifacts` | [44884492675](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492675) | **14698949815** | head + v6 APKs and `SHA256SUMS.txt` |
 | `api-matrix-apk` | [44884492722](https://github.com/qadeer-cyber/TharMesh/actions/runs/44884492722) | **14698529845** | head APK and `SHA256SUMS.txt` |
-| `tharmesh-app-debug` (Android CI) | — | — | **NOT PRODUCED** — `build` failed before assemble (§5.3) |
+| `tharmesh-app-debug` (Android CI) | [44886839234](https://github.com/qadeer-cyber/TharMesh/actions/runs/44886839234) @ `052adb2` | **14700014150** | head debug APK (not produced at `51c32ab`; `build` failed before assemble) |
+| `unit-test-reports` (Android CI) | [44886839234](https://github.com/qadeer-cyber/TharMesh/actions/runs/44886839234) @ `052adb2` | **14700710211** | JUnit XML for the cloud unit-test run |
 
 | Field | Value |
 |-------|-------|
@@ -362,6 +371,12 @@ APK of the same commit was built and digest-verified by both green workflows abo
 
 Both digests were produced and verified by `verify-pinned-apk.sh` inside the green runs
 above; neither is a local claim.
+
+Android CI did not print the digest of the APK it uploads, so the `tharmesh-app-debug`
+artifact could not be tied to a hash from its own log. A `Record debug APK digest` step
+now does that; its value appears in the run log and job summary from the next Android CI
+run onward. Until then, the only in-pipeline measured head-APK digest for this branch is
+the `e52541b6…` above, measured at `51c32ab` by the Cat 6 and API-matrix runs.
 
 ### 5.5 CI consumption for this correction
 
@@ -447,7 +462,7 @@ correction touches `main`, PR #52, #55 or #56.
 | Regression guards fail on breakage | **PASS** (mutation-tested, §4.2) |
 | Emulator API 30 Gate A + Gate B 3/3 | **PASS** — run 44884492675, strict pin enforced |
 | Android 13/14/15 install + permission declaration | **PASS** — run 44884492722 |
-| Android CI `build` (assemble + unit tests in cloud) | **FAIL** at `51c32ab` — external, root-caused §5.3; probe fixed in the follow-up commit |
+| Android CI `build` (assemble + unit tests in cloud) | **FAIL** at `51c32ab` (external, §5.3) → **PASS** at `052adb2` |
 | Android 13/14/15 **functional mesh** | **NOT EXECUTED** (no such gate exists) |
 | Physical mesh UAT | **NOT EXECUTED** |
 | Hosted staging | **BLOCKED** |
