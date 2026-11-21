@@ -300,19 +300,22 @@ class NearbyConnectionsTransport(
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
+            // Status-free tracker calls: the branch itself carries the meaning, so a
+            // wrong numeric mirror cannot silently swallow every delivery receipt
+            // (PayloadTransferUpdate.Status.SUCCESS is 1, IN_PROGRESS is 3).
             when (update.status) {
                 PayloadTransferUpdate.Status.SUCCESS -> {
-                    outboundTracker.onPayloadTransferUpdate(
+                    outboundTracker.onTransferSuccess(
                         update.payloadId,
-                        update.status,
                         update.bytesTransferred.toLong(),
                         update.totalBytes.toLong()
                     )?.let { dispatch(it) }
                 }
-                PayloadTransferUpdate.Status.FAILURE -> {
+                PayloadTransferUpdate.Status.FAILURE,
+                PayloadTransferUpdate.Status.CANCELED -> {
                     outboundTracker.onTransferFailure(
                         update.payloadId,
-                        "payload transfer failed status=${update.status}"
+                        "payload transfer did not complete status=${update.status}"
                     )?.let { dispatch(it) }
                 }
                 else -> Unit

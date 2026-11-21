@@ -128,7 +128,8 @@ class ChatsActivity : AppCompatActivity() {
             val statusGlyph = when (conv.lastMessageStatus) {
                 MessageStatus.AWAITING_KEY -> "🔒 "
                 MessageStatus.QUEUED,
-                MessageStatus.SENDING -> "⏳ "
+                MessageStatus.SENDING,
+                MessageStatus.RELAYING -> "⏳ "
                 MessageStatus.SENT -> "✓ "
                 MessageStatus.DELIVERED -> "✓✓ "
                 MessageStatus.READ -> "✓✓ "

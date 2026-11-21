@@ -478,7 +478,8 @@ class ChatActivity : AppCompatActivity() {
         private fun statusGlyph(status: String): String = when (status) {
             MessageStatus.AWAITING_KEY -> "🔒"
             MessageStatus.QUEUED,
-            MessageStatus.SENDING -> "⏳"
+            MessageStatus.SENDING,
+            MessageStatus.RELAYING -> "⏳"
             MessageStatus.SENT -> "✓"
             MessageStatus.DELIVERED -> "✓✓"
             MessageStatus.READ -> "✓✓"

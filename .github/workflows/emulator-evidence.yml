@@ -16,6 +16,8 @@ on:
       - "scripts/debug-keystore-upgrade-*"
       - "scripts/build-historical-debug-apk.sh"
       - "scripts/verify-pinned-apk.sh"
+      - "scripts/pinned/**"
+      - "scripts/selftest-verify-pinned-apk.sh"
       - ".github/workflows/emulator-evidence.yml"
       - ".github/scripts/run-gate-*.sh"
 
@@ -32,7 +34,11 @@ env:
   ANDROID_COMPILE_SDK: "30"
   ANDROID_BUILD_TOOLS: "30.0.3"
   LEGACY_SOURCE_COMMIT: 9fedae917868340e9b2b93f46b847a6119c576bd
-  HISTORICAL_WORKTREE: ${{ github.workspace }}/ci-wt-room-v6
+  # The v6 rebuild is only byte-reproducible at the path the pin was established
+  # at: moving it to ${{ github.workspace }}/ci-wt-room-v6 in 2620190 is what broke
+  # the file-hash pin (857dd3d5... vs e2f7145b...) and triggered the cert-only
+  # downgrade in 08875ba. Keep /tmp/wt-room-v6.
+  HISTORICAL_WORKTREE: /tmp/wt-room-v6
   THARMESH_EXPECT_V6_FILE_SHA256: e2f7145b975ff099566f3a8a2d02cbd236ba75ae67af7a29f4ffd8d43f900c89
   THARMESH_EXPECT_DEBUG_CERT_SHA256: ac1a511884df9ec2cd8b0b8d696c3192b671cddc6c93f8e83ae9efd08221c2ec
 
@@ -77,9 +83,14 @@ jobs:
           mkdir -p apk-artifacts
           cp -f app/build/outputs/apk/debug/tharmesh.app-debug.apk apk-artifacts/tharmesh-head-debug.apk
           cp -f "$HISTORICAL_WORKTREE/app/build/outputs/apk/debug/tharmesh.app-debug.apk" apk-artifacts/v6-room6-debug.apk
-          chmod +x scripts/verify-pinned-apk.sh
-          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk cert-only
+          chmod +x scripts/verify-pinned-apk.sh scripts/selftest-verify-pinned-apk.sh
+          # Prove the verifier itself still fails closed before trusting its verdict.
+          bash scripts/selftest-verify-pinned-apk.sh
           sha256sum apk-artifacts/*.apk | tee apk-artifacts/SHA256SUMS.txt
+          # Strict: pinned file hash AND signing cert for the trusted v6 artifact.
+          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk pinned
+          EXPECT_HEAD=$(awk '/tharmesh-head-debug\.apk$/ {print $1}' apk-artifacts/SHA256SUMS.txt | head -1)
+          bash scripts/verify-pinned-apk.sh apk-artifacts/tharmesh-head-debug.apk "expected:$EXPECT_HEAD"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -103,10 +114,10 @@ jobs:
           name: cat6-apk-artifacts
           path: apk-artifacts
 
-      - name: Re-verify v6 APK hash and cert
+      - name: Re-verify v6 APK hash and cert (strict)
         run: |
           chmod +x scripts/verify-pinned-apk.sh
-          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk cert-only
+          bash scripts/verify-pinned-apk.sh apk-artifacts/v6-room6-debug.apk pinned
 
       - uses: actions/setup-java@v4
         with:

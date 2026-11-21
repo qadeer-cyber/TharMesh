@@ -1,6 +1,11 @@
 name: Android API 33–35 evidence
 
 on:
+  workflow_dispatch:
+  # Push-only, same rationale as emulator-evidence.yml (b3d1b37): the push and
+  # pull_request triggers have different concurrency keys, so every commit used to
+  # start two runs of three emulators each. The push run still reports as a check
+  # on the stacked PR.
   push:
     branches:
       - cursor/tharmesh-0.9-engineering-5aa9
@@ -8,14 +13,7 @@ on:
       - "app/**"
       - "scripts/api-emulator-evidence.sh"
       - "scripts/verify-pinned-apk.sh"
-      - ".github/workflows/android-api-matrix.yml"
-  pull_request:
-    branches:
-      - cursor/tharmesh-0.8-field-mesh-5aa9
-    paths:
-      - "app/**"
-      - "scripts/api-emulator-evidence.sh"
-      - "scripts/verify-pinned-apk.sh"
+      - "scripts/pinned/**"
       - ".github/workflows/android-api-matrix.yml"
 
 permissions:
@@ -48,7 +46,13 @@ jobs:
           distribution: temurin
           java-version: 11
       - run: ./gradlew --no-daemon assembleDebug
-      - run: mkdir -p apk-artifacts && cp -f app/build/outputs/apk/debug/tharmesh.app-debug.apk apk-artifacts/tharmesh-head-debug.apk
+      - name: Package head APK with digest manifest
+        run: |
+          set -euo pipefail
+          mkdir -p apk-artifacts
+          cp -f app/build/outputs/apk/debug/tharmesh.app-debug.apk apk-artifacts/tharmesh-head-debug.apk
+          sha256sum apk-artifacts/tharmesh-head-debug.apk | sed 's#apk-artifacts/##' \
+            | tee apk-artifacts/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: api-matrix-apk

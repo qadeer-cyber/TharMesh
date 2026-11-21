@@ -4,7 +4,7 @@ set -euo pipefail
 export ANDROID_HOME="${ANDROID_SDK_ROOT}"
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
 API="${ANDROID_API_LEVEL:-unknown}"
-EVIDENCE="${THERMESH_EVIDENCE_DIR:-ci-evidence/api-${API}}"
+EVIDENCE="${THARMESH_EVIDENCE_DIR:-ci-evidence/api-${API}}"
 APK="${GITHUB_WORKSPACE:-$(cd "$(dirname "$0")/.." && pwd)}/apk-artifacts/tharmesh-head-debug.apk"
 PKG="tharmesh.app"
 ADB="$ANDROID_HOME/platform-tools/adb"
@@ -19,7 +19,11 @@ test -f "$APK"
   echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "commit=${GITHUB_SHA:-local}"
 } | tee "$EVIDENCE/run-metadata.txt"
-bash scripts/verify-pinned-apk.sh "$APK" cert-only | tee -a "$EVIDENCE/run-metadata.txt"
+SUMS="$(dirname "$APK")/SHA256SUMS.txt"
+test -f "$SUMS" || { echo "FAIL missing $SUMS (head APK provenance unverifiable)"; exit 1; }
+EXPECT_HEAD=$(awk '/tharmesh-head-debug\.apk$/ {print $1}' "$SUMS" | head -1)
+[ -n "$EXPECT_HEAD" ] || { echo "FAIL no head APK digest in SHA256SUMS.txt"; exit 1; }
+bash scripts/verify-pinned-apk.sh "$APK" "expected:$EXPECT_HEAD" | tee -a "$EVIDENCE/run-metadata.txt"
 "$AAPT" dump permissions "$APK" | tee "$EVIDENCE/aapt-permissions.txt"
 grep -E 'POST_NOTIFICATIONS|NEARBY_WIFI|FOREGROUND_SERVICE_CONNECTED_DEVICE' "$EVIDENCE/aapt-permissions.txt" | tee "$EVIDENCE/permission-spotcheck.txt"
 "$ADB" wait-for-device
@@ -31,4 +35,5 @@ test "$DEVICE_SDK" = "$API" || {
 }
 "$ADB" install -r -g "$APK" | tee "$EVIDENCE/adb-install.txt"
 "$ADB" shell dumpsys package "$PKG" | grep -E 'permission|granted=true' | head -80 | tee "$EVIDENCE/dumpsys-package-head.txt"
-echo "RESULT=PASS api_emulator_level=${API}" | tee "$EVIDENCE/verdict.txt"
+echo "RESULT=PASS api_emulator_level=${API} scope=install+permission-declaration" | tee "$EVIDENCE/verdict.txt"
+echo "note=this gate proves install and permission declaration on API ${API}; it does NOT exercise mesh messaging" | tee -a "$EVIDENCE/verdict.txt"

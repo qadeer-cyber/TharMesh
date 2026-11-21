@@ -10,8 +10,16 @@ NEW_APK="${GITHUB_WORKSPACE}/apk-artifacts/tharmesh-head-debug.apk"
 export HEAD_DEBUG_APK="$NEW_APK"
 export NEW_APK
 mkdir -p "$THARMESH_EVIDENCE_DIR"
-bash scripts/verify-pinned-apk.sh "$V6_APK" cert-only
+# Strict: the v6 APK must match the committed pin (file hash AND signing cert).
+bash scripts/verify-pinned-apk.sh "$V6_APK" pinned | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
 test -f "$NEW_APK"
+# Chain of custody for the head APK built in prepare-apks.
+SUMS="${GITHUB_WORKSPACE}/apk-artifacts/SHA256SUMS.txt"
+test -f "$SUMS" || { echo "FAIL missing $SUMS (head APK provenance unverifiable)"; exit 1; }
+EXPECT_HEAD=$(awk '/tharmesh-head-debug\.apk$/ {print $1}' "$SUMS" | head -1)
+[ -n "$EXPECT_HEAD" ] || { echo "FAIL no head APK digest in SHA256SUMS.txt"; exit 1; }
+bash scripts/verify-pinned-apk.sh "$NEW_APK" "expected:$EXPECT_HEAD" \
+  | tee -a "$THARMESH_EVIDENCE_DIR/run-metadata.txt"
 bash scripts/debug-keystore-upgrade-evidence.sh "$V6_APK"
 UPGRADE_DIR="${THARMESH_EVIDENCE_DIR}/debug-keystore-upgrade"
 grep -q 'RESULT=PASS debug-keystore legacy schema upgrade' \
