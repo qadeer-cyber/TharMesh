@@ -1,12 +1,67 @@
 # Phase 7 — staging-only deployment plan (prepared, NOT executed)
 
-**Target:** staging project `owhmuxueacjbljhpmpua` only. **No production action.**
-**Status:** awaiting explicit owner approval. Nothing in this document has been applied.
+**Target:** project `owhmuxueacjbljhpmpua` only. **No production action.**
+**Status:** **HALTED at the project-identity check — see section 0.** Nothing in this
+document has been applied. Awaiting an owner decision, not merely an approval.
 **Prepared:** 2026-11-21, from the verified state below.
 
 Owner decisions encoded: debug ref stays `example`; staging ref is
 `owhmuxueacjbljhpmpua`; production ref stays unset; PR #57 stays DRAFT and PR #58
 unmerged.
+
+---
+
+## 0. HALT — the targeted project is not the one named staging
+
+Authenticated `supabase projects list` (CLI 3.2.0) returns **two** projects:
+
+| Ref | Name | Region | Status | Created |
+|---|---|---|---|---|
+| `owhmuxueacjbljhpmpua` | **tharmesh** | ap-northeast-2 | ACTIVE_HEALTHY | 2026-11-11 |
+| `uxntqgspxrepvhelhqfs` | **TharMesh-Staging** | ap-northeast-1 | ACTIVE_HEALTHY | 2026-11-13 |
+
+The repository's `SUPABASE_URL`, every probe in this document, and the owner's stated
+target all point at `owhmuxueacjbljhpmpua` — which is named plainly **`tharmesh`**, not
+`TharMesh-Staging`. A separately named staging project exists and is referenced nowhere
+in the repository or in CI.
+
+Nothing in the repository records which ref is which: neither ref appears in any tracked
+file (the only occurrences are in this document and in `supabase/.temp/`, which is local
+CLI state and now gitignored). So the naming is the only available signal, and it points
+the opposite way from the assumption this plan was built on.
+
+**Consequences, which is why this is a halt and not a note:**
+
+1. Applying 14 migrations to `owhmuxueacjbljhpmpua` may be a mutation of the **primary
+   or production** project. That is the one outcome this whole plan exists to prevent.
+2. Setting `THARMESH_STAGING_PROJECT_REF=owhmuxueacjbljhpmpua` — the value currently
+   instructed — compiles that ref into `BuildConfig.SUPABASE_STAGING_PROJECT_REF`.
+   `SupabaseEnvironmentGuard` then **permits `qa` and `staging` builds against it**. If
+   `owhmuxueacjbljhpmpua` is production, signed QA artifacts would be pointed at
+   production while every guard still reports fail-closed, because the guard enforces
+   *ref equality*, not *environment intent*.
+3. Conversely, if `owhmuxueacjbljhpmpua` genuinely is staging and `TharMesh-Staging` is
+   a newer empty replacement, then the repository is correct and only the project name
+   is misleading — but that cannot be established from outside.
+
+**Supporting (not decisive) evidence:** `public.profiles`, `public.devices` and
+`public.recovery_blobs` on `owhmuxueacjbljhpmpua` all return `200 []` through the
+publishable key, so it holds no rows in the user-facing tables. That argues against it
+being a populated production database, but says nothing about which project is *intended*
+for staging, and RLS could mask rows from the anon role.
+
+`uxntqgspxrepvhelhqfs` was **not** inspected. The owner authorized work on one ref, and
+reading another project — even read-only — is outside that authorization.
+
+### Owner decision required
+
+1. State which ref is **staging** and which, if any, is **production**.
+2. If staging is `uxntqgspxrepvhelhqfs`: the repository's `SUPABASE_URL` and
+   `SUPABASE_ANON_KEY` repository values are pointed at the wrong project and must be
+   re-pointed before any migration, and `THARMESH_STAGING_PROJECT_REF` must be set to
+   that ref instead. PR #58's forwarding change is still correct; only the value differs.
+3. If staging really is `owhmuxueacjbljhpmpua`: confirm explicitly, and preferably rename
+   the projects in the dashboard so the names stop contradicting the configuration.
 
 ---
 
@@ -170,19 +225,20 @@ Run from a checkout of the 0.8 base, authenticated as the project owner
 committed or pasted into CI).
 
 ```bash
-# Gate A — confirm the target, so nothing can be aimed at production by accident
-supabase projects list                       # expect owhmuxueacjbljhpmpua = staging, ACTIVE_HEALTHY
-export TM_REF=owhmuxueacjbljhpmpua
+# Gate A — confirm the target (DONE, and it FAILED: see section 0)
+supabase projects list                       # returned two projects; the target is named "tharmesh"
+export TM_REF=<ref the owner confirms is staging>
 
 # Gate B — rehearse on a disposable local database first (already done, repeatable)
 bash supabase/tests/postgres-ensure-test-role.sh
 bash .github/scripts/ci-postgres-tests.sh    # expect 48/48
 
 # Gate C — migrations, staging only. Review the plan before applying.
-supabase link --project-ref "$TM_REF"
-supabase db push --dry-run                   # APPROVAL GATE: read the statement list
-supabase db push                             # applies schema-tracked migrations in order
-notify_reload() { :; }                       # PostgREST reloads automatically after DDL
+# CLI 3.2.0: target remotes with --remote; `supabase link` is not required and
+# --remote=<ref> is explicit, so no ambient linked-project state can misdirect it.
+supabase migration list --remote="$TM_REF"   # the REAL history table (see section 8)
+supabase db push --remote="$TM_REF" --dry-run  # APPROVAL GATE: read the statement list
+supabase db push --remote="$TM_REF"          # applies schema-tracked migrations in order
 
 # Gate D — functions, staging only, platform-default JWT verification
 supabase functions deploy identity-proof     --project-ref "$TM_REF"
@@ -271,3 +327,44 @@ name gates it in addition to the four conditions.
   or convert the condition to a `workflow_dispatch` input so QA signing is run
   deliberately rather than on every push. Each widens who can produce a signed artifact,
   so none should be applied silently.
+
+---
+
+## 8. Second blocker — no direct Postgres path from the cloud container
+
+Independent of section 0, the read-only steps that need a database connection cannot run
+from this environment.
+
+| Attempt | Result |
+|---|---|
+| `supabase projects list` (Management API over HTTPS) | **works** |
+| `supabase migration list --remote=owhmuxueacjbljhpmpua` | **hangs, killed at 60 s (exit 124)**, no output |
+| `supabase migration list --remote=… --debug` | same; no connection diagnostics emitted before the timeout |
+
+Cause: the CLI opens a direct PostgreSQL connection for history, dump and push.
+`db.owhmuxueacjbljhpmpua.supabase.co` publishes **AAAA only** (no A record), and this
+container's egress is an HTTPS forward proxy — it carries `CONNECT` to allowed hosts on
+443 and cannot carry raw TCP on 5432/6543 at all. Allowing more hostnames cannot fix
+this; the limitation is the protocol, not the allowlist.
+
+**Therefore the following must run from the owner's machine** (or any host with ordinary
+outbound TCP), not from this session:
+
+```bash
+supabase login                                   # browser flow, interactive
+supabase migration list --remote=<staging-ref>   # item 3: the real history table
+supabase db dump --remote=<staging-ref> -f staging-schema.sql          # item 4: backup
+supabase db dump --remote=<staging-ref> --data-only -f staging-data.sql
+sha256sum staging-*.sql                          # record the digests
+supabase db push --remote=<staging-ref> --dry-run # item 5
+```
+
+What this session **can** still do over HTTPS once the identity question is settled:
+`projects list`, `functions deploy`, `functions list`, `functions logs`, and all
+REST/Auth verification including the negative authentication cases in section 6. So
+Edge Function deployment and verification are feasible from here; **migrations are not**.
+
+Note on backups: the dashboard's automatic daily backup depends on the project's plan,
+and a logical `db dump` is the no-cost, verifiable alternative — but it needs the same
+direct connection, so the backup evidence this plan requires before any mutation must
+also be produced from the owner's machine.
